@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Twitter Sentiment</title>
+    <style>
+      :root { --bg:#0b0d12; --card:#141821; --text:#e5e7eb; --muted:#9ca3af; --accent:#60a5fa; --ok:#22c55e; --bad:#ef4444; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto; background:var(--bg); color:var(--text); }
+      header { display:flex; align-items:center; justify-content:space-between; padding:16px 24px; border-bottom:1px solid #1f2937; position:sticky; top:0; background:rgba(11,13,18,0.8); backdrop-filter:saturate(180%) blur(8px); }
+      .brand { font-weight:700; letter-spacing:.3px; }
+      .container { max-width:1100px; margin:0 auto; padding:24px; }
+      .hero { display:grid; grid-template-columns: 1.2fr 0.8fr; gap:24px; align-items:center; margin-top:12px; }
+      .card { background:var(--card); border:1px solid #1f2937; border-radius:16px; padding:20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+      .muted { color:var(--muted); }
+      .btn { padding:10px 14px; border-radius:12px; border:1px solid #334155; background:#0b1220; color:var(--text); cursor:pointer; }
+      .btn.primary { background: linear-gradient(135deg, #2563eb, #0891b2); border-color:#1d4ed8; }
+      .grid { display:grid; gap:16px; }
+      .grid.cols-2 { grid-template-columns: 1fr 1fr; }
+      table { width:100%; border-collapse: collapse; }
+      th, td { text-align:left; padding:10px 8px; border-bottom:1px solid #1f2937; }
+      th { color:#93c5fd; font-weight:600; }
+      .badge { padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid #334155; }
+      .badge.pos { color:#86efac; }
+      .badge.neg { color:#fca5a5; }
+      .section-title { font-size:18px; margin:0 0 8px 0; }
+      .field { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+      input, select { padding:10px 12px; border-radius:10px; border:1px solid #334155; background:#0b1220; color:var(--text); }
+      .row { display:flex; gap:10px; align-items:center; }
+      .footer { color:var(--muted); font-size:12px; margin-top:36px; text-align:center; }
+      .pill { font-weight:600; color:#93c5fd; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,1 @@
+export default function App(){ return <div style={{padding:20}}>Backend upgraded to Postgres default; reuse GUI from v1.1.0/v1.2.0.</div> }

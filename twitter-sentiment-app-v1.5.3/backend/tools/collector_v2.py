@@ -2,13 +2,14 @@
 """
 Tradersecho — v2.0 Step 1b: Hardened collector_v2
 
-Key changes vs previous:
-- Prints detected columns of `mention_minutes` (helps verify schema).
-- Timezone-aware UTC timestamps.
-- Guaranteed handling for NOT NULL `mentions` if present.
-- `--force-aggregated` to always send mentions/pos/neg/neu.
-"""
+- Prints detected columns of `mention_minutes`.
+- Timezone-aware UTC.
+- Fills `mentions=1` if column exists; one-hot pos/neg/neu when present.
+- `--force-aggregated` to always include mentions/pos/neg/neu when columns exist.
 
+Usage:
+  python backend/tools/collector_v2.py --tickers-file backend/symbols.txt --simulate --batch-size 200 --sleep-sec 2 --loops 1 --force-aggregated
+"""
 import argparse
 import datetime as dt
 import os
@@ -58,7 +59,6 @@ def reflect_mention_minutes(engine: Engine) -> Table:
 
 def detect_columns(engine: Engine, table: Table) -> Dict[str, bool]:
     cols = {c.name for c in table.columns}
-    # Determine not-null constraints via inspector best-effort
     insp = sa_inspect(engine)
     try:
         info = insp.get_columns(table.name, schema=getattr(table, "schema", None))
@@ -71,17 +71,15 @@ def detect_columns(engine: Engine, table: Table) -> Dict[str, bool]:
 
 def _row_for_schema(d: Dict[str, bool], ticker: str, now_utc: dt.datetime, source: str, sentiment: int, force_agg: bool) -> Dict[str, Any]:
     row: Dict[str, Any] = {}
-
-    # basic identifiers
-    row["ticker"] = ticker if "ticker" in d["cols"] else None
+    if "ticker" in d["cols"]:
+        row["ticker"] = ticker
     ts_col = d["ts_col"]
     if ts_col:
-        row[ts_col] = now_utc.replace(tzinfo=None)  # keep naive in DB if column is naive
-    row["source"] = source if "source" in d["cols"] else None
-    row["external_id"] = (f"sim-{source}-{ticker}-{now_utc.isoformat(timespec='minutes')}-{uuid.uuid4().hex[:8]}"
-                          if "external_id" in d["cols"] else None)
-
-    # aggregated fields
+        row[ts_col] = now_utc.replace(tzinfo=None)  # DB col likely naive
+    if "source" in d["cols"]:
+        row["source"] = source
+    if "external_id" in d["cols"]:
+        row["external_id"] = f"sim-{source}-{ticker}-{now_utc.isoformat(timespec='minutes')}-{uuid.uuid4().hex[:8]}"
     include_agg = force_agg or d["has_mentions"] or d["has_pos"] or d["has_neg"] or d["has_neu"]
     if include_agg:
         if d["has_mentions"]:
@@ -92,29 +90,22 @@ def _row_for_schema(d: Dict[str, bool], ticker: str, now_utc: dt.datetime, sourc
             row["neg"] = 1 if sentiment == -1 else 0
         if d["has_neu"]:
             row["neu"] = 1 if sentiment == 0 else 0
-
-    # sentiment field
     if d["has_sentiment"]:
         row["sentiment"] = sentiment
-
-    # prune keys not in table or None
     for k in list(row.keys()):
         if k not in d["cols"] or row[k] is None:
             row.pop(k, None)
-
     return row
 
 def simulate_insert(engine: Engine, mention_minutes: Table, tickers: List[str], source: str, debug_dict: Dict[str, bool], force_agg: bool):
     now_utc = dt.datetime.now(dt.UTC).replace(second=0, microsecond=0)
     sentiments = [-1, 0, 1, 0, 0, 1]
-
     values = []
     for t in tickers:
         for _ in range(random.randint(1, 3)):
             sent = random.choice(sentiments)
             row = _row_for_schema(debug_dict, t, now_utc, source, sent, force_agg)
             values.append(row)
-
     if not values:
         return 0
     with engine.begin() as conn:
@@ -125,15 +116,11 @@ def main():
     args = parse_args()
     engine = get_engine()
     mention_minutes = reflect_mention_minutes(engine)
-
     debug_dict = detect_columns(engine, mention_minutes)
-    if args.debug_schema or True:
-        print("[collector_v2] detected columns:", sorted(list(debug_dict["cols"])))
-        print("[collector_v2] has_mentions:", debug_dict["has_mentions"], "not_null_mentions:", debug_dict["not_null_mentions"])
-        print("[collector_v2] ts_col:", debug_dict["ts_col"], "has_pos/neg/neu:", debug_dict["has_pos"], debug_dict["has_neg"], debug_dict["has_neu"], "has_sentiment:", debug_dict["has_sentiment"])
-
+    print("[collector_v2] detected columns:", sorted(list(debug_dict["cols"])))
+    print("[collector_v2] has_mentions:", debug_dict["has_mentions"], "not_null_mentions:", debug_dict["not_null_mentions"])
+    print("[collector_v2] ts_col:", debug_dict["ts_col"], "has_pos/neg/neu:", debug_dict["has_pos"], debug_dict["has_neg"], debug_dict["has_neu"], "has_sentiment:", debug_dict["has_sentiment"])
     tickers = read_tickers(args.tickers_file)
-
     for loop_idx in range(args.loops):
         total_inserted = 0
         for batch in batches(tickers, args.batch_size):

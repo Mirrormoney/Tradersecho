@@ -9,7 +9,7 @@
 
 ## Before external delivery
 1. Owner creates and connects the Tradersecho X account using user authorization with publishing permission. Do not paste credentials into chat. Set the appropriate automated account disclosure.
-2. Choose a public domain and verified newsletter sender. Connect Resend or an equivalent email provider. No provider was provisioned or purchased in this release.
+2. Choose a public domain and verified newsletter sender. Connect Resend or an equivalent email provider. Resend free plan is connected to Preview; tradersecho.com and all three DNS records are verified.
 3. Implement and verify email confirmation, tokenized unsubscribe, authenticated delivery webhooks with bounce/complaint suppression, and membership checks at send time. Saved preferences alone do not verify ownership of the email address.
 4. Add a durable delivery ledger with one dispatch per report/channel/recipient, provider idempotency keys and reconciliation for ambiguous responses. No send route exists yet, so environment variables alone cannot enable broadcasts.
 5. Run owner-only test emails and review several X drafts. Add the public link only once the website is intentionally launched. Integrate publishing spend into the existing monthly ceiling before enabling writes.
@@ -27,4 +27,10 @@
 - Domain: tradersecho.com; DNS provider: United Domains (owner described as Uniter Domains).
 - From: Tradersecho <newsletter@tradersecho.com>.
 - Reply-To and support: info@tradersecho.com.
-- Domain ownership was provided by the owner; DNS verification is still pending. Keep existing mail records intact.
+- Resend verified domain and all three DNS records on 2026-09-16. Existing mail records were preserved.
+
+## Owner-only delivery test
+- `ops/prepare_owner_email.py` prepares HTML and plain text from the latest stored complete report, checks freshness, and reads the active owner recipient from the database. Pass a private output JSON path.
+- `ops/send_owner_test.cjs payload.json receipt.json --send` sends only an explicitly prepared test using server-side RESEND_API_KEY. The persisted receipt freezes the payload hash and idempotency key before transmission; successful retries do not resend, and ambiguous attempts older than 23 hours require reconciliation. Keep payloads, environment files and receipts outside the repository.
+- The first authorized owner test on 2026-09-16 was confirmed delivered by Resend. It used the September 15 UTC report, top ten stocks across the 357-stock universe, and the stable private preview link.
+- These are operator tools, not public endpoints or an automated newsletter launch. Subscriber delivery remains off pending the confirmation, unsubscribe, suppression and durable database delivery work above.

@@ -1,193 +1,46 @@
-import React, { useEffect, useRef, useState } from 'react'
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
-function number(n){ return Intl.NumberFormat('en-US', {maximumFractionDigits:2}).format(n) }
-function pct(n){ return (n>=0?'+':'') + number(n*100) + '%' }
-function useAuth(){
-  const [token, setToken] = useState(localStorage.getItem('token') || '')
-  const save = (t)=>{ localStorage.setItem('token', t); setToken(t) }
-  const clear = ()=>{ localStorage.removeItem('token'); setToken('') }
-  return { token, save, clear }
-}
-function useMe(token){
-  const [me, setMe] = useState(null)
-  useEffect(()=>{
-    if(!token){ setMe(null); return }
-    fetch(`${API_BASE}/api/me`, { headers:{Authorization:`Bearer ${token}`} })
-      .then(r=>r.ok?r.json():null).then(setMe).catch(()=>setMe(null))
-  }, [token])
-  return me
-}
-function FreeList(){
-  const [rows, setRows] = useState([])
-  const [tickers, setTickers] = useState('')
-  const [limit, setLimit] = useState(10)
-  const [sort, setSort] = useState('interest_score')
-  async function load(){
-    const params = new URLSearchParams()
-    if(tickers.trim()) params.set('tickers', tickers.trim())
-    params.set('limit', limit); params.set('sort', sort)
-    const r = await fetch(`${API_BASE}/api/free/daily?${params.toString()}`)
-    const j = await r.json(); setRows(j)
-  }
-  useEffect(()=>{ load() },[])
-  return (<div className="card">
-    <div className="row" style={{justifyContent:'space-between'}}>
-      <h3 className="section-title">Free (Delayed) Sentiment — Yesterday</h3>
-      <span className="muted">From DB rollups</span>
-    </div>
-    <div className="row" style={{gap:8, marginBottom:10}}>
-      <input placeholder="Tickers (e.g. AAPL,TSLA)" value={tickers} onChange={e=>setTickers(e.target.value)} />
-      <input type="number" min="1" max="100" value={limit} onChange={e=>setLimit(e.target.value)} style={{width:90}}/>
-      <select value={sort} onChange={e=>setSort(e.target.value)}>
-        <option value="interest_score">Sort: Interest</option>
-        <option value="mentions">Sort: Mentions</option>
-        <option value="zscore">Sort: Z</option>
-      </select>
-      <button className="btn" onClick={load}>Apply</button>
-    </div>
-    <table><thead><tr>
-      <th>Date</th><th>Ticker</th><th>Mentions</th><th>Interest</th><th>Z</th><th>Pos/Neg/Neu</th>
-    </tr></thead><tbody>
-      {rows.map(r=>(
-        <tr key={r.ticker+String(r.date)}>
-          <td>{r.date}</td>
-          <td><span className="pill">${r.ticker}</span></td>
-          <td>{r.mentions}</td>
-          <td>{number(r.interest_score)}</td>
-          <td>{number(r.zscore)}</td>
-          <td>{r.pos}/{r.neg}/{r.neu}</td>
-        </tr>
-      ))}
-    </tbody></table>
-  </div>)
-}
-function Login({onAuthed}){
-  const [mode, setMode] = useState('login')
-  const userRef = useRef(null); const passRef = useRef(null)
-  async function submit(e){
-    e.preventDefault()
-    const username = userRef.current.value.trim(), password = passRef.current.value.trim()
-    if(!username || !password) return
-    try {
-      if(mode === 'signup'){
-        const r = await fetch(`${API_BASE}/api/auth/signup`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, password}) })
-        const j = await r.json(); if(j.access_token){ onAuthed(j.access_token) } else { alert(j.detail || 'Signup failed') }
-      } else {
-        const form = new URLSearchParams(); form.set('username', username); form.set('password', password)
-        const r = await fetch(`${API_BASE}/api/auth/login`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: form })
-        const j = await r.json(); if(j.access_token){ onAuthed(j.access_token) } else { alert(j.detail || 'Login failed') }
-      }
-    } catch{ alert('Network error') }
-  }
-  return (<div className="card">
-    <h3 className="section-title">{mode==='signup' ? 'Create account' : 'Log in for Pro (Realtime)'}</h3>
-    <form onSubmit={submit}>
-      <div className="field"><label>Username</label><input ref={userRef} placeholder="you@example.com" /></div>
-      <div className="field"><label>Password</label><input ref={passRef} type="password" placeholder="••••••••" /></div>
-      <div className="row"><button className="btn primary" type="submit">{mode==='signup'?'Sign up':'Log in'}</button>
-      <button className="btn" type="button" onClick={()=>setMode(mode==='signup'?'login':'signup')}>{mode==='signup'?'Have an account? Log in':'No account? Sign up'}</button></div>
-    </form>
-  </div>)
-}
-function Upgrade({token}){
-  async function go(){
-    const r = await fetch(`${API_BASE}/api/billing/create-checkout-session`, { method:'POST', headers:{ Authorization:`Bearer ${token}` } })
-    const j = await r.json()
-    if(j.url){ window.location.href = j.url } else { alert(j.detail || 'Failed to start checkout') }
-  }
-  return (<div className="card">
-    <h3 className="section-title">Upgrade to Pro</h3>
-    <p className="muted">Unlock realtime updates and full ticker coverage.</p>
-    <button className="btn primary" onClick={go}>Start Stripe Checkout</button>
-  </div>)
-}
-function ProRealtime({token}){
-  const [rows, setRows] = useState([])
-  useEffect(()=>{
-    fetch(`${API_BASE}/api/pro/snapshot?window=5m`, { headers:{Authorization:`Bearer ${token}`} })
-      .then(async r=>{ if(r.status===403) throw new Error('notpro'); return r.json() })
-      .then(setRows).catch(()=>{})
-    const ws = new WebSocket(`${API_BASE.replace('http','ws')}/ws/realtime?token=${token}`)
-    ws.onmessage = (ev)=>{ try{ setRows(JSON.parse(ev.data)) }catch{} }
-    return ()=>{ ws.close() }
-  }, [token])
-  return (<div className="card">
-    <div className="row" style={{justifyContent:'space-between'}}>
-      <h3 className="section-title">Pro (Realtime) Sentiment</h3>
-    </div>
-    <table><thead><tr>
-      <th>Ticker</th><th>Interest</th><th>Mentions (5m)</th><th>Δ vs Avg</th><th>Sentiment</th>
-    </tr></thead><tbody>
-      {rows.map(r=>{
-        const pos = r.sentiment >= 0
-        return (<tr key={r.ticker}>
-          <td><span className="pill">${r.ticker}</span></td>
-          <td>{number(r.interest_score)}</td>
-          <td>{r.mentions}</td>
-          <td>{pct(r.change_vs_avg)}</td>
-          <td><span className={`badge ${pos?'pos':'neg'}`}>{number(r.sentiment)}</span></td>
-        </tr>)
-      })}
-    </tbody></table>
-  </div>)
-}
+import React,{useEffect,useState} from 'react'
+import './style.css'
+
+const fmt=n=>Intl.NumberFormat('en-US').format(n)
+const compact=n=>Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(n)
+async function api(path,method='GET',body){const r=await fetch('/api'+path,{method,credentials:'include',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok)throw new Error(typeof j.detail==='string'?j.detail:'Please check your entries and try again.');return j}
+function Icon({name,size=20}){const paths={pulse:'M2 12h4l3-8 5 16 3-8h5',grid:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',star:'m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M16 3a4 4 0 0 1 0 8 M22 21v-2a4 4 0 0 0-3-3.9 M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',search:'m21 21-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',arrow:'M7 17 17 7 M7 7h10v10',close:'m6 6 12 12 M6 18 18 6',chevron:'m9 5 7 7-7 7',data:'M4 5c0-4 16-4 16 0s-16 4-16 0v14c0 4 16 4 16 0V5 M4 12c0 4 16 4 16 0',bolt:'m13 2-9 12h7l-1 8 10-12h-7z',clock:'M12 8v5l3 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',check:'m5 12 4 4L19 6',logout:'M9 4H4v16h5 M12 12h10m-4-4 4 4-4 4',info:'M12 11v6 M12 7v1 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',plus:'M12 5v14 M5 12h14'};return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]||paths.pulse}/></svg>}
+function Spark({values=[],large=false}){const max=Math.max(1,...values);const points=values.map((v,i)=>`${i/(values.length-1||1)*200},${60-v/max*52}`).join(' ');return <svg className={large?'chart':'spark'} viewBox="0 0 200 65" preserveAspectRatio="none" role="img" aria-label="Mention volume over the selected period"><path d={'M0 65 L'+points.replaceAll(' ',' L')+' L200 65Z'} fill="currentColor" opacity=".08"/><polyline points={points} fill="none" stroke="currentColor" strokeWidth={large?1:2}/></svg>}
+function Sentiment({row}){const total=row.mentions||1;return <div className="sentiment"><div className="sentiment-bar"><i style={{width:row.bullish/total*100+'%'}}/><i style={{width:row.neutral/total*100+'%'}}/><i style={{width:row.bearish/total*100+'%'}}/></div><span>{Math.round(row.bullish/total*100)}% bullish</span></div>}
+function Modal({title,onClose,children}){useEffect(()=>{const previous=document.activeElement;const handler=e=>{if(e.key==='Escape')onClose();if(e.key==='Tab'){const items=[...document.querySelectorAll('.modal button,.modal input,.modal select,.modal a')].filter(el=>!el.disabled);if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1)?.focus()}else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0]?.focus()}}};document.addEventListener('keydown',handler);document.querySelector('.modal button')?.focus();return()=>{document.removeEventListener('keydown',handler);previous?.focus()}},[]);return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}><section className="modal" role="dialog" aria-modal="true" aria-label={title}><div className="section-head"><h2>{title}</h2><button className="icon-button" aria-label="Close dialog" onClick={onClose}><Icon name="close"/></button></div>{children}</section></div>}
+function Posts({rows,source}){if(!rows.length)return <div className="empty"><Icon name="clock" size={28}/><h3>No posts in this window</h3><p>Try a longer period. Tracked accounts only show posts already collected.</p></div>;return <div className="posts">{rows.map(p=><article className="post" key={p.id}><div className="post-top"><div className="avatar">{p.author.slice(0,2).toUpperCase()}</div><div><strong>@{p.author}</strong><small>{new Date(p.ts*1000).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</small></div><span className={'tag '+p.sentiment}>{p.sentiment}</span></div><p>{p.text}</p><div className="post-bottom"><span>♡ {fmt(p.likes)} likes</span>{source==='demo'?<span>Fictional sample post</span>:<a href={'https://x.com/'+p.author+'/status/'+p.id} target="_blank" rel="noreferrer">View on X ↗</a>}</div></article>)}</div>}
+
 export default function App(){
-  const [themeCss] = useState(`
-    :root { --bg:#0b0d12; --card:#141821; --text:#e5e7eb; --muted:#9ca3af; }
-    * { box-sizing: border-box; } body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto; background:var(--bg); color:var(--text); }
-    header { display:flex; align-items:center; justify-content:space-between; padding:16px 24px; border-bottom:1px solid #1f2937; position:sticky; top:0; background:rgba(11,13,18,0.8); backdrop-filter:saturate(180%) blur(8px); }
-    .brand { font-weight:700; letter-spacing:.3px; }
-    .container { max-width:1100px; margin:0 auto; padding:24px; }
-    .hero { display:grid; grid-template-columns: 1.2fr 0.8fr; gap:24px; align-items:center; margin-top:12px; }
-    .card { background:var(--card); border:1px solid #1f2937; border-radius:16px; padding:20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-    .muted { color:var(--muted); }
-    .btn { padding:10px 14px; border-radius:12px; border:1px solid #334155; background:#0b1220; color:var(--text); cursor:pointer; }
-    .btn.primary { background: linear-gradient(135deg, #2563eb, #0891b2); border-color:#1d4ed8; }
-    .grid { display:grid; gap:16px; } .grid.cols-2 { grid-template-columns: 1fr 1fr; }
-    table { width:100%; border-collapse: collapse; } th, td { text-align:left; padding:10px 8px; border-bottom:1px solid #1f2937; } th { color:#93c5fd; font-weight:600; }
-    .badge { padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid #334155; } .badge.pos { color:#86efac; } .badge.neg { color:#fca5a5; }
-    .section-title { font-size:18px; margin:0 0 8px 0; } .field { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
-    input, select { padding:10px 12px; border-radius:10px; border:1px solid #334155; background:#0b1220; color:var(--text); }
-    .row { display:flex; gap:10px; align-items:center; } .pill { font-weight:600; color:#93c5fd; }
-    .footer { color:var(--muted); font-size:12px; margin-top:36px; text-align:center; }
-  `)
-  const auth = (function useAuth(){
-    const [token, setToken] = useState(localStorage.getItem('token') || '')
-    const save = (t)=>{ localStorage.setItem('token', t); setToken(t) }
-    const clear = ()=>{ localStorage.removeItem('token'); setToken('') }
-    return { token, save, clear }
-  })()
-  const me = useMe(auth.token)
-  const authed = !!auth.token
-  return (<>
-    <style>{themeCss}</style>
-    <header>
-      <div className="brand">Twitter Sentiment</div>
-      <div className="row"><a className="btn" href="#pricing">Pricing</a><a className="btn primary" href="#pro">Go Pro</a></div>
-    </header>
-    <div className="container">
-      <div className="hero">
-        <div className="card">
-          <h2 style={{marginTop:0}}>Spot ticker hype, before the chart.</h2>
-          <p className="muted">We track cashtag mentions and compare them to each ticker’s baseline to compute an Interest Score. Add sentiment on top, and you get a real-time crowd signal.</p>
-          <div className="row" style={{marginTop:12}}><a className="btn primary" href="#pro">Try Pro (Realtime)</a><a className="btn" href="#free">See free delayed list</a></div>
-        </div>
-        <div id="free"><FreeList /></div>
-      </div>
-      <div id="pro" style={{marginTop:24}}>
-        {!authed ? <Login onAuthed={auth.save} /> : (me && me.pro ? <ProRealtime token={auth.token} /> : <Upgrade token={auth.token} />)}
-      </div>
-      <div id="pricing" className="grid cols-2" style={{marginTop:24}}>
-        <div className="card"><h3 className="section-title">Free</h3>
-          <ul><li>✓ Yesterday’s sentiment (delayed, from DB)</li><li>✓ Top tickers ranked by Interest score</li><li>✓ Market-wide snapshot</li></ul>
-          <div className="row" style={{marginTop:8}}><span className="muted">€0 / month</span></div>
-        </div>
-        <div className="card"><h3 className="section-title">Pro</h3>
-          <ul><li>✓ Realtime updates (WebSocket)</li><li>✓ Full ticker universe</li><li>✓ API access</li></ul>
-          <div className="row" style={{marginTop:8, justifyContent:'space-between'}}><span className="muted">from €29 / month</span><a className="btn primary" href="#pro">Get started</a></div>
-        </div>
-      </div>
-      <div className="footer">Demo data shown. Plug in your collector to go live.</div>
-    </div>
-  </>)
+const [page,setPage]=useState('market'),[windowDays,setWindowDays]=useState(1),[source,setSource]=useState('demo'),[status,setStatus]=useState(null),[data,setData]=useState(null),[user,setUser]=useState(null),[watchlist,setWatchlist]=useState([]),[handles,setHandles]=useState([]),[posts,setPosts]=useState([]),[postOrder,setPostOrder]=useState('latest'),[query,setQuery]=useState(''),[sort,setSort]=useState('heat'),[sector,setSector]=useState('All sectors'),[selected,setSelected]=useState(null),[modal,setModal]=useState(''),[authMode,setAuthMode]=useState('signup'),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[refresh,setRefresh]=useState(0)
+useEffect(()=>{Promise.all([api('/status'),api('/me')]).then(([s,u])=>{setStatus(s);setUser(u);if(!s.demo_enabled)setSource('x')}).catch(e=>setError(e.message))},[])
+useEffect(()=>{let current=true;setLoading(true);setError('');api(`/rankings?window=${windowDays}&source=${source}`).then(d=>{if(current)setData(d)}).catch(e=>{if(current){setError(e.message);setData(null)}}).finally(()=>{if(current)setLoading(false)});return()=>{current=false}},[windowDays,source,refresh])
+useEffect(()=>{setWatchlist([]);setHandles([]);if(!user)return;api('/watchlist').then(setWatchlist).catch(e=>setError(e.message));if(user.plan==='premium')api('/handles').then(setHandles).catch(e=>setError(e.message))},[user])
+useEffect(()=>{let current=true;setPosts([]);if(!selected&&page!=='voices')return;if(page==='voices'&&user?.plan!=='premium')return;api(`/posts?source=${source}&window=${windowDays}&ticker=${selected||''}&tracked=${page==='voices'&&!selected}&order=${postOrder}`).then(p=>{if(current)setPosts(p)}).catch(e=>{if(current)setError(e.message)});return()=>{current=false}},[selected,page,source,windowDays,handles,user,refresh,postOrder])
+useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(''),4500);return()=>clearTimeout(t)},[notice])
+async function act(fn){setBusy(true);setError('');try{await fn()}catch(e){setError(e.message)}finally{setBusy(false)}}
+async function toggleWatch(ticker){if(!user){setSelected(null);setModal('auth');return}await act(async()=>{await api('/watchlist/'+ticker,watchlist.includes(ticker)?'DELETE':'PUT');setWatchlist(await api('/watchlist'));setNotice(watchlist.includes(ticker)?`${ticker} removed from watchlist`:`${ticker} saved to watchlist`)})}
+function navigate(p){setPage(p);setSelected(null);setQuery('');setError('')}
+const all=data?.rows||[],rows=all.filter(r=>(page!=='watchlist'||watchlist.includes(r.ticker))&&(sector==='All sectors'||r.sector===sector)&&(`${r.ticker} ${r.name}`.toLowerCase().includes(query.toLowerCase()))).sort((a,b)=>(b[sort]??-999)-(a[sort]??-999)),total=all.reduce((n,r)=>n+r.mentions,0),positive=all.reduce((n,r)=>n+r.bullish,0),selectedRow=all.find(r=>r.ticker===selected),leader=all[0]
+return <div className="app"><aside className="sidebar"><a className="brand" href="#" onClick={e=>{e.preventDefault();navigate('market')}}><span className="brand-icon"><Icon name="pulse" size={25}/></span>traders<span>echo</span></a><div className="workspace-label">MARKET INTELLIGENCE</div><nav>{[['market','grid','Market pulse'],['watchlist','star','My watchlist'],['voices','users','Tracked voices'],['data','data','Data sources']].map(([key,icon,label])=><button key={key} className={page===key?'nav-item active':'nav-item'} onClick={()=>navigate(key)}><Icon name={icon}/>{label}{key==='watchlist'&&watchlist.length>0&&<span className="count">{watchlist.length}</span>}{key==='voices'&&<small>PRO</small>}</button>)}</nav><div className="sidebar-bottom"><div className="pro-card"><Icon name="bolt"/><h3>A closer look at the crowd.</h3><p>Follow the voices behind the tickers with Premium.</p><button onClick={()=>setModal('plans')}>Explore Premium <Icon name="arrow" size={16}/></button></div><button className="nav-item" onClick={()=>setModal('method')}><Icon name="info"/>How it works</button><div className="profile"><div className="avatar">{user?user.email.slice(0,2).toUpperCase():'TE'}</div><div><strong>{user?(user.demo?'Preview account':user.email.split('@')[0]):'Your market, in focus'}</strong><small>{user?`${user.plan}${user.demo?' · sample only':''}`:'Sign in to save your research'}</small></div>{user?<button aria-label="Sign out" className="icon-button" onClick={()=>act(async()=>{await api('/auth/logout','POST');setUser(null);setNotice('Signed out')})}><Icon name="logout" size={17}/></button>:<button className="icon-button" aria-label="Sign in" onClick={()=>setModal('auth')}><Icon name="chevron"/></button>}</div></div></aside>
+<div className="main"><header><div className="breadcrumb">Workspace <span>/</span> <strong>{({market:'Market pulse',watchlist:'My watchlist',voices:'Tracked voices',data:'Data sources'})[page]}</strong></div><div className="header-actions"><span className="source-badge">{source==='demo'?'SAMPLE DATA':'COLLECTED X DATA'}</span><button className="button quiet" onClick={()=>{setAuthMode('login');setModal(user?'plans':'auth')}}>{user?user.plan==='premium'?'Premium account':'Free account':'Log in'}</button>{!user&&<button className="button primary" onClick={()=>{setAuthMode('signup');setModal('auth')}}>Create account</button>}</div></header>
+<main><div className="page-heading"><div className="eyebrow">THE CONVERSATION, QUANTIFIED</div><div className="heading-row"><div><h1>{page==='market'?'What’s moving the conversation?':page==='watchlist'?'Your stocks. Your signal.':page==='voices'?'Follow the voices that matter.':'Know where your signal comes from.'}</h1><p>{page==='market'?'Discover the stocks getting attention on X — and what the crowd is saying.':page==='watchlist'?'A focused view of the tickers you’re keeping an eye on.':page==='voices'?'Build your own list of X accounts and explore their collected takes.':'Transparent coverage, clear provenance, and no made-up live numbers.'}</p></div><button className="button" onClick={()=>{setRefresh(v=>v+1);api('/status').then(setStatus).catch(e=>setError(e.message))}}><Icon name="clock" size={16}/>Refresh</button></div></div>
+<div className="demo-banner"><Icon name="info" size={18}/><span>{source==='demo'?<>You’re exploring a <strong>sample market</strong>. All posts and activity are fictional.</>:<>Showing <strong>imported X posts</strong>. Coverage is limited to the configured ticker universe and collection history.</>}</span><button onClick={()=>setSource(source==='demo'?'x':'demo')} disabled={!status?.demo_enabled&&source==='x'}>{source==='demo'?'View collected data':'Explore sample data'} <span>→</span></button></div>
+{error&&<div className="error" role="alert">{error}<button aria-label="Dismiss error" onClick={()=>setError('')}>×</button></div>}
+{page==='data'?<div className="data-grid"><section className="panel"><div className="section-head"><h2>X / Twitter</h2><span className="tag neutral">{status?.x_configured?'Configured':'Not connected'}</span></div><p>Official X API recent search, with cashtag matching, unique post IDs and stored history.</p><dl><div><dt>Imported posts</dt><dd>{fmt(status?.live_posts||0)}</dd></div><div><dt>Latest post</dt><dd>{status?.latest_post?new Date(status.latest_post*1000).toLocaleString():'No posts yet'}</dd></div><div><dt>Tracked universe</dt><dd>{status?.catalog.length||16} stocks</dd></div><div><dt>Last collection</dt><dd>{status?.last_sync?.at?new Date(status.last_sync.at*1000).toLocaleString():'Not run yet'}</dd></div></dl><p className="muted">Recent search covers the last 7 days. Month views grow as collection runs, or can be filled through an archive import.</p><a className="text-link" href="https://docs.x.com/x-api/posts/search/introduction" target="_blank" rel="noreferrer">Read X data documentation ↗</a></section><section className="panel"><h2>Bring your own data</h2><p>Administrators can import a JSON export of X posts. Imports are validated and duplicate post/ticker pairs count once.</p><p className="muted">Required fields: id, author, text, created_at. Optional: likes, sentiment. Dates must include a timezone.</p><button className="button" onClick={()=>setModal('import')}><Icon name="plus" size={16}/>Import X posts</button><div className="divider"/><h3>Sentiment is an estimate</h3><p className="muted">A transparent keyword classifier labels bullish, bearish or neutral language. Sarcasm, mixed theses and multi-ticker posts can be misread. Inspect the original post before drawing conclusions.</p></section><section className="panel universe"><h2>Tracked ticker universe</h2><p className="muted">Rankings describe these stocks, not every stock on X.</p><div className="ticker-chips">{status?.catalog.map(t=><span key={t.ticker}>${t.ticker} <small>{t.name}</small></span>)}</div></section></div>:<>
+<div className="toolbar"><div className="tabs" role="group" aria-label="Time period">{[[1,'24 hours'],[7,'7 days'],[30,'30 days']].map(([v,l])=><button key={v} aria-pressed={windowDays===v} className={windowDays===v?'selected':''} onClick={()=>setWindowDays(v)}>{l}</button>)}</div><span className="as-of">{data?`${source==='demo'?'Sample snapshot':'As of'} · ${new Date(data.as_of*1000).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}`:'Loading market…'}</span></div>
+{page==='voices'?user?.plan==='premium'?<><div className="voices-layout"><section className="panel"><div className="section-head"><h2>Your tracked voices</h2><span className="muted">{handles.length}/25</span></div><form className="handle-form" onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);const form=e.currentTarget;act(async()=>{await api('/handles','POST',{handle:f.get('handle'),note:f.get('note')});setHandles(await api('/handles'));form.reset();setNotice('Account added to your tracked voices')})}}><label>X handle<input name="handle" placeholder="@username" required maxLength={16}/></label><label>Research note<input name="note" placeholder="Why do you follow this account?" maxLength={250}/></label><button className="button primary" disabled={busy}>Add account <Icon name="plus" size={16}/></button></form><div className="divider"/>{handles.map(h=><div className="handle" key={h.handle}><div><strong>@{h.handle}</strong><p>{h.note||'No research note'}</p></div><button className="icon-button" aria-label={'Remove @'+h.handle} onClick={()=>act(async()=>{await api('/handles/'+h.handle,'DELETE');setHandles(await api('/handles'))})}><Icon name="close" size={16}/></button></div>)}<p className="muted">Adding a handle filters collected posts; it does not import its complete history. Sample handles are fictional.</p></section><section><div className="section-head"><h2>Collected takes</h2><select aria-label="Post order" value={postOrder} onChange={e=>setPostOrder(e.target.value)}><option value="latest">Latest posts</option><option value="engagement">Most liked takes</option></select></div><Posts rows={posts} source={source}/></section></div></>:<div className="panel upgrade-empty"><Icon name="users" size={35}/><h2>Your own circle of conviction.</h2><p>Premium lets you save up to 25 X accounts, add research notes, and filter their collected ticker mentions.</p><button className="button primary" onClick={()=>setModal('plans')}>Explore Premium</button></div>:<>
+<section className="stats"><div className="stat"><div>Total ticker mentions <Icon name="pulse" size={18}/></div><strong>{compact(total)}</strong><small>Across {all.length} active stocks</small></div><div className="stat"><div>Crowd sentiment <Icon name="users" size={18}/></div><strong>{total?Math.round(positive/total*100)+'%':'—'} <em>bullish</em></strong><small>Of all collected ticker mentions</small></div><div className="stat spotlight"><div>Most on fire <Icon name="bolt" size={18}/></div><strong>{leader?'$'+leader.ticker:'—'} <em>{leader?.change!=null?`${leader.change>0?'+':''}${leader.change}%`:''}</em></strong><small>{leader?'Mention growth vs previous period':'Waiting for collected data'}</small></div><div className="stat"><div>Unusual attention <Icon name="arrow" size={18}/></div><strong>{all.filter(r=>r.change>=100).length} <em>stocks</em></strong><small>At least 2× the previous period</small></div></section>
+<div className="market-layout"><section className="panel ranking"><div className="section-head"><div><h2>{page==='watchlist'?'Your watchlist':'Trending tickers'} <span className="count">{rows.length}</span></h2><p className="muted">Ranked by volume and acceleration in the conversation.</p></div><button className="icon-button" aria-label="Ranking methodology" onClick={()=>setModal('method')}><Icon name="info" size={18}/></button></div><div className="filters"><label className="search"><Icon name="search" size={17}/><input aria-label="Search tickers" placeholder="Search ticker or company…" value={query} onChange={e=>setQuery(e.target.value)}/></label><select aria-label="Filter sector" value={sector} onChange={e=>setSector(e.target.value)}><option>All sectors</option>{[...new Set(all.map(r=>r.sector))].sort().map(s=><option key={s}>{s}</option>)}</select><select aria-label="Sort tickers" value={sort} onChange={e=>setSort(e.target.value)}><option value="heat">Heat score</option><option value="mentions">Most mentions</option><option value="change">Fastest growth</option><option value="sentiment">Most bullish</option></select></div>
+{loading?<div className="empty">Loading ticker activity…</div>:!rows.length?<div className="empty"><Icon name="search" size={30}/><h3>{page==='watchlist'?'Start with a stock you know.':'No matching activity yet.'}</h3><p>{page==='watchlist'?'Use the star beside a ticker to add it here.':'Change the filters, explore sample data, or connect a data source.'}</p><button className="button" onClick={()=>{if(page==='watchlist')navigate('market');else{setQuery('');setSector('All sectors');if(source==='x')navigate('data')}}}>{page==='watchlist'?'Explore tickers':'Review data & filters'}</button></div>:<div className="table-scroll"><table><thead><tr><th>#</th><th>Stock</th><th>Mentions</th><th>Growth</th><th>Sentiment</th><th>Activity</th><th><span className="sr-only">Watchlist</span></th></tr></thead><tbody>{rows.map((r,i)=><tr key={r.ticker}><td className="rank">{String(i+1).padStart(2,'0')}</td><td><button className="stock" onClick={()=>setSelected(r.ticker)}><span className={'ticker-logo logo-'+(Object.keys(status?.catalog||{}).length?i%5:0)}>{r.ticker.slice(0,2)}</span><span><strong>{r.ticker}{i===0&&sort==='heat'&&<span className="hot">HOT</span>}</strong><small>{r.name}</small></span></button></td><td className="numeric">{fmt(r.mentions)}<small>{fmt(r.authors)} authors</small></td><td><span className={'growth '+(r.change>=0?'positive':'negative')}>{r.change===null?'New':`${r.change>=0?'+':''}${r.change}%`}</span></td><td><Sentiment row={r}/></td><td><Spark values={r.spark}/></td><td><button className={'icon-button save '+(watchlist.includes(r.ticker)?'saved':'')} aria-label={(watchlist.includes(r.ticker)?'Unwatch ':'Watch ')+r.ticker} disabled={busy} onClick={()=>toggleWatch(r.ticker)}><Icon name="star" size={19}/></button></td></tr>)}</tbody></table></div>}
+<div className="table-footer"><span>{source==='demo'?'Fictional sample activity':'Unique post × ticker pairs'} · Reposts excluded by collector</span><button onClick={()=>setModal('method')}>How we rank <span>↗</span></button></div></section><aside className="insights"><section className="panel"><div className="section-head"><h2>On the radar</h2><Icon name="bolt" size={18}/></div><p className="muted">The biggest jumps in attention.</p>{[...all].filter(r=>r.change!==null).sort((a,b)=>b.change-a.change).slice(0,3).map((r,i)=><button className="radar-item" key={r.ticker} onClick={()=>setSelected(r.ticker)}><span className="radar-index">0{i+1}</span><span><strong>${r.ticker}</strong><small>{r.name}</small></span><b className="positive">{r.change>=0?'+':''}{r.change}%</b></button>)}{!all.length&&<p>No activity collected.</p>}</section><section className="panel signal-note"><span className="eyebrow">READ THE SIGNAL</span><h3>Attention ≠ conviction.</h3><p>A surge in mentions can be bullish, bearish, or just noise. Open a ticker to see the discussion behind the number.</p><button className="text-link" onClick={()=>setModal('method')}>Understand the metrics <span>↗</span></button></section><div className="legend"><span><i/>Bullish</span><span><i/>Neutral</span><span><i/>Bearish</span></div></aside></div>
+{data&&!data.comparison_complete&&source==='x'&&<p className="coverage">Partial history: {data.coverage_days} days available. Growth compares observed counts and may be inflated until two full windows are collected.</p>}</>}
+</>}
+<footer><span>tradersecho <b>·</b> Listen to the market.</span><span>Sentiment research. Not investment advice.</span></footer></main></div>
+{notice&&<div className="toast" role="status"><Icon name="check" size={18}/>{notice}</div>}
+{selected&&<Modal title={'$'+selected+' · '+(selectedRow?.name||'Ticker details')} onClose={()=>setSelected(null)}>{selectedRow&&<><div className="detail-stats"><div><small>Mentions</small><strong>{fmt(selectedRow.mentions)}</strong></div><div><small>Heat score</small><strong>{selectedRow.heat}</strong></div><div><small>Distinct authors</small><strong>{selectedRow.authors}</strong></div></div><Spark values={selectedRow.spark} large/><div className="chart-labels"><span>{windowDays===1?'24 hours':windowDays+' days'} ago</span><span>Snapshot</span></div><Sentiment row={selectedRow}/><button className="button" onClick={()=>toggleWatch(selected)}>{watchlist.includes(selected)?'Remove from watchlist':'Add to watchlist'}</button><div className="divider"/></>}<div className="section-head"><h3>Behind the mentions</h3><select aria-label="Post order" value={postOrder} onChange={e=>setPostOrder(e.target.value)}><option value="latest">Latest posts</option><option value="engagement">Most liked takes</option></select></div><Posts rows={posts} source={source}/></Modal>}
+{modal==='auth'&&<Modal title={authMode==='signup'?'Create your free account':'Welcome back'} onClose={()=>setModal('')}><p className="muted">Save your watchlist and keep your market research together.</p><form onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);act(async()=>{const u=await api('/auth/'+authMode,'POST',{email:f.get('email'),password:f.get('password')});setUser(u);setModal('');setNotice(authMode==='signup'?'Your free account is ready':'Welcome back')})}}><label>Email address<input type="email" name="email" required autoComplete="email" placeholder="you@example.com"/></label><label>Password<input type="password" name="password" required minLength={10} maxLength={128} autoComplete={authMode==='signup'?'new-password':'current-password'} placeholder="At least 10 characters"/></label>{error&&<p className="error" role="alert">{error}</p>}<button disabled={busy} className="button primary full">{busy?'Please wait…':authMode==='signup'?'Create free account':'Log in'}</button></form><button className="text-link auth-switch" onClick={()=>{setAuthMode(authMode==='signup'?'login':'signup');setError('')}}>{authMode==='signup'?'Already have an account? Log in':'New here? Create an account'}</button>{status?.demo_enabled&&<><div className="divider"/><p className="muted">Just exploring? Try an isolated preview account.</p><div className="button-row">{['free','premium'].map(plan=><button disabled={busy} className="button" key={plan} onClick={()=>act(async()=>{setUser(await api('/auth/demo?plan='+plan,'POST'));setSource('demo');setModal('');setNotice(plan+' preview ready — sample data only')})}>Try {plan}</button>)}</div></>}</Modal>}
+{modal==='plans'&&<Modal title="Choose your research toolkit" onClose={()=>setModal('')}><div className="plans"><section><span className="eyebrow">FREE</span><h2>The daily pulse.</h2><strong className="price">€0</strong><p>Discover what’s getting attention.</p><ul><li>Day, week and month rankings</li><li>Ticker sentiment and recent posts</li><li>Save up to 5 stocks</li></ul><button className="button full" onClick={()=>{setAuthMode('signup');setModal('auth')}}>{user?'Manage account / log in':'Create free account'}</button></section><section className="premium-plan"><span className="eyebrow">PREMIUM</span><h2>Your research circle.</h2><strong className="price">Early access</strong><p>Pricing will be confirmed at checkout.</p><ul><li>Everything in Free</li><li>Save up to 50 stocks</li><li>Track 25 X accounts with notes</li><li>Filter posts from tracked voices</li></ul><button disabled={busy} className="button primary full" onClick={()=>{if(!user||user.demo){setAuthMode('signup');setModal('auth')}else act(async()=>{const j=await api('/billing/checkout','POST');location.assign(j.url)})}}>{status?.billing_configured?'Upgrade to Premium':'Subscriptions opening soon'}</button></section></div>{error&&<p className="error" role="alert">{error}</p>}{status?.demo_enabled&&<button className="text-link auth-switch" disabled={busy} onClick={()=>act(async()=>{setUser(await api('/auth/demo?plan=premium','POST'));setSource('demo');setModal('');navigate('voices');setNotice('Premium preview ready')})}>Explore Premium with sample data →</button>}<div className="button-row">{user&&<button className="button" onClick={()=>act(async()=>{await api('/auth/logout','POST');setUser(null);setModal('');setNotice('Signed out')})}>Sign out</button>}</div><p className="muted">Premium controls access to research tools. It does not guarantee complete X coverage or a trading advantage.</p></Modal>}
+{modal==='method'&&<Modal title="What’s behind the signal?" onClose={()=>setModal('')}><div className="method"><h3>Mentions</h3><p>One unique post mentioning a supported cashtag counts once per ticker. A post about $NVDA and $AMD counts once for each. Rankings cover our tracked universe only.</p><h3>Heat score</h3><p>Volume combined with acceleration: 10 × ln(1 + mentions) × [1 + max(0, log₂((mentions + 5) / (previous mentions + 5)))]. A high score means unusual attention, not a price prediction.</p><h3>Growth</h3><p>The percentage change versus the preceding window of equal length. No earlier mentions is labeled “New”. Incomplete collection can distort comparisons.</p><h3>Sentiment</h3><p>Rule-based language analysis labels posts bullish, bearish or neutral. The bullish percentage includes neutral posts in its denominator. The same post-level label applies to each mentioned ticker; mixed opinions need human review.</p><h3>Time & provenance</h3><p>Rolling 24-hour, 7-day and 30-day windows use UTC timestamps. Sample data has a fixed reference time and fictional authors. Collected X data is always kept separate.</p></div></Modal>}
+{modal==='import'&&<Modal title="Import X posts" onClose={()=>setModal('')}><p className="muted">Administrator access is required. Your token is used for this request only and is not saved in the browser.</p><form onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);act(async()=>{const file=f.get('file');const parsed=JSON.parse(await file.text());const r=await fetch('/api/admin/import',{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':f.get('token')},body:JSON.stringify({posts:Array.isArray(parsed)?parsed:parsed.posts})});const j=await r.json();if(!r.ok)throw Error(typeof j.detail==='string'?j.detail:'Invalid import file');setNotice(`${j.posts_added} posts and ${j.mentions_added} mentions imported`);setStatus(await api('/status'));setRefresh(v=>v+1);setSource('x');setModal('')})}}><label>Administrator token<input name="token" type="password" required autoComplete="off"/></label><label>JSON file (up to 1,000 posts)<input type="file" name="file" accept=".json,application/json" required/></label>{error&&<p className="error" role="alert">{error}</p>}<button className="button primary full" disabled={busy}>{busy?'Importing…':'Validate and import'}</button></form></Modal>}
+</div>
 }

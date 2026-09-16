@@ -1,6 +1,12 @@
 .env
-backend\.venv/
+.env.*
+!.env.example
+!.env.v2.example
+**/node_modules/
+**/dist/
 **/__pycache__/
-*.pyc
-node_modules/
-frontend\dist/
+**/.pytest_cache/
+**/.venv/
+**/data/
+*.sqlite*
+user login data.docx

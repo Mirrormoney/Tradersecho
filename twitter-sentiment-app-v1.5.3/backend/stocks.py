@@ -15,6 +15,10 @@ def migrate(c):
     CREATE INDEX IF NOT EXISTS collection_pending ON collection_jobs(day,status,kind);
     CREATE TABLE IF NOT EXISTS post_authors(id TEXT PRIMARY KEY,handle TEXT,created_at REAL,followers INTEGER,following INTEGER,posts INTEGER,fetched_at REAL);
     ''')
+    columns={r['name'] for r in c.execute('PRAGMA table_info(collection_jobs)')}
+    for name,kind in [('lease_token','TEXT'),('next_attempt','REAL DEFAULT 0'),('window_end','REAL'),('query','TEXT'),('truncated','INTEGER DEFAULT 0')]:
+        if name not in columns: c.execute(f'ALTER TABLE collection_jobs ADD COLUMN {name} {kind}')
+    c.execute('CREATE INDEX IF NOT EXISTS x_counts_window ON x_counts(start, end, ticker)')
     if not c.execute('SELECT 1 FROM stocks LIMIT 1').fetchone():
         seed=json.loads((Path(__file__).parent/'stock_universe.json').read_text(encoding='utf-8'))
         for r in seed:

@@ -16,8 +16,7 @@ def plan_day():
         if not settings['enabled']: raise RuntimeError('Collection is paused. Enable it in Administration after setting your X spending limit.')
         if not os.getenv('X_BEARER_TOKEN'): raise RuntimeError('X_BEARER_TOKEN is not configured. No paid call was sent.')
         if c.execute('SELECT 1 FROM meta WHERE key=?',('day_planned:'+day,)).fetchone(): return day,end,settings
-        for ticker in s.CATALOG:
-            c.execute('INSERT OR IGNORE INTO collection_jobs(day,kind,ticker,updated_at) VALUES(?,?,?,?)',(day,'counts',ticker,now))
+        c.executemany('INSERT OR IGNORE INTO collection_jobs(day,kind,ticker,updated_at) VALUES(?,?,?,?)',[(day,'counts',ticker,now) for ticker in s.CATALOG])
         c.execute('INSERT INTO meta VALUES(?,?)',('day_planned:'+day,str(end)))
     return day,end,settings
 
@@ -25,9 +24,9 @@ def claim_job(day):
     s=core();now=time.time()
     with s.db() as c:
         c.execute('BEGIN IMMEDIATE')
-        row=c.execute("SELECT * FROM collection_jobs WHERE day=? AND attempts<3 AND (status='pending' OR (status='running' AND lease_until<?)) ORDER BY CASE WHEN kind='counts' THEN 0 ELSE 1 END,id LIMIT 1",(day,now)).fetchone()
+        row=c.execute("SELECT * FROM collection_jobs WHERE day=? AND attempts<3 AND (status='pending' OR (status='running' AND lease_until<?) OR (status='error' AND next_attempt>0 AND next_attempt<=?)) ORDER BY CASE WHEN kind='counts' THEN 0 ELSE 1 END,id LIMIT 1",(day,now,now)).fetchone()
         if not row:return None
-        c.execute("UPDATE collection_jobs SET status='running',attempts=attempts+1,lease_until=?,updated_at=? WHERE id=?",(now+180,now,row['id']))
+        c.execute("UPDATE collection_jobs SET status='running',attempts=attempts+1,lease_until=?,updated_at=? WHERE id=?",(now+300,now,row['id']))
         return dict(row)
 
 def add_samples(day,end,settings):
@@ -38,7 +37,10 @@ def add_samples(day,end,settings):
         c.execute("INSERT INTO meta VALUES('completed_snapshot',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(end),))
         key='samples_planned:'+day
         if c.execute('SELECT 1 FROM meta WHERE key=?',(key,)).fetchone():return
-        # Up to 120 posts/day in 12 samples; reserve a small budget for selected voices.
+        if settings['intraday_enabled']:
+            c.execute('INSERT INTO meta VALUES(?,?)',(key,str(end)))
+            return
+        # Legacy daily-only mode; intraday sampling shares its own hourly queue.
         voices=[r[0] for r in c.execute("SELECT DISTINCT h.handle FROM handles h JOIN accounts a ON h.user_id=a.id WHERE a.demo=0 AND a.status='active' AND (a.plan='premium' OR a.role IN ('admin','owner')) ORDER BY h.handle")]
         voices=sorted(voices,key=lambda h:hashlib.sha256((day+h).encode()).hexdigest())[:min(2,settings['daily_post_limit']//10)]
         maximum=max(0,settings['daily_post_limit']//10-len(voices))
@@ -71,7 +73,7 @@ def run_batch(max_jobs=10,client=None):
                     parsed=[(datetime.fromisoformat(b['start'].replace('Z','+00:00')).timestamp(),datetime.fromisoformat(b['end'].replace('Z','+00:00')).timestamp(),int(b['tweet_count'])) for b in buckets]
                     if len(parsed)!=expected or sorted(a for a,b,n in parsed)!=list(range(int(start),end,3600)) or any(b-a!=3600 or n<0 for a,b,n in parsed):raise RuntimeError('Incomplete hourly counts; snapshot withheld.')
                     with s.db() as c:
-                        for a,b,n in parsed:c.execute('INSERT INTO x_counts VALUES(?,?,?,?,?,?) ON CONFLICT(ticker,start) DO UPDATE SET n=excluded.n,end=excluded.end,query=excluded.query,fetched_at=excluded.fetched_at',(ticker,a,b,n,query,time.time()))
+                        c.executemany('INSERT INTO x_counts VALUES(?,?,?,?,?,?) ON CONFLICT(ticker,start) DO UPDATE SET n=excluded.n,end=excluded.end,query=excluded.query,fetched_at=excluded.fetched_at',[(ticker,a,b,n,query,time.time()) for a,b,n in parsed])
                 elif job['kind']=='profiles':
                     with s.db() as c:
                         ids=[r[0] for r in c.execute('SELECT DISTINCT i.author_id FROM post_identity i JOIN posts p ON p.source=i.source AND p.id=i.post_id LEFT JOIN post_authors a ON a.id=i.author_id WHERE p.ts>? AND (a.id IS NULL OR a.fetched_at<?) ORDER BY i.author_id LIMIT ?',(end-86400,end-30*86400,settings['daily_profile_limit']))]
@@ -92,7 +94,8 @@ def run_batch(max_jobs=10,client=None):
             except Exception as exc:
                 # Never place provider response bodies or credentials into audit/UI errors.
                 message=str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__+': collection failed; check server logs.'
-                with s.db() as c:c.execute("UPDATE collection_jobs SET status='error',lease_until=0,error=?,updated_at=? WHERE id=?",(message[:300],time.time(),job['id']))
+                transient=isinstance(exc,(httpx.TimeoutException,httpx.NetworkError)) or 'HTTP 429' in message or any('HTTP '+str(n) in message for n in range(500,600))
+                with s.db() as c:c.execute("UPDATE collection_jobs SET status='error',lease_until=0,error=?,next_attempt=?,updated_at=? WHERE id=?",(message[:300],time.time()+900 if transient else 0,time.time(),job['id']))
                 errors.append(message);break
         with s.db() as c:
             pending=c.execute("SELECT COUNT(*) FROM collection_jobs WHERE day=? AND status!='done'",(day,)).fetchone()[0]
@@ -107,7 +110,8 @@ def progress(request:Request):
     with s.db() as c:
         counts=[dict(r) for r in c.execute('SELECT kind,status,COUNT(*) n FROM collection_jobs WHERE day=? GROUP BY kind,status',(day,))]
         errors=[dict(r) for r in c.execute("SELECT ticker,kind,error,attempts FROM collection_jobs WHERE day=? AND status='error' ORDER BY id LIMIT 20",(day,))]
-    return {'day':day,'jobs':counts,'errors':errors,'configured':bool(os.getenv('X_BEARER_TOKEN')),'automatic_preview':False}
+    from .live_collection import status
+    return {'day':day,'jobs':counts,'errors':errors,'configured':bool(os.getenv('X_BEARER_TOKEN')),**status()}
 
 @router.post('/api/admin/collection/run')
 def run_owner(request:Request):
@@ -128,5 +132,6 @@ def retry(request:Request):
 def cron(request:Request):
     expected=os.getenv('CRON_SECRET','')
     if not expected or not hmac.compare_digest(request.headers.get('authorization',''),'Bearer '+expected):raise HTTPException(401,'Unauthorized')
-    try:return run_batch()
+    from .live_collection import tick
+    try:return tick(scheduled=True)
     except RuntimeError as exc:return {'paused':True,'reason':str(exc)}

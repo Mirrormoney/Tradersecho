@@ -228,7 +228,7 @@ def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('de
         with db() as c:
             rows=enrich(c,rows,now,window)
             from .screening import enrich as screen_rows
-            rows=screen_rows(c,rows,now,window,classify)
+            rows=screen_rows(c,rows,time.time(),window,classify)
     rows.sort(key=lambda x:x['heat'],reverse=True)
     total=len(rows)
     comparison=bool(earliest and earliest<=prev)
@@ -236,21 +236,21 @@ def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('de
         comparison=all(r.get('comparison_complete',False) for r in rows)
         with db() as c:
             earliest=c.execute('SELECT MIN(start) FROM x_counts').fetchone()[0]
-    return {'rows':rows if u else rows[:3],'total_tickers':total,'preview':not bool(u),'as_of':now,'source':source,'window':window,'comparison_complete':comparison,'coverage_days':round((now-earliest)/86400,1) if earliest else 0}
+    return {'rows':rows if u else rows[:3],'total_tickers':total,'preview':not bool(u),'as_of':now,'sample_as_of':time.time() if source=='x' else now,'source':source,'window':window,'comparison_complete':comparison,'coverage_days':round((now-earliest)/86400,1) if earliest else 0}
 
 @app.get('/api/posts')
 def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),tracked:bool=False,order:str=Query('latest',pattern='^(latest|engagement)$')):
     account(request)
     args=[source]; clauses=['p.source=?']
     with db() as c:
-        now=reference(source,c)
+        now=time.time() if source=='x' else reference(source,c)
         clauses+=['p.ts>?','p.ts<=?'];args += [now-window*86400,now]
         if ticker: clauses.append('m.ticker=?');args.append(ticker.upper())
         if tracked:
             u=account(request);premium(u,source)
             clauses.append('p.author IN (SELECT handle FROM handles WHERE user_id=?)');args.append(u['id'])
         ordering='p.likes DESC,p.ts DESC' if order=='engagement' else 'p.ts DESC'
-        rows=c.execute('SELECT p.*,GROUP_CONCAT(DISTINCT m.ticker) tickers FROM posts p JOIN mentions m ON p.source=m.source AND p.id=m.post_id WHERE '+' AND '.join(clauses)+' GROUP BY p.source,p.id ORDER BY '+ordering+' LIMIT 50',args).fetchall()
+        rows=c.execute('SELECT p.*,GROUP_CONCAT(DISTINCT m.ticker) tickers FROM posts p LEFT JOIN mentions m ON p.source=m.source AND p.id=m.post_id WHERE '+' AND '.join(clauses)+' GROUP BY p.source,p.id ORDER BY '+ordering+' LIMIT 50',args).fetchall()
     return [dict(r) for r in rows]
 
 @app.get('/api/watchlist')
@@ -319,7 +319,7 @@ def classify(text):
         score+=v
     return 'bullish' if score>0 else 'bearish' if score<0 else 'neutral'
 
-def ingest(items):
+def ingest(items,include_unmatched=False):
     normalized=[]
     for item in items:
         pid=str(item.get('id',''));author=str(item.get('author','')).lstrip('@').lower();text=str(item.get('text',''))
@@ -334,13 +334,11 @@ def ingest(items):
         likes=int(item.get('likes',0))
         if likes<0: raise ValueError('Likes must be nonnegative.')
         normalized.append((pid,author,text,ts,sentiment,likes,tickers,str(item.get('author_id',''))))
-    added=0; mentions=0
+    normalized=[r for r in normalized if r[6] or include_unmatched]
     with db() as c:
-        for pid,author,text,ts,sentiment,likes,tickers,author_id in normalized:
-            if not tickers: continue
-            cur=c.execute('INSERT OR IGNORE INTO posts VALUES(?,?,?,?,?,?,?)',('x',pid,author,text,ts,sentiment,likes));added+=cur.rowcount
-            if author_id: c.execute('INSERT OR IGNORE INTO post_identity VALUES(?,?,?)',('x',pid,author_id))
-            for ticker in tickers: mentions+=c.execute('INSERT OR IGNORE INTO mentions VALUES(?,?,?)',('x',pid,ticker)).rowcount
+        added=c.executemany('INSERT OR IGNORE INTO posts VALUES(?,?,?,?,?,?,?)',[('x',pid,author,text,ts,sentiment,likes) for pid,author,text,ts,sentiment,likes,tickers,aid in normalized]).rowcount
+        c.executemany('INSERT OR IGNORE INTO post_identity VALUES(?,?,?)',[('x',r[0],r[7]) for r in normalized if r[7]])
+        mentions=c.executemany('INSERT OR IGNORE INTO mentions VALUES(?,?,?)',[('x',r[0],ticker) for r in normalized for ticker in r[6]]).rowcount
     return {'posts_added':added,'mentions_added':mentions,'received':len(items)}
 
 class ImportPayload(BaseModel):
@@ -400,6 +398,8 @@ async def webhook(request:Request):
 
 from .collection import router as collection_router
 app.include_router(collection_router)
+from .live_collection import router as live_router
+app.include_router(live_router)
 
 @app.get('/api/health')
 def health():

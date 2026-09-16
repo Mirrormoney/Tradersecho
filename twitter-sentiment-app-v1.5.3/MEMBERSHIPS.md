@@ -1,3 +1,5 @@
+> Current hourly collection and scheduler configuration: see [AUTOMATION.md](AUTOMATION.md).
+
 # Memberships, ownership and affordable X collection
 
 ## Owner setup

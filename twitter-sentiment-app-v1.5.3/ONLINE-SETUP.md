@@ -1,3 +1,5 @@
+> Current hourly collection and scheduler configuration: see [AUTOMATION.md](AUTOMATION.md).
+
 # Protected online preview
 
 The Vercel project is `sven-mais-projects/tradersecho`. Deploy preview branches only. Do not promote or deploy `--prod` until public launch is explicitly approved. Vercel Authentication must remain enabled. No public alias is needed for testing.

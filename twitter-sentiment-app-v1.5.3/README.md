@@ -1,3 +1,5 @@
+> Current hourly collection and scheduler configuration: see [AUTOMATION.md](AUTOMATION.md).
+
 # Tradersecho — protected online preview
 
 **Current deployment and X setup:** [ONLINE-SETUP.md](ONLINE-SETUP.md). The Vercel preview uses PostgreSQL, a reviewed AI universe (capacity 1,000), resumable daily collection and sample screening. The local/Docker instructions below remain available for offline work. [Stock selection](UNIVERSE.md).

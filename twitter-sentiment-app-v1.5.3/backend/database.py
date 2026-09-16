@@ -46,6 +46,12 @@ def translate(sql):
 
 class Postgres:
     def __init__(self, connection): self.connection=connection
+    def executemany(self, sql, rows):
+        # psycopg batches these commands in pipeline mode: one network exchange,
+        # rather than one exchange for every historical hour.
+        cursor = self.connection.cursor()
+        cursor.executemany(translate(sql), rows)
+        return Result(cursor, rows=[])
     def execute(self,sql,args=()):
         if sql.strip().upper()=='BEGIN IMMEDIATE':
             return Result(self.connection.execute('SELECT pg_advisory_xact_lock(742091826)'))

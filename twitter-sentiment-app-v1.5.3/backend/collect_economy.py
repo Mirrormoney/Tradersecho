@@ -14,14 +14,28 @@ def paid_request(client,path,params,kind,reserve,token):
         if not settings['enabled']: raise RuntimeError('Collection is paused in Admin → Data budget.')
         spent=c.execute('SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE month=?',(month,)).fetchone()[0]
         if round(spent+reserve,6)>settings['monthly_budget']: raise RuntimeError('Local monthly cost ceiling reached; no request sent.')
+        today=int(time.time()//86400)*86400
+        if kind.startswith('sample') or kind=='profiles':
+            category='sample%' if kind.startswith('sample') else 'profiles'
+            limit=settings['daily_post_limit']*.005 if kind.startswith('sample') else settings['daily_profile_limit']*.01
+            used=c.execute('SELECT COALESCE(SUM(reserved),0) FROM x_spend WHERE ts>=? AND kind LIKE ?',(today,category)).fetchone()[0]
+            if round(used+reserve,6)>round(limit,6): raise RuntimeError('Daily sampling allowance reached; no request sent.')
+        circuit=c.execute("SELECT value FROM meta WHERE key='x_retry_after'").fetchone()
+        if circuit and float(circuit[0])>time.time(): raise RuntimeError('X cooldown active; no request sent.')
         rid=c.execute('INSERT INTO x_spend(month,kind,reserved,ts,status) VALUES(?,?,?,?,?)',(month,kind,reserve,time.time(),'reserved')).lastrowid
     # An uncertain or failed request keeps its full reservation: never refund a request that may have been billed.
     try:
         r=client.get('https://api.x.com/2/'+path,params=params,headers={'Authorization':'Bearer '+token})
-        if not r.is_success: raise RuntimeError(f'X returned HTTP {r.status_code}; reservation retained. Check access, balance or rate limits.')
+        if not r.is_success:
+            if r.status_code==429 or r.status_code>=500:
+                try: reset=float(r.headers.get('x-rate-limit-reset',0))
+                except ValueError: reset=0
+                until=max(time.time()+900,min(reset,time.time()+3600))
+                with db() as c:c.execute("INSERT INTO meta VALUES('x_retry_after',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(until),))
+            raise RuntimeError(f'X returned HTTP {r.status_code}; reservation retained. Check access, balance or rate limits.')
         result=r.json()
         if result.get('errors'): raise RuntimeError('X returned a partial response; reservation retained.')
-        estimate=.005 if kind=='counts' else len(result.get('data',[]))*.01 if kind=='profiles' else len(result.get('data',[]))*.005+len(result.get('includes',{}).get('users',[]))*.01
+        estimate=.005 if kind.startswith('counts') else len(result.get('data',[]))*.01 if kind=='profiles' else len(result.get('data',[]))*.005+len(result.get('includes',{}).get('users',[]))*.01
         with db() as c: c.execute('UPDATE x_spend SET actual_estimate=?,status=? WHERE id=?',(round(estimate,4),'received',rid))
         return result
     except Exception:

@@ -263,3 +263,77 @@ def test_cron_requires_secret_and_owner_signup_is_reserved(monkeypatch):
     assert c.get('/api/cron/collect',headers={'Authorization':'Bearer private-test-secret'}).json()['paused']
     create_owner_invite('reserved@example.com')
     assert c.post('/api/auth/signup',json={'email':'reserved@example.com','password':'long-test-password'}).status_code==403
+
+def test_hourly_planning_budget_and_shared_demand(monkeypatch):
+    from . import live_collection as live
+    from .community import create_owner_invite
+    monkeypatch.setenv('X_BEARER_TOKEN','mock-only')
+    monkeypatch.setattr(s,'CATALOG',{'NVDA':('NVIDIA','Chips'),'AMD':('AMD','Chips')})
+    owner,u=make_account('hourly@example.com',create_owner_invite('hourly@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'intraday_enabled':True,'monthly_budget':5,'daily_post_limit':20,'daily_profile_limit':0})
+    end=int(time.time()//3600)*3600
+    with s.db() as c:
+        c.execute("INSERT INTO meta VALUES('completed_snapshot',?)",(str(end-86400),))
+        c.executemany('INSERT INTO x_counts VALUES(?,?,?,?,?,?)',[('NVDA',end-172800+i*3600,end-172800+(i+1)*3600,3,'mock',time.time()) for i in range(24)])
+    live.plan_hour();live.plan_hour()
+    with s.db() as c:
+        assert c.execute("SELECT COUNT(*) FROM collection_jobs WHERE kind='hour_counts'").fetchone()[0]==1
+        assert c.execute("SELECT COUNT(*) FROM collection_jobs WHERE kind='hour_sample'").fetchone()[0]==1
+    a=owner.post('/api/refresh/AMD');b=owner.post('/api/refresh/AMD')
+    assert a.status_code==b.status_code==200
+    with s.db() as c:assert c.execute("SELECT COUNT(*) FROM collection_jobs WHERE kind='request_counts'").fetchone()[0]==1
+    guest=TestClient(s.app)
+    assert guest.post('/api/refresh/AMD').status_code==401
+    free,_=make_account('free-hourly@example.com')
+    assert free.post('/api/refresh/AMD').status_code==403
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200,json={'data':[]})
+    client=httpx.Client(transport=httpx.MockTransport(handler))
+    from .collect_economy import paid_request
+    paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
+    paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
+    with pytest.raises(RuntimeError,match='allowance'):paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
+    assert len(calls)==2
+
+
+def test_worker_lease_cooldown_and_tracked_posts(monkeypatch):
+    from . import live_collection as live
+    from .community import create_owner_invite
+    from .collect_economy import paid_request
+    monkeypatch.setenv('X_BEARER_TOKEN','mock-only')
+    owner,u=make_account('worker@example.com',create_owner_invite('worker@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'intraday_enabled':True,'monthly_budget':5})
+    with s.db() as c:c.execute("INSERT INTO meta VALUES('worker_lease',?)",(json.dumps({'token':'other','until':time.time()+90}),))
+    assert live.tick()['busy']
+    with s.db() as c:c.execute("DELETE FROM meta WHERE key='worker_lease'")
+    calls=[]
+    def handler(request):
+        calls.append(request);return httpx.Response(429,json={'title':'rate limit'})
+    client=httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(RuntimeError,match='429'):paid_request(client,'tweets/counts/recent',{},'counts_live',.005,'mock')
+    with pytest.raises(RuntimeError,match='cooldown'):paid_request(client,'tweets/counts/recent',{},'counts_live',.005,'mock')
+    assert len(calls)==1
+    owner.post('/api/handles',json={'handle':'researcher','note':'test'})
+    result=s.ingest([{'id':'883322','author':'researcher','author_id':'77','text':'A useful general discussion without a cashtag','created_at':datetime.now(timezone.utc).isoformat()}],include_unmatched=True)
+    assert result['posts_added']==1 and result['mentions_added']==0
+    rows=owner.get('/api/posts?source=x&tracked=true').json()
+    assert len(rows)==1 and rows[0]['author']=='researcher'
+
+
+def test_bulk_history_and_live_freshness(monkeypatch):
+    from .live_collection import perform
+    from .community import create_owner_invite
+    monkeypatch.setenv('X_BEARER_TOKEN','mock-only')
+    owner,u=make_account('bulk@example.com',create_owner_invite('bulk@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'intraday_enabled':True,'monthly_budget':5})
+    end=int(time.time()//3600)*3600
+    def handler(request):
+        from .collect_economy import iso
+        return httpx.Response(200,json={'data':[{'start':iso(t),'end':iso(t+3600),'tweet_count':7} for t in range(end-86400,end,3600)]})
+    client=httpx.Client(transport=httpx.MockTransport(handler))
+    perform({'kind':'hour_counts','ticker':'NVDA','window_end':end,'query':'$NVDA'},client)
+    data=owner.get('/api/live/NVDA').json()
+    assert data['mentions_24h']==168 and data['coverage_hours']==24 and not data['stale']
+    assert owner.post('/api/refresh/NVDA').json()['state']=='fresh'

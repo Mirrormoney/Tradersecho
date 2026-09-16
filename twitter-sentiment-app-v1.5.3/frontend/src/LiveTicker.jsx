@@ -1,0 +1,8 @@
+import React,{useEffect,useState} from 'react'
+import {api} from './api.js'
+export function LiveTicker({ticker,premium,refresh}){
+ const [data,setData]=useState(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false)
+ useEffect(()=>{let active=true;setError('');api('/live/'+ticker).then(d=>{if(active)setData(d)}).catch(e=>{if(active)setError(e.message)});return()=>{active=false}},[ticker,refresh])
+ async function request(){setBusy(true);setError('');try{const r=await api('/refresh/'+ticker,'POST');setNotice(r.message);setData(await api('/live/'+ticker))}catch(e){setError(e.message)}finally{setBusy(false)}}
+ return <section className="panel"><h3>Latest attention check</h3>{data?<><p><strong>{data.mentions_24h.toLocaleString()} mentions</strong> · {data.coverage_hours}/24 hourly buckets</p><p className="muted">Counts through {data.as_of?new Date(data.as_of*1000).toLocaleString():'not collected'}{data.stale?' · Awaiting an update':''}. Daily rankings use a common snapshot so stocks remain comparable.</p><p className="muted">Latest sampled post: {data.latest_sample?new Date(data.latest_sample*1000).toLocaleString():'none yet'}. Samples do not cover every post.</p></>:<p>Checking freshness…</p>}{premium&&<button className="button" disabled={busy||data?.queued} onClick={request}>{busy?'Requesting…':data?.queued?'Refresh queued':'Request shared refresh'}</button>}<p className="muted">Scheduled runs process requests. Recent data is reused; limits apply across the community.</p>{notice&&<p role="status">{notice}</p>}{error&&<p role="alert" className="error">{error}</p>}</section>
+}

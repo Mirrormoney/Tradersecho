@@ -20,3 +20,5 @@ backend/*
 *.zip
 *.docx
 work/
+
+!backend/live_collection.py

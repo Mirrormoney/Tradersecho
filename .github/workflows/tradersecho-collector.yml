@@ -1,0 +1,45 @@
+name: Tradersecho automatic collection
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: tradersecho-collection
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Run protected budget-limited batches
+        env:
+          TRADERSECHO_URL: ${{ secrets.TRADERSECHO_URL }}
+          CRON_SECRET: ${{ secrets.TRADERSECHO_CRON_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.TRADERSECHO_VERCEL_BYPASS }}
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+          from urllib.parse import urlsplit
+          url=os.environ['TRADERSECHO_URL'].rstrip('/')
+          target=urlsplit(url)
+          if target.scheme!='https' or not target.hostname or not target.hostname.endswith('.vercel.app') or target.username or target.password or target.path or target.query:
+              raise SystemExit('Configure the protected Vercel URL secret first.')
+          if not os.environ['CRON_SECRET'] or not os.environ['VERCEL_AUTOMATION_BYPASS_SECRET']:
+              raise SystemExit('Collector authentication secrets are missing.')
+          headers={'Authorization':'Bearer '+os.environ['CRON_SECRET'],'x-vercel-protection-bypass':os.environ['VERCEL_AUTOMATION_BYPASS_SECRET']}
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,*args,**kwargs): return None
+          opener=urllib.request.build_opener(NoRedirect)
+          for batch in range(60):
+              try:
+                  with opener.open(urllib.request.Request(url+'/api/cron/collect',headers=headers),timeout=190) as response: result=json.load(response)
+              except urllib.error.HTTPError as exc: raise SystemExit('Collection HTTP '+str(exc.code)+'; inspect the app.')
+              except Exception: raise SystemExit('Collection did not respond; checkpoints will resume next run.')
+              if result.get('paused'): print('Collection paused in owner settings.');break
+              if result.get('errors'): raise SystemExit('Collection reported errors; inspect Administration > Collection.')
+              print('Completed jobs:',result.get('completed',0))
+              if result.get('busy') or not result.get('completed'):break
+              time.sleep(2)
+          else: raise SystemExit('Batch limit reached; inspect backlog.')
+          PY

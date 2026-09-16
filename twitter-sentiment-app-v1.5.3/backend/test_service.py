@@ -314,6 +314,10 @@ def test_worker_lease_cooldown_and_tracked_posts(monkeypatch):
     client=httpx.Client(transport=httpx.MockTransport(handler))
     with pytest.raises(RuntimeError,match='429'):paid_request(client,'tweets/counts/recent',{},'counts_live',.005,'mock')
     with pytest.raises(RuntimeError,match='cooldown'):paid_request(client,'tweets/counts/recent',{},'counts_live',.005,'mock')
+    assert live.tick(scheduled=True,client=client)['deferred']
+    with s.db() as c:
+        assert c.execute("SELECT COUNT(*) FROM collection_jobs").fetchone()[0]==0
+        assert c.execute("SELECT value FROM meta WHERE key='scheduler_seen'").fetchone()
     assert len(calls)==1
     owner.post('/api/handles',json={'handle':'researcher','note':'test'})
     result=s.ingest([{'id':'883322','author':'researcher','author_id':'77','text':'A useful general discussion without a cashtag','created_at':datetime.now(timezone.utc).isoformat()}],include_unmatched=True)
@@ -337,3 +341,4 @@ def test_bulk_history_and_live_freshness(monkeypatch):
     data=owner.get('/api/live/NVDA').json()
     assert data['mentions_24h']==168 and data['coverage_hours']==24 and not data['stale']
     assert owner.post('/api/refresh/NVDA').json()['state']=='fresh'
+

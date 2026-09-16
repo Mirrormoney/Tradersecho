@@ -98,6 +98,8 @@ def tick(scheduled=False,client=None):
         if scheduled:c.execute("INSERT INTO meta VALUES('scheduler_seen',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(now),))
         if not settings['enabled']:return {'paused':True,'reason':'Collection paused','completed':0}
         if not os.getenv('X_BEARER_TOKEN'):raise RuntimeError('X credential missing.')
+        cooldown=c.execute("SELECT value FROM meta WHERE key='x_retry_after'").fetchone()
+        if cooldown and float(cooldown[0])>now:return {'completed':0,'deferred':True,'retry_after':float(cooldown[0])}
         active=c.execute("SELECT value FROM meta WHERE key='worker_lease'").fetchone()
         if active and json.loads(active[0])['until']>now:return {'completed':0,'busy':True}
         c.execute("INSERT INTO meta VALUES('worker_lease',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps({'token':lease,'until':now+300}),))
@@ -192,3 +194,4 @@ def live_ticker(ticker:str,request:Request):
         latest=c.execute("SELECT MAX(p.ts) FROM posts p JOIN mentions m ON m.source=p.source AND m.post_id=p.id WHERE p.source='x' AND m.ticker=?",(ticker,)).fetchone()[0]
         queued=c.execute("SELECT COUNT(*) FROM collection_jobs WHERE ticker=? AND kind IN ('hour_counts','request_counts') AND status IN ('pending','running')",(ticker,)).fetchone()[0]
     return {'ticker':ticker,'as_of':end,'mentions_24h':counts[0] or 0,'coverage_hours':counts[1],'latest_sample':latest,'queued':bool(queued),'stale':not end or time.time()-end>7200}
+

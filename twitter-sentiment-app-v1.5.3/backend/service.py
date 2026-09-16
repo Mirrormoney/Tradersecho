@@ -7,29 +7,23 @@ from fastapi import FastAPI, Request, Response, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from .community import router as community_router, migrate, claim_owner
+from .database import connect, IntegrityError
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = os.getenv('TRADERSECHO_DB', str(ROOT / 'data' / 'tradersecho.sqlite'))
 DEMO = os.getenv('DEMO_ENABLED', 'true').lower() == 'true'
-SECURE = os.getenv('COOKIE_SECURE', 'false').lower() == 'true'
+SECURE = os.getenv('COOKIE_SECURE', 'true' if os.getenv('VERCEL') else 'false').lower() == 'true'
 ORIGIN = os.getenv('APP_ORIGIN', 'http://127.0.0.1:8000').rstrip('/')
-CATALOG = {'NVDA':('NVIDIA','Semiconductors'), 'TSLA':('Tesla','Automotive'), 'PLTR':('Palantir','Software'), 'AMD':('Advanced Micro Devices','Semiconductors'), 'AAPL':('Apple','Technology'), 'MSFT':('Microsoft','Software'), 'AMZN':('Amazon','Consumer'), 'META':('Meta Platforms','Technology'), 'GOOGL':('Alphabet','Technology'), 'COIN':('Coinbase','Financials'), 'RKLB':('Rocket Lab','Aerospace'), 'ASTS':('AST SpaceMobile','Telecom'), 'SOFI':('SoFi Technologies','Financials'), 'INTC':('Intel','Semiconductors'), 'MU':('Micron Technology','Semiconductors'), 'AVGO':('Broadcom','Semiconductors')}
+DEMO_CATALOG = {'NVDA':('NVIDIA','Semiconductors'), 'TSLA':('Tesla','Automotive'), 'PLTR':('Palantir','Software'), 'AMD':('Advanced Micro Devices','Semiconductors'), 'AAPL':('Apple','Technology'), 'MSFT':('Microsoft','Software'), 'AMZN':('Amazon','Consumer'), 'META':('Meta Platforms','Technology'), 'GOOGL':('Alphabet','Technology'), 'COIN':('Coinbase','Financials'), 'RKLB':('Rocket Lab','Aerospace'), 'ASTS':('AST SpaceMobile','Telecom'), 'SOFI':('SoFi Technologies','Financials'), 'INTC':('Intel','Semiconductors'), 'MU':('Micron Technology','Semiconductors'), 'AVGO':('Broadcom','Semiconductors')}
+from .stocks import Catalog, router as stocks_router, migrate as migrate_stocks
+CATALOG=Catalog()
 app = FastAPI(title='Tradersecho', version='2.0.0')
+app.include_router(community_router)
+app.include_router(stocks_router)
 
-@contextmanager
 def db():
-    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=30)
-    conn.row_factory = sqlite3.Row
-    conn.execute('PRAGMA foreign_keys=ON')
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    return connect(DB_PATH)
 
 def init():
     with db() as c:
@@ -47,6 +41,9 @@ def init():
         CREATE TABLE IF NOT EXISTS attempts(key TEXT PRIMARY KEY,count INTEGER,reset REAL);
         CREATE TABLE IF NOT EXISTS webhook_events(id TEXT PRIMARY KEY);
         ''')
+        migrate(c)
+        migrate_stocks(c)
+        c.execute('CREATE TABLE IF NOT EXISTS post_identity(source TEXT,post_id TEXT,author_id TEXT,PRIMARY KEY(source,post_id))')
     if DEMO: seed_demo()
 
 def seed_demo():
@@ -57,7 +54,7 @@ def seed_demo():
         authors = ['signal_lab','growth_notes','chip_observer','market_journal','orbital_research','value_compass']
         phrases = {'bullish':['Demand looks strong. Watching the next earnings update.','Bullish on the long-term opportunity; execution is the key.','Breakout potential as revenue growth accelerates.'], 'bearish':['Valuation looks stretched. Risk of a pullback here.','Bearish near term: margins under pressure and guidance is weak.','The rally feels overextended. Watching downside risk.'], 'neutral':['Earnings on my watchlist. Waiting for the numbers.','Tracking the volume today; no position yet.','Interesting discussion, but the thesis needs more evidence.']}
         for day in range(61):
-            for idx,ticker in enumerate(CATALOG):
+            for idx,ticker in enumerate(DEMO_CATALOG):
                 base = 25 - idx
                 boost = (4.7 if idx==0 else 3.3 if idx==2 else 1.8 if idx==1 else 1) if day<1 else (1.8 if idx in [3,10] and day<7 else 1)
                 count = max(3, int(base*boost*rng.uniform(.7,1.3)))
@@ -75,6 +72,8 @@ async def security(request, call_next):
     if request.method not in ('GET','HEAD','OPTIONS'):
         origin = request.headers.get('origin')
         allowed = {ORIGIN,'http://127.0.0.1:5173','http://localhost:5173'} if not SECURE else {ORIGIN}
+        for key in ['VERCEL_URL','VERCEL_BRANCH_URL','VERCEL_PROJECT_PRODUCTION_URL']:
+            if os.getenv(key): allowed.add('https://'+os.environ[key])
         if origin and origin not in allowed:
             return Response('Origin rejected',status_code=403)
         try:
@@ -96,10 +95,13 @@ def account(request, required=True):
     with db() as c:
         row=c.execute('SELECT a.* FROM accounts a JOIN sessions s ON a.id=s.user_id WHERE s.token=? AND s.expires>?',(hashlib.sha256(raw.encode()).hexdigest(),time.time())).fetchone()
     if not row and required: raise HTTPException(401,'Sign in to continue.')
+    if row and row['status']!='active': raise HTTPException(403,'This account is suspended. Contact the site owner.')
+    if row and (not row['last_seen'] or row['last_seen']<time.time()-300):
+        with db() as c: c.execute('UPDATE accounts SET last_seen=? WHERE id=?',(time.time(),row['id']))
     return dict(row) if row else None
 
 def public_account(u):
-    return {'email':u['email'],'plan':u['plan'],'demo':bool(u['demo'])}
+    return {k:u[k] for k in ['id','email','plan','role','status','display_name']} | {'demo':bool(u['demo'])}
 
 def session(response, uid):
     token=secrets.token_urlsafe(32)
@@ -124,6 +126,7 @@ def password_hash(p,salt=None):
 class Credentials(BaseModel):
     email:str=Field(min_length=3,max_length=254)
     password:str=Field(min_length=10,max_length=128)
+    owner_code:str=Field(default='',max_length=150)
 
 @app.post('/api/auth/signup')
 def signup(payload:Credentials,request:Request,response:Response):
@@ -132,10 +135,15 @@ def signup(payload:Credentials,request:Request,response:Response):
     if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email): raise HTTPException(422,'Enter a valid email address.')
     uid=secrets.token_hex(16)
     with db() as c:
-        try: c.execute('INSERT INTO accounts(id,email,password) VALUES(?,?,?)',(uid,email,password_hash(payload.password)))
-        except sqlite3.IntegrityError: raise HTTPException(409,'An account with this email already exists.')
+        c.execute('BEGIN IMMEDIATE')
+        reserved=c.execute('SELECT 1 FROM owner_invites WHERE email=? AND used_by IS NULL AND expires>?',(email,time.time())).fetchone()
+        if reserved and not payload.owner_code: raise HTTPException(403,'This email is reserved. Use Owner setup with your private invitation.')
+        try: c.execute('INSERT INTO accounts(id,email,password,display_name,created_at,last_login) VALUES(?,?,?,?,?,?)',(uid,email,password_hash(payload.password),'Trader-'+uid[:6],time.time(),time.time()))
+        except IntegrityError: raise HTTPException(409,'An account with this email already exists.')
+        if payload.owner_code: claim_owner(c,payload.owner_code,email,uid)
+        u=c.execute('SELECT * FROM accounts WHERE id=?',(uid,)).fetchone()
     session(response,uid)
-    return {'email':email,'plan':'free','demo':False}
+    return public_account(u)
 
 @app.post('/api/auth/login')
 def login(payload:Credentials,request:Request,response:Response):
@@ -144,6 +152,8 @@ def login(payload:Credentials,request:Request,response:Response):
     stored=u['password'] if u else password_hash('unmatched-password')
     if not hmac.compare_digest(password_hash(payload.password,stored.split(':')[0]),stored) or not u:
         raise HTTPException(401,'Email or password is incorrect.')
+    if u['status']!='active': raise HTTPException(403,'This account is suspended. Contact the site owner.')
+    with db() as c: c.execute('UPDATE accounts SET last_login=? WHERE id=?',(time.time(),u['id']))
     session(response,u['id'])
     return public_account(u)
 
@@ -153,7 +163,7 @@ def demo_account(request:Request,response:Response,plan:str=Query('premium',patt
     throttle(request)
     uid=secrets.token_hex(16)
     with db() as c:
-        c.execute('INSERT INTO accounts(id,email,plan,demo) VALUES(?,?,?,1)',(uid,f'{plan}-preview-{uid[:6]}@demo.local',plan))
+        c.execute('INSERT INTO accounts(id,email,plan,demo,display_name,created_at) VALUES(?,?,?,1,?,?)',(uid,f'{plan}-preview-{uid[:6]}@demo.local',plan,'Preview-'+uid[:6],time.time()))
         for t in ['NVDA','PLTR','RKLB']: c.execute('INSERT INTO watchlist VALUES(?,?)',(uid,t))
         c.execute('INSERT INTO handles VALUES(?,?,?)',(uid,'signal_lab','Fictional analyst in the sample dataset'))
         u=c.execute('SELECT * FROM accounts WHERE id=?',(uid,)).fetchone()
@@ -172,12 +182,16 @@ def me(request:Request):
     return public_account(u) if u else None
 
 def premium(u,source='demo'):
-    if not u or u['plan']!='premium' or (u['demo'] and source!='demo'): raise HTTPException(403,'Premium membership is required for this feature.')
+    if not u or (u['plan']!='premium' and u['role'] not in ['owner','admin']) or (u['demo'] and source!='demo'): raise HTTPException(403,'Premium membership is required for this feature.')
 
 def reference(source,c):
     if source=='demo':
         if not DEMO: raise HTTPException(404,'Sample data is disabled.')
         return float(c.execute("SELECT value FROM meta WHERE key='demo_anchor'").fetchone()[0])
+    latest=c.execute("SELECT value FROM meta WHERE key='completed_snapshot'").fetchone()
+    if latest: return float(latest[0])
+    totals=c.execute('SELECT ticker,MAX(end) latest FROM x_counts GROUP BY ticker').fetchall()
+    if len(totals)==len(CATALOG): return min(r['latest'] for r in totals)
     return time.time()
 
 @app.get('/api/status')
@@ -189,6 +203,8 @@ def status():
 
 @app.get('/api/rankings')
 def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$')):
+    u=account(request,False)
+    if not u and window!=1: raise HTTPException(401,'Create a free account to explore weekly and monthly rankings.')
     if window not in [1,7,30]: raise HTTPException(422,'Choose 1, 7 or 30 days.')
     with db() as c:
         now=reference(source,c); start=now-window*86400; prev=start-window*86400
@@ -207,11 +223,24 @@ def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('de
         row['sentiment']=round((row['bullish']-row['bearish'])/row['mentions']*100)
         row['heat']=round(math.log1p(row['mentions'])*(1+max(0,math.log2((row['mentions']+5)/(old+5))))*10,1)
         rows.append(row)
+    if source=='x':
+        from .count_metrics import enrich
+        with db() as c:
+            rows=enrich(c,rows,now,window)
+            from .screening import enrich as screen_rows
+            rows=screen_rows(c,rows,now,window,classify)
     rows.sort(key=lambda x:x['heat'],reverse=True)
-    return {'rows':rows,'as_of':now,'source':source,'window':window,'comparison_complete':bool(earliest and earliest<=prev),'coverage_days':round((now-earliest)/86400,1) if earliest else 0}
+    total=len(rows)
+    comparison=bool(earliest and earliest<=prev)
+    if source=='x' and any(r.get('volume_source') for r in rows):
+        comparison=all(r.get('comparison_complete',False) for r in rows)
+        with db() as c:
+            earliest=c.execute('SELECT MIN(start) FROM x_counts').fetchone()[0]
+    return {'rows':rows if u else rows[:3],'total_tickers':total,'preview':not bool(u),'as_of':now,'source':source,'window':window,'comparison_complete':comparison,'coverage_days':round((now-earliest)/86400,1) if earliest else 0}
 
 @app.get('/api/posts')
 def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),tracked:bool=False,order:str=Query('latest',pattern='^(latest|engagement)$')):
+    account(request)
     args=[source]; clauses=['p.source=?']
     with db() as c:
         now=reference(source,c)
@@ -274,6 +303,8 @@ def remove_handle(handle:str,request:Request):
     return {'ok':True}
 
 def admin(request):
+    u=account(request,False)
+    if u and not u['demo'] and u['role'] in ['admin','owner']: return
     expected=os.getenv('ADMIN_TOKEN','')
     if not expected or not hmac.compare_digest(request.headers.get('x-admin-token',''),expected): raise HTTPException(403,'Administrator access required.')
 
@@ -292,7 +323,7 @@ def ingest(items):
     normalized=[]
     for item in items:
         pid=str(item.get('id',''));author=str(item.get('author','')).lstrip('@').lower();text=str(item.get('text',''))
-        if not re.fullmatch(r'\d{1,30}',pid) or not re.fullmatch(r'[a-z0-9_]{1,15}',author) or not text or len(text)>25000: raise ValueError('Each post needs a numeric X id, valid author handle, text and UTC created_at.')
+        if not re.fullmatch(r'\d{1,30}',pid) or not re.fullmatch(r'(?:[a-z0-9_]{1,15}|id[0-9]{1,20})',author) or not text or len(text)>25000: raise ValueError('Each post needs a numeric X id, valid author handle, text and UTC created_at.')
         ts=datetime.fromisoformat(str(item.get('created_at','')).replace('Z','+00:00'))
         if ts.tzinfo is None: raise ValueError('created_at must include a timezone.')
         ts=ts.timestamp()
@@ -302,12 +333,13 @@ def ingest(items):
         if sentiment not in ['bullish','bearish','neutral']: raise ValueError('Invalid sentiment label.')
         likes=int(item.get('likes',0))
         if likes<0: raise ValueError('Likes must be nonnegative.')
-        normalized.append((pid,author,text,ts,sentiment,likes,tickers))
+        normalized.append((pid,author,text,ts,sentiment,likes,tickers,str(item.get('author_id',''))))
     added=0; mentions=0
     with db() as c:
-        for pid,author,text,ts,sentiment,likes,tickers in normalized:
+        for pid,author,text,ts,sentiment,likes,tickers,author_id in normalized:
             if not tickers: continue
             cur=c.execute('INSERT OR IGNORE INTO posts VALUES(?,?,?,?,?,?,?)',('x',pid,author,text,ts,sentiment,likes));added+=cur.rowcount
+            if author_id: c.execute('INSERT OR IGNORE INTO post_identity VALUES(?,?,?)',('x',pid,author_id))
             for ticker in tickers: mentions+=c.execute('INSERT OR IGNORE INTO mentions VALUES(?,?,?)',('x',pid,ticker)).rowcount
     return {'posts_added':added,'mentions_added':mentions,'received':len(items)}
 
@@ -325,7 +357,7 @@ async def set_plan(request:Request):
     admin(request);payload=await request.json()
     if payload.get('plan') not in ['free','premium']: raise HTTPException(422,'Invalid plan.')
     with db() as c:
-        changed=c.execute('UPDATE accounts SET plan=? WHERE email=? AND demo=0',(payload['plan'],payload.get('email','').lower())).rowcount
+        changed=c.execute("UPDATE accounts SET plan=? WHERE email=? AND demo=0 AND role='member'",(payload['plan'],payload.get('email','').lower())).rowcount
     if not changed: raise HTTPException(404,'Account not found.')
     return {'ok':True}
 
@@ -366,7 +398,20 @@ async def webhook(request:Request):
                 c.execute('INSERT INTO webhook_events VALUES(?)',(event['id'],))
     return {'received':True}
 
-init()
+from .collection import router as collection_router
+app.include_router(collection_router)
+
+@app.get('/api/health')
+def health():
+    try:
+        with db() as c: c.execute('SELECT 1').fetchone()
+        return {'ok':True,'storage':'postgres' if os.getenv('APP_DATABASE_URL') or os.getenv('DATABASE_URL') or os.getenv('POSTGRES_URL') else 'sqlite','universe':len(CATALOG)}
+    except Exception as exc:
+        import logging
+        logging.exception('Database health check failed')
+        return Response(json.dumps({'ok':False,'error':type(exc).__name__}),status_code=503,media_type='application/json')
+
+if not os.getenv('VERCEL'): init()
 DIST=ROOT/'frontend'/'dist'
 if DIST.exists():
     app.mount('/assets',StaticFiles(directory=DIST/'assets'),name='assets')

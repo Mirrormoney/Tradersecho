@@ -10,7 +10,7 @@ services:
   collector:
     build: .
     profiles: ["live"]
-    command: ["python", "-m", "backend.collect_x", "--loop", "--interval", "3600", "--max-pages", "2"]
+    command: ["python", "-m", "backend.run_local", "--loop"]
     env_file: .env.v2
     environment:
       TRADERSECHO_DB: /app/data/tradersecho.sqlite

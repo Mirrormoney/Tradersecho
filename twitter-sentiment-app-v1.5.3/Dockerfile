@@ -9,7 +9,7 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY backend/requirements-v2.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-COPY backend/__init__.py backend/service.py backend/collect_x.py ./backend/
+COPY backend/*.py backend/stock_universe.json ./backend/
 COPY --from=frontend /build/dist ./frontend/dist
 RUN useradd --create-home appuser && mkdir /app/data && chown -R appuser:appuser /app
 USER appuser

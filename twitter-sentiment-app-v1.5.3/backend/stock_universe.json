@@ -1,0 +1,2858 @@
+[
+  {
+    "ticker": "NVDA",
+    "name": "NVIDIA Corporation",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AMD",
+    "name": "Advanced Micro Devices, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "INTC",
+    "name": "Intel Corporation",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AVGO",
+    "name": "Broadcom Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "TSM",
+    "name": "Taiwan Semiconductor Manufacturing Company Ltd.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "QCOM",
+    "name": "QUALCOMM Incorporated",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MRVL",
+    "name": "Marvell Technology, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ALAB",
+    "name": "Astera Labs, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AMBA",
+    "name": "Ambarella, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "LSCC",
+    "name": "Lattice Semiconductor Corporation",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MPWR",
+    "name": "Monolithic Power Systems, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MCHP",
+    "name": "Microchip Technology Incorporated",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ADI",
+    "name": "Analog Devices, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "TXN",
+    "name": "Texas Instruments Incorporated",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "NXPI",
+    "name": "NXP Semiconductors N.V.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ON",
+    "name": "ON Semiconductor Corporation",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "STM",
+    "name": "STMicroelectronics N.V. Common Stock",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "GFS",
+    "name": "GlobalFoundries Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "UMC",
+    "name": "United Microelectronics Corporation (NEW) Common Stock",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "TSEM",
+    "name": "Tower Semiconductor Ltd.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CRUS",
+    "name": "Cirrus Logic, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SYNA",
+    "name": "Synaptics Incorporated",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SLAB",
+    "name": "Silicon Laboratories, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "POWI",
+    "name": "Power Integrations, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SITM",
+    "name": "SiTime Corporation",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CEVA",
+    "name": "CEVA, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AIP",
+    "name": "Arteris, Inc. ",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "QUIK",
+    "name": "QuickLogic Corporation",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "GSIT",
+    "name": "GSI Technology, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MX",
+    "name": "Magnachip Semiconductor Corporation Common Stock",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AMKR",
+    "name": "Amkor Technology, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "FORM",
+    "name": "FormFactor, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "COHU",
+    "name": "Cohu, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AEHR",
+    "name": "Aehr Test Systems",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "TER",
+    "name": "Teradyne, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CAMT",
+    "name": "Camtek Ltd.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ONTO",
+    "name": "Onto Innovation Inc. Common Stock",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ACLS",
+    "name": "Axcelis Technologies, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ACMR",
+    "name": "ACM Research, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AMAT",
+    "name": "Applied Materials, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "LRCX",
+    "name": "Lam Research Corporation",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "KLAC",
+    "name": "KLA Corporation ",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ASML",
+    "name": "ASML Holding N.V.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ICHR",
+    "name": "Ichor Holdings",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "UCTT",
+    "name": "Ultra Clean Holdings, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "VECO",
+    "name": "Veeco Instruments Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AOSL",
+    "name": "Alpha and Omega Semiconductor Limited",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "DIOD",
+    "name": "Diodes Incorporated",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MTSI",
+    "name": "MACOM Technology Solutions Holdings, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "NVTS",
+    "name": "Navitas Semiconductor Corporation",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "WOLF",
+    "name": "Wolfspeed, Inc. Common Stock New",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "IPGP",
+    "name": "IPG Photonics Corporation",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MKSI",
+    "name": "MKS Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ENTG",
+    "name": "Entegris, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AXTI",
+    "name": "AXT Inc",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "PDFS",
+    "name": "PDF Solutions, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "PLAB",
+    "name": "Photronics, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "KLIC",
+    "name": "Kulicke and Soffa Industries, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "LITE",
+    "name": "Lumentum Holdings Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "COHR",
+    "name": "Coherent Corp. Common Stock",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AAOI",
+    "name": "Applied Optoelectronics, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "FN",
+    "name": "Fabrinet Ordinary Shares",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "POET",
+    "name": "POET Technologies Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "LWLG",
+    "name": "Lightwave Logic, Inc.",
+    "sector": "Semiconductors",
+    "theme": "AI compute",
+    "reason": "Compute, chip design or semiconductor supply-chain exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MU",
+    "name": "Micron Technology, Inc.",
+    "sector": "Memory and storage",
+    "theme": "Data infrastructure",
+    "reason": "Memory, storage or data-management infrastructure exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "WDC",
+    "name": "Western Digital Corporation",
+    "sector": "Memory and storage",
+    "theme": "Data infrastructure",
+    "reason": "Memory, storage or data-management infrastructure exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "STX",
+    "name": "Seagate Technology Holdings PLC",
+    "sector": "Memory and storage",
+    "theme": "Data infrastructure",
+    "reason": "Memory, storage or data-management infrastructure exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "NTAP",
+    "name": "NetApp, Inc.",
+    "sector": "Memory and storage",
+    "theme": "Data infrastructure",
+    "reason": "Memory, storage or data-management infrastructure exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SNDK",
+    "name": "Sandisk Corporation",
+    "sector": "Memory and storage",
+    "theme": "Data infrastructure",
+    "reason": "Memory, storage or data-management infrastructure exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "RMBS",
+    "name": "Rambus, Inc.",
+    "sector": "Memory and storage",
+    "theme": "Data infrastructure",
+    "reason": "Memory, storage or data-management infrastructure exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "INOD",
+    "name": "Innodata Inc.",
+    "sector": "Memory and storage",
+    "theme": "Data infrastructure",
+    "reason": "Memory, storage or data-management infrastructure exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ANET",
+    "name": "Arista Networks, Inc. Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CSCO",
+    "name": "Cisco Systems, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "HPE",
+    "name": "Hewlett Packard Enterprise Company Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "DELL",
+    "name": "Dell Technologies Inc. Class C Common Stock ",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "SMCI",
+    "name": "Super Micro Computer, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CIEN",
+    "name": "Ciena Corporation Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "VIAV",
+    "name": "Viavi Solutions Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "EXTR",
+    "name": "Extreme Networks, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ADTN",
+    "name": "ADTRAN Holdings, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CALX",
+    "name": "Calix, Inc Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "FSLY",
+    "name": "Fastly, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "NET",
+    "name": "Cloudflare, Inc. Class A Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AKAM",
+    "name": "Akamai Technologies, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "FFIV",
+    "name": "F5, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "DGII",
+    "name": "Digi International Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "BELFB",
+    "name": "Bel Fuse Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "BDC",
+    "name": "Belden Inc Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "APH",
+    "name": "Amphenol Corporation Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "TEL",
+    "name": "TE Connectivity plc Ordinary Shares",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "GLW",
+    "name": "Corning Incorporated Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "FLEX",
+    "name": "Flex Ltd.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "JBL",
+    "name": "Jabil Inc. Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CLS",
+    "name": "Celestica, Inc. Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "SANM",
+    "name": "Sanmina Corporation",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "PLXS",
+    "name": "Plexus Corp.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "TTMI",
+    "name": "TTM Technologies, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AEIS",
+    "name": "Advanced Energy Industries, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "VSH",
+    "name": "Vishay Intertechnology, Inc. Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AVT",
+    "name": "Avnet, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ARW",
+    "name": "Arrow Electronics, Inc. Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "KEYS",
+    "name": "Keysight Technologies Inc. Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "TDY",
+    "name": "Teledyne Technologies Incorporated Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CTS",
+    "name": "CTS Corporation Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "PAR",
+    "name": "PAR Technology Corporation Common Stock",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "OUST",
+    "name": "Ouster, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AEVA",
+    "name": "Aeva Technologies, Inc.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "INVZ",
+    "name": "Innoviz Technologies Ltd.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ARBE",
+    "name": "Arbe Robotics Ltd.",
+    "sector": "Networking and servers",
+    "theme": "AI infrastructure",
+    "reason": "Networking, servers, optical connectivity or electronics manufacturing exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "VRT",
+    "name": "Vertiv Holdings, LLC Class A Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ETN",
+    "name": "Eaton Corporation, PLC Ordinary Shares",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "GEV",
+    "name": "GE Vernova Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "PWR",
+    "name": "Quanta Services, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "HUBB",
+    "name": "Hubbell Inc Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "NVT",
+    "name": "nVent Electric plc Ordinary Shares ",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "EMR",
+    "name": "Emerson Electric Company Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ROK",
+    "name": "Rockwell Automation, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "JCI",
+    "name": "Johnson Controls International plc Ordinary Share",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "TT",
+    "name": "Trane Technologies plc",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CARR",
+    "name": "Carrier Global Corporation Common Stock ",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AAON",
+    "name": "AAON, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MOD",
+    "name": "Modine Manufacturing Company Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "FIX",
+    "name": "Comfort Systems USA, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "EME",
+    "name": "EMCOR Group, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "IESC",
+    "name": "IES Holdings, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MYRG",
+    "name": "MYR Group, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MTZ",
+    "name": "MasTec, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "STRL",
+    "name": "Sterling Infrastructure, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "PRIM",
+    "name": "Primoris Services Corporation Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "APG",
+    "name": "APi Group Corporation Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ATKR",
+    "name": "Atkore Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "GNRC",
+    "name": "Generac Holdlings Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CMI",
+    "name": "Cummins Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CAT",
+    "name": "Caterpillar, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "BWXT",
+    "name": "BWX Technologies, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "NNE",
+    "name": "Nano Nuclear Energy Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SMR",
+    "name": "NuScale Power Corporation Class A Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "OKLO",
+    "name": "Oklo Inc. Class A common stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "BE",
+    "name": "Bloom Energy Corporation Class A Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "EOSE",
+    "name": "Eos Energy Enterprises, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "FLNC",
+    "name": "Fluence Energy, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "STEM",
+    "name": "Stem, Inc. Class A Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "GE",
+    "name": "GE Aerospace Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AMSC",
+    "name": "American Superconductor Corporation",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "POWL",
+    "name": "Powell Industries, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SHLS",
+    "name": "Shoals Technologies Group, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "NXT",
+    "name": "Nextpower Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ARRY",
+    "name": "Array Technologies, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ENPH",
+    "name": "Enphase Energy, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SEDG",
+    "name": "SolarEdge Technologies, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "FSLR",
+    "name": "First Solar, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "RUN",
+    "name": "Sunrun Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AMRC",
+    "name": "Ameresco, Inc. Class A Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AOS",
+    "name": "A.O. Smith Corporation Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "WTS",
+    "name": "Watts Water Technologies, Inc. Class A Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "SPXC",
+    "name": "SPX Technologies, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ITT",
+    "name": "ITT Inc. Common Stock ",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "IR",
+    "name": "Ingersoll Rand Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "DOV",
+    "name": "Dover Corporation Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "PH",
+    "name": "Parker-Hannifin Corporation Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "RRX",
+    "name": "Regal Rexnord Corporation Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "GRC",
+    "name": "Gorman-Rupp Company (The) Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ROAD",
+    "name": "Construction Partners, Inc.",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "DY",
+    "name": "Dycom Industries, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AGX",
+    "name": "Argan, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "BKR",
+    "name": "Baker Hughes Company",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "WCC",
+    "name": "WESCO International, Inc. Common Stock",
+    "sector": "Power and cooling",
+    "theme": "Data-center enablers",
+    "reason": "Electrical equipment, cooling, construction or grid infrastructure; AI demand is an indirect theme.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CEG",
+    "name": "Constellation Energy Corporation",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "VST",
+    "name": "Vistra Corp. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "NRG",
+    "name": "NRG Energy, Inc. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "TLN",
+    "name": "Talen Energy Corporation",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "NEE",
+    "name": "NextEra Energy, Inc. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "DUK",
+    "name": "Duke Energy Corporation (Holding Company) Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "SO",
+    "name": "Southern Company (The) Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AEP",
+    "name": "American Electric Power Company, Inc.",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "D",
+    "name": "Dominion Energy, Inc. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "EXC",
+    "name": "Exelon Corporation",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "XEL",
+    "name": "Xcel Energy Inc.",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ETR",
+    "name": "Entergy Corporation Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "PEG",
+    "name": "Public Service Enterprise Group Incorporated Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "SRE",
+    "name": "DBA Sempra Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ED",
+    "name": "Consolidated Edison, Inc. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "WEC",
+    "name": "WEC Energy Group, Inc. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ES",
+    "name": "Eversource Energy (D/B/A) Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AES",
+    "name": "The AES Corporation Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "PCG",
+    "name": "Pacific Gas & Electric Co. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "EIX",
+    "name": "Edison International Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "FE",
+    "name": "FirstEnergy Corp. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "PPL",
+    "name": "PPL Corporation Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AEE",
+    "name": "Ameren Corporation Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CMS",
+    "name": "CMS Energy Corporation Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CNP",
+    "name": "CenterPoint Energy, Inc (Holding Co) Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "LNT",
+    "name": "Alliant Energy Corporation",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "EVRG",
+    "name": "Evergy, Inc.",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "OGE",
+    "name": "OGE Energy Corp Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "POR",
+    "name": "Portland General Electric Co Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "PNW",
+    "name": "Pinnacle West Capital Corporation Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "IDA",
+    "name": "IDACORP, Inc. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "BKH",
+    "name": "Black Hills Corporation Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "NWE",
+    "name": "NorthWestern Energy Group, Inc. ",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AVA",
+    "name": "Avista Corporation Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "OTTR",
+    "name": "Otter Tail Corporation",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "UGI",
+    "name": "UGI Corporation Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "BEPC",
+    "name": "Brookfield Renewable Corporation Brookfield Renewable Corporation Class A Subordinate Voting Shares",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "BIPC",
+    "name": "Brookfield Infrastructure Corporation Brookfield Infrastructure Corporation",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CWEN",
+    "name": "Clearway Energy, Inc. Class C Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ORA",
+    "name": "Ormat Technologies, Inc. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CCJ",
+    "name": "Cameco Corporation Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "LEU",
+    "name": "Centrus Energy Corp. Class A Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "UEC",
+    "name": "Uranium Energy Corp. Common Stock",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "UUUU",
+    "name": "Energy Fuels Inc Ordinary Shares (Canada)",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "DNN",
+    "name": "Denison Mines Corp Ordinary Shares (Canada)",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "NXE",
+    "name": "Nexgen Energy Ltd. Common Shares",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "UROY",
+    "name": "Uranium Royalty Corp.",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "LTBR",
+    "name": "Lightbridge Corporation",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "EU",
+    "name": "enCore Energy Corp.",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "URG",
+    "name": "Ur Energy Inc Common Shares (Canada)",
+    "sector": "Power generation",
+    "theme": "Energy for compute",
+    "reason": "Electricity generation, utilities or nuclear fuel; connection to AI is indirect and requires company research.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "MSFT",
+    "name": "Microsoft Corporation",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AMZN",
+    "name": "Amazon.com, Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "GOOGL",
+    "name": "Alphabet Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "META",
+    "name": "Meta Platforms, Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ORCL",
+    "name": "Oracle Corporation Common Stock",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "IBM",
+    "name": "International Business Machines Corporation Common Stock",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "EQIX",
+    "name": "Equinix, Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "DLR",
+    "name": "Digital Realty Trust, Inc. Common Stock",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "IRM",
+    "name": "Iron Mountain Incorporated (Delaware)Common Stock REIT",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AMT",
+    "name": "American Tower Corporation (REIT) Common Stock",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "DBRG",
+    "name": "DigitalBridge Group, Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CRWV",
+    "name": "CoreWeave, Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "NBIS",
+    "name": "Nebius Group N.V.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "IREN",
+    "name": "IREN Limited",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "APLD",
+    "name": "Applied Digital Corporation",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "HUT",
+    "name": "Hut 8 Corp.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "WULF",
+    "name": "TeraWulf Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CORZ",
+    "name": "Core Scientific, Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CIFR",
+    "name": "Cipher Digital Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "RIOT",
+    "name": "Riot Platforms, Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MARA",
+    "name": "MARA Holdings, Inc.",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "BTDR",
+    "name": "Bitdeer Technologies Group",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "HIVE",
+    "name": "HIVE Digital Technologies Ltd",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SAIH",
+    "name": "SAIHEAT Limited",
+    "sector": "Cloud and data centers",
+    "theme": "Cloud platforms",
+    "reason": "Cloud, colocation, hosting or data-center capacity exposure.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "PLTR",
+    "name": "Palantir Technologies Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SNOW",
+    "name": "Snowflake Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "MDB",
+    "name": "MongoDB, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "DDOG",
+    "name": "Datadog, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ESTC",
+    "name": "Elastic N.V. Ordinary Shares",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CRM",
+    "name": "Salesforce, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "NOW",
+    "name": "ServiceNow, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ADBE",
+    "name": "Adobe Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ADSK",
+    "name": "Autodesk, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "INTU",
+    "name": "Intuit Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SAP",
+    "name": "SAP  SE ADS",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "WDAY",
+    "name": "Workday, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "TEAM",
+    "name": "Atlassian Corporation ",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "HUBS",
+    "name": "HubSpot, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "U",
+    "name": "Unity Software Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "PATH",
+    "name": "UiPath, Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AI",
+    "name": "C3.ai, Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "SOUN",
+    "name": "SoundHound AI, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "BBAI",
+    "name": "BigBear.ai, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "VERI",
+    "name": "Veritone, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "PDYN",
+    "name": "Palladyne AI Corp.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "REKR",
+    "name": "Rekor Systems, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "DOCN",
+    "name": "DigitalOcean Holdings, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "GTLB",
+    "name": "GitLab Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ZS",
+    "name": "Zscaler, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CRWD",
+    "name": "CrowdStrike Holdings, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "PANW",
+    "name": "Palo Alto Networks, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "S",
+    "name": "SentinelOne, Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "FTNT",
+    "name": "Fortinet, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "OKTA",
+    "name": "Okta, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "TENB",
+    "name": "Tenable Holdings, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "RPD",
+    "name": "Rapid7, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "QLYS",
+    "name": "Qualys, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "VRNS",
+    "name": "Varonis Systems, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CHKP",
+    "name": "Check Point Software Technologies Ltd.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "GEN",
+    "name": "Gen Digital Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "NTNX",
+    "name": "Nutanix, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "DT",
+    "name": "Dynatrace, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "APP",
+    "name": "Applovin Corporation",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "APPF",
+    "name": "AppFolio, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "APPN",
+    "name": "Appian Corporation",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ASAN",
+    "name": "Asana, Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "BOX",
+    "name": "Box, Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "DBX",
+    "name": "Dropbox, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "DOCU",
+    "name": "DocuSign, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ZM",
+    "name": "Zoom Communications, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "TWLO",
+    "name": "Twilio Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "RNG",
+    "name": "RingCentral, Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "FIVN",
+    "name": "Five9, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "PEGA",
+    "name": "Pegasystems Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "PRGS",
+    "name": "Progress Software Corporation",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "TDC",
+    "name": "Teradata Corporation Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "EPAM",
+    "name": "EPAM Systems, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "GLOB",
+    "name": "Globant S.A. Common Shares",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ACN",
+    "name": "Accenture plc Class A Ordinary Shares (Ireland)",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CTSH",
+    "name": "Cognizant Technology Solutions Corporation",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "WIT",
+    "name": "Wipro Limited Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "HCKT",
+    "name": "The Hackett Group, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "EXLS",
+    "name": "ExlService Holdings, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "TASK",
+    "name": "TaskUs, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "TTEC",
+    "name": "TTEC Holdings, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CACI",
+    "name": "CACI International, Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "SAIC",
+    "name": "Science Applications International Corporation",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "LDOS",
+    "name": "Leidos Holdings, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "BAH",
+    "name": "Booz Allen Hamilton Holding Corporation Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "FICO",
+    "name": "Fair Isaac Corporation Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "BRZE",
+    "name": "Braze, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "IOT",
+    "name": "Samsara Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "QTWO",
+    "name": "Q2 Holdings, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "PAYC",
+    "name": "Paycom Software, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "PCTY",
+    "name": "Paylocity Holding Corporation",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "DUOL",
+    "name": "Duolingo, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "RBRK",
+    "name": "Rubrik, Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "TEM",
+    "name": "Tempus AI, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "RXRX",
+    "name": "Recursion Pharmaceuticals, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SDGR",
+    "name": "Schrodinger, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ABSI",
+    "name": "Absci Corporation",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ABCL",
+    "name": "AbCellera Biologics Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CERT",
+    "name": "Certara, Inc.",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "VEEV",
+    "name": "Veeva Systems Inc. Class A Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "IQV",
+    "name": "IQVIA Holdings, Inc. Common Stock",
+    "sector": "Software and security",
+    "theme": "AI applications",
+    "reason": "Enterprise software, data, developer tooling or cybersecurity; AI exposure varies by product and adoption.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "TSLA",
+    "name": "Tesla, Inc. ",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ISRG",
+    "name": "Intuitive Surgical, Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "SYM",
+    "name": "Symbotic Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "CGNX",
+    "name": "Cognex Corporation",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ZBRA",
+    "name": "Zebra Technologies Corporation",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "NOVT",
+    "name": "Novanta Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ATS",
+    "name": "ATS Corporation Common Shares",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "SERV",
+    "name": "Serve Robotics Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "RR",
+    "name": "Richtech Robotics Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "KSCP",
+    "name": "Knightscope, Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AUR",
+    "name": "Aurora Innovation, Inc. ",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "MBLY",
+    "name": "Mobileye Global Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "DE",
+    "name": "Deere & Company Common Stock",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AGCO",
+    "name": "AGCO Corporation Common Stock",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "CNH",
+    "name": "CNH Industrial N.V. Common Shares",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "HON",
+    "name": "Honeywell International Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AME",
+    "name": "AMETEK, Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "AZTA",
+    "name": "Azenta, Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "BRKR",
+    "name": "Bruker Corporation",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AAPL",
+    "name": "Apple Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "LOGI",
+    "name": "Logitech International S.A.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "AVAV",
+    "name": "AeroVironment, Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "KTOS",
+    "name": "Kratos Defense & Security Solutions, Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "RCAT",
+    "name": "Red Cat Holdings, Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "RDW",
+    "name": "Redwire Corporation Common Stock",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "RKLB",
+    "name": "Rocket Lab Corporation",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "ASTS",
+    "name": "AST SpaceMobile, Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "GSAT",
+    "name": "Globalstar, Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "VSAT",
+    "name": "ViaSat, Inc.",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "IRDM",
+    "name": "Iridium Communications Inc",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "PL",
+    "name": "Planet Labs PBC Class A Common Stock",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "JOBY",
+    "name": "Joby Aviation, Inc. Common Stock",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "ACHR",
+    "name": "Archer Aviation Inc. Class A Common Stock",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "EVTL",
+    "name": "Vertical Aerospace Ltd. Ordinary Shares",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "US exchange"
+  },
+  {
+    "ticker": "EH",
+    "name": "EHang Holdings Limited",
+    "sector": "Robotics and autonomy",
+    "theme": "Physical AI",
+    "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
+    "exchange": "NASDAQ"
+  }
+]

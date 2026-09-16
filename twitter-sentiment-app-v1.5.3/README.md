@@ -1,8 +1,12 @@
-# Tradersecho — v2 working preview
+# Tradersecho — protected online preview
+
+**Current deployment and X setup:** [ONLINE-SETUP.md](ONLINE-SETUP.md). The Vercel preview uses PostgreSQL, a reviewed AI universe (capacity 1,000), resumable daily collection and sample screening. The local/Docker instructions below remain available for offline work. [Stock selection](UNIVERSE.md).
 
 An extension of the original `twitter-sentiment-app-v1.5.3` React/Python project. The new entrypoint is **backend.service:app**. The earlier Python modules and migrations are retained as legacy reference and are not used by v2. The v2 database is separate; no existing users or records are modified or silently migrated.
 
 ## Try it
+
+**Membership update:** see [MEMBERSHIPS.md](MEMBERSHIPS.md) for the private owner invitation, administration, visitor statistics, Premium trading room and the recommended count-first X collector. Logged-out visitors see three stocks; signed-in members unlock the full workspace. Existing v2 accounts are migrated additively without deleting their data.
 
 The local preview runs at http://127.0.0.1:8000. Choose **Create account → Try free / Try premium** to explore an isolated sample account. These are real server sessions over a fictional dataset. No shared passwords are shipped. Real signup creates a Free account.
 
@@ -40,23 +44,17 @@ Configuration is read from **process environment variables**, not the old commit
 
 ## Live X data
 
-Set `X_BEARER_TOKEN` to a newly issued credential and `X_DAILY_REQUEST_LIMIT` to an approved request budget. The default is 24 requests/day, at most 100 returned posts per request; this is a request ceiling, not a currency cap. X charges depend on provider usage and current terms. Configure a provider-side spending limit too.
+The recommended collector is the checkpointed daily queue in `backend.collection`, described in [ONLINE-SETUP.md](ONLINE-SETUP.md). It is paused by default, has a $185 monthly API ceiling, and supports up to 1,000 active stocks. The initial universe contains 357 exchange-validated AI supply-chain and adjacent names. Manage it in Administration; see [UNIVERSE.md](UNIVERSE.md).
 
-```sh
-python -m backend.collect_x --max-pages 2
-# Continuous collection, only after approving your X data budget:
-python -m backend.collect_x --loop --interval 3600 --max-pages 2
-```
+For local or Docker collection, configure `X_BEARER_TOKEN`, enable the owner budget setting, and run `python -m backend.run_local` once daily, or use `--loop`. For the protected online preview, use the admin batch button or `backend.run_remote` from a trusted scheduler. A daily schedule is not yet provisioned for the private preview.
 
-Do not run multiple collector processes against the same database. Each run resumes unfinished pagination before advancing the time window, and a 60-second overlap plus deduplication avoids boundary losses. Rate-limit failures retain the checkpoint. If a backlog ages beyond the recent-search window, the collector stops rather than silently claiming full coverage. Use an archive export/import to fill gaps, then reset the relevant `cursor:` metadata only after reviewing the backfill.
+Raw mention counts and screened sentiment samples are separate. History accumulates for weekly/monthly comparisons; insufficient evidence is shown explicitly. Set a provider-side spending cap as well. Actual paid X requests have not been tested because the owner's credentials are not connected.
 
-The initial collection looks back one day. Recent search supports seven days; monthly views accumulate over time or require archive data. Supported cashtags are deliberately limited to `CATALOG` in `backend/service.py` (16 stocks). Add supported symbols there to expand the query; keep within X query-length limits. Tracked handles filter the collected universe, not arbitrary posts or complete account history. English posts only; reposts excluded. A selected handle may have no collected cashtag posts.
-
-Current official references: [search capabilities](https://docs.x.com/x-api/posts/search/introduction), [usage pricing](https://docs.x.com/x-api/getting-started/pricing). Verify commercial display/retention requirements for your approved access before public launch. Removal/compliance synchronization is not implemented yet.
+Official references: [search capabilities](https://docs.x.com/x-api/posts/search/introduction), [usage pricing](https://docs.x.com/x-api/getting-started/pricing). Removal/compliance synchronization is not implemented yet and is required before public launch.
 
 ### JSON import
 
-Set a random `ADMIN_TOKEN` server-side, open **Data sources → Import X posts**, and select an array of up to 1,000 posts or `{ "posts": [...] }`:
+Sign in as owner or administrator, open **Data sources → Import X posts**, and select an array of up to 1,000 posts or `{ "posts": [...] }`. Legacy operator scripts can alternatively use a server-configured `ADMIN_TOKEN`:
 
 ```json
 [{"id":"1234567890123456789","author":"example_handle","text":"Bullish $NVDA and $AMD","created_at":"2026-09-16T08:00:00Z","likes":12}]
@@ -66,15 +64,15 @@ This schema example is not a real X post. Do not import it as real data. `sentim
 
 ## Free / Premium
 
-Free: all three ranking windows, ticker details and 5 saved stocks. Premium: 50 saved stocks and 25 tracked handles with filtered posts. Both use the same collection; Premium does not promise better coverage. Demo Premium cannot access the premium live-post feed.
+Free: all three ranking windows, ticker details and 5 saved stocks. Premium: 50 saved stocks, 25 tracked handles with filtered posts, and the private trading room. Both use the same collection; Premium does not promise better coverage. Demo Premium cannot enter the community or access the premium live-post feed.
 
-To grant early-access Premium without billing, an administrator can POST `/api/admin/plan` with header `x-admin-token` and JSON `{ "email": "the-account-email", "plan": "premium" }`. Users cannot grant themselves a plan. Do not distribute the admin token.
+Grant early-access Premium from **Administration → Users**. Legacy scripts can POST `/api/admin/plan` with header `x-admin-token` and JSON `{ "email": "the-account-email", "plan": "premium" }`. Users cannot grant themselves a plan. Do not distribute the admin token.
 
 For subscriptions, configure `STRIPE_SECRET_KEY`, recurring `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, and your HTTPS `APP_ORIGIN`. Register `/api/billing/webhook` for `customer.subscription.created`, `.updated`, and `.deleted`. The server retrieves canonical subscription status and grants Premium only for active/trialing subscriptions. Configure and test Stripe Customer Portal/cancellation support before accepting public payments; the in-app portal flow is not yet implemented. Checkout and actual webhook delivery were not tested against a live Stripe account.
 
 ## Hosting
 
-This is a **local working preview**, not a public deployment. Deploy the included Docker image on a host with a persistent disk; SQLite must not be placed on ephemeral/serverless storage. Start with one web instance and one collector. Put HTTPS in front, set `APP_ORIGIN` exactly and `COOKIE_SECURE=true`, persist `/app/data`, set a random admin token, and disable sample accounts using `DEMO_ENABLED=false` if not desired. Back up the database.
+A **protected Vercel preview** is now available; see ONLINE-SETUP.md. The following is an alternative Docker hosting path. Deploy the included Docker image on a host with a persistent disk; SQLite must not be placed on ephemeral/serverless storage. Start with one web instance and one collector. Put HTTPS in front, set `APP_ORIGIN` exactly and `COOKIE_SECURE=true`, persist `/app/data`, set a random admin token, and disable sample accounts using `DEMO_ENABLED=false` if not desired. Back up the database.
 
 Docker usage: copy `.env.v2.example` to `.env.v2`, fill only the necessary values, then `docker compose up --build -d`. The collector is off by default. Enable it with `docker compose --profile live up -d` only after configuring the X budget.
 
@@ -96,7 +94,7 @@ npm run build
 npm audit
 ```
 
-Six integration scenarios cover time windows, source separation, sign-in/logout, account isolation, limits, premium gates, multi-ticker deduplication, atomic validation, CSRF origin rejection, unsigned webhooks, and mocked X pagination/request caps. Browser checks cover period switching, search, details, saved watchlists, tracked handles, and desktop/mobile layout. Real X ingestion, live Stripe payments and Docker hosting need external configuration and were not executed.
+Ten integration scenarios cover time windows, source separation, sign-in/logout, account isolation, limits, premium gates, multi-ticker deduplication, atomic validation, origin rejection, unsigned webhooks, mocked X pagination/counts/budgets, owner claims, administration, room moderation and analytics. Browser checks cover period switching, search, details, watchlists, tracked handles, landing, owner form, administration, chat posting and responsive layout. Real X ingestion, live Stripe payments and Docker hosting need external configuration and were not executed.
 
 ## Repository hygiene
 

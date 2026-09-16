@@ -36,12 +36,9 @@ def collect(max_pages=2, client=None):
                 c.execute('INSERT INTO meta VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('requests:'+day,str(used+1)))
             params={'query':query,'max_results':100,'start_time':iso(cursor['start']),'end_time':iso(cursor['end']),'tweet.fields':'created_at,author_id,public_metrics','expansions':'author_id','user.fields':'username'}
             if cursor.get('next_token'): params['next_token']=cursor['next_token']
-            r=client.get('https://api.x.com/2/tweets/search/recent',params=params,headers={'Authorization':'Bearer '+token})
+            from .collect_economy import paid_request
+            result=paid_request(client,'tweets/search/recent',params,'full_search',1.5,token)
             requests+=1
-            if r.status_code==429: raise RuntimeError('X rate limit reached. Retry after the provider reset; checkpoint preserved.')
-            if not r.is_success: raise RuntimeError(f'X returned HTTP {r.status_code}. Check API access and credits; checkpoint preserved.')
-            result=r.json()
-            if result.get('errors'): raise RuntimeError('X returned a partial response. Checkpoint retained to avoid silent gaps.')
             authors={u['id']:u['username'] for u in result.get('includes',{}).get('users',[])}
             items=[]
             for p in result.get('data',[]):

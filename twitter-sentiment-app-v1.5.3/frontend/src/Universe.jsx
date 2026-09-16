@@ -1,0 +1,19 @@
+import React,{useEffect,useState} from 'react'
+import {api} from './Membership.jsx'
+
+export function Universe(){
+ const [data,setData]=useState(null),[q,setQ]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false)
+ const load=()=>api('/admin/stocks').then(setData)
+ useEffect(()=>{load().catch(e=>setError(e.message))},[])
+ const rows=data?.rows.filter(r=>(r.ticker+' '+r.name+' '+r.sector).toLowerCase().includes(q.toLowerCase()))||[]
+ async function toggle(r){setBusy(true);try{await api('/admin/stocks','POST',{stocks:[{...r,active:!r.active}]});await load()}catch(e){setError(e.message)}finally{setBusy(false)}}
+ return <section className="panel"><div className="section-head"><div><h2>AI supply-chain universe</h2><p className="muted">{data?.active||0} active · capacity 1,000 · exchange-listed symbols</p></div><input aria-label="Search stock universe" placeholder="Ticker, company or theme" value={q} onChange={e=>setQ(e.target.value)}/></div><p className="muted">A research universe, not a recommendation. Power and industrial exposure can be indirect. Every name has an inclusion reason; we do not fill the capacity with unrelated stocks. Capitalization buckets need a current market-data source.</p>{error&&<p className="error" role="alert">{error}</p>}<div className="table-scroll"><table><thead><tr><th>Stock</th><th>Theme / reason</th><th>Status</th></tr></thead><tbody>{rows.slice(0,100).map(r=><tr key={r.ticker}><td><strong>${r.ticker}</strong><small className="block">{r.name}</small></td><td>{r.sector}<small className="block">{r.reason}</small></td><td><button className="button" disabled={busy} onClick={()=>toggle(r)}>{r.active?'Disable':'Enable'}</button></td></tr>)}</tbody></table></div><p className="muted">Showing {Math.min(100,rows.length)} of {rows.length} matches. Search to narrow the list.</p><label>Import reviewed stocks (JSON)<input type="file" accept=".json,application/json" disabled={busy} onChange={async e=>{const f=e.target.files[0];if(!f)return;setBusy(true);setError('');try{const j=JSON.parse(await f.text());await api('/admin/stocks','POST',{stocks:Array.isArray(j)?j:j.stocks});await load()}catch(e){setError(e.message)}finally{setBusy(false)}}}/></label><p className="muted">Fields: ticker, name, sector, theme, reason, exchange, active. Owner access required for changes.</p></section>
+}
+
+export function Collection(){
+ const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[notice,setNotice]=useState('')
+ const load=()=>api('/admin/collection').then(setData)
+ useEffect(()=>{load().catch(e=>setError(e.message))},[])
+ async function run(path){setBusy(true);setError('');try{const r=await api(path,'POST');setNotice(r.errors?.length?r.errors.join(' '):r.completed!=null?`${r.completed} jobs completed. Run another batch to continue.`:`${r.retried} jobs requeued.`);await load()}catch(e){setError(e.message)}finally{setBusy(false)}}
+ return <section className="panel"><h2>Daily collection</h2><p>{data?.configured?'X credential configured':'X credential not connected'} · {data?.day}</p><p className="muted">Each batch processes up to 10 requests with persistent checkpoints. Preview scheduling is off; use these controls after configuring X, or the documented protected runner. Vercel cron schedules apply to production deployments only.</p><div className="button-row"><button className="button primary" disabled={busy} onClick={()=>run('/admin/collection/run')}>{busy?'Processing batch…':'Run next batch'}</button><button className="button" disabled={busy} onClick={()=>run('/admin/collection/retry')}>Retry failed jobs</button></div>{error&&<p role="alert" className="error">{error}</p>}{notice&&<p role="status">{notice}</p>}{data?.jobs.map(j=><div className="handle" key={j.kind+j.status}><span>{j.kind} · {j.status}</span><strong>{j.n}</strong></div>)}{data?.errors.map((e,i)=><p className="error" key={i}>{e.ticker}: {e.error}</p>)}</section>
+}

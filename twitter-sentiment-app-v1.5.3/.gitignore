@@ -8,3 +8,10 @@ __pycache__/
 .pytest_cache/
 .venv/
 data/
+
+!.env.v2.example
+*owner*setup*.txt
+.vercel
+.env*
+
+!.env.v2.example

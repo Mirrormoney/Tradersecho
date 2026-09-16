@@ -93,7 +93,7 @@ def admin_briefing(request:Request):
     preview=personalized(report,u)
     text=''
     if preview.get('ready'):
-        text=f"Tradersecho daily briefing — {preview['date']} UTC\n\n"
+        text=f"From: Tradersecho <newsletter@tradersecho.com>\nReply-To: info@tradersecho.com\n\nTradersecho daily briefing — {preview['date']} UTC\n\n"
         text+='\n'.join(f"${r['ticker']}: {r['mentions']:,} mentions; previous day {r['previous']:,}" for r in preview['rows'])
         text+='\n\n'+preview['disclosure']
     return {'report':preview,'email_preview':text,'x_draft':report.get('x_draft',''),'email_enabled':False,'x_enabled':False,'requirements':['Verified email sending domain and sender address','Email service connection, unsubscribe and delivery-event handling','Public website address before marketing launch','New X account authorization with publishing permission'],'note':'Drafts only. No emails or X posts are sent. Email preview reflects your own preferences; individual member data is never put into the public X draft.'}

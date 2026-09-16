@@ -22,3 +22,9 @@
 - Show a transparent data timestamp and sample coverage. Skip stale/incomplete reports. Do not fabricate catalysts from mention counts or imply investment returns.
 - Measure visits from recap links, registrations, returning users and Premium conversion. Begin with organic distribution; no advertising spend is authorized.
 - Add watchlist spike alerts after collecting enough baseline history, then richer account-to-ticker research views. Evaluate whether users return before adding more channels.
+
+## Owner-confirmed sending identity
+- Domain: tradersecho.com; DNS provider: United Domains (owner described as Uniter Domains).
+- From: Tradersecho <newsletter@tradersecho.com>.
+- Reply-To and support: info@tradersecho.com.
+- Domain ownership was provided by the owner; DNS verification is still pending. Keep existing mail records intact.

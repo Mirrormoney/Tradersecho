@@ -142,6 +142,9 @@ def tick(scheduled=False,client=None):
                 if 'allowance reached' not in str(exc) and 'ceiling reached' not in str(exc):errors.append(str(exc))
         with s.db() as c:
             c.execute("INSERT INTO meta VALUES('worker_result',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps({'at':time.time(),'completed':completed,'errors':errors,'duration_seconds':round(time.time()-now,1)}),))
+        if not errors:
+            from .digest import build
+            build()
         return {'completed':completed,'errors':errors}
     finally:
         if owned:client.close()
@@ -194,4 +197,3 @@ def live_ticker(ticker:str,request:Request):
         latest=c.execute("SELECT MAX(p.ts) FROM posts p JOIN mentions m ON m.source=p.source AND m.post_id=p.id WHERE p.source='x' AND m.ticker=?",(ticker,)).fetchone()[0]
         queued=c.execute("SELECT COUNT(*) FROM collection_jobs WHERE ticker=? AND kind IN ('hour_counts','request_counts') AND status IN ('pending','running')",(ticker,)).fetchone()[0]
     return {'ticker':ticker,'as_of':end,'mentions_24h':counts[0] or 0,'coverage_hours':counts[1],'latest_sample':latest,'queued':bool(queued),'stale':not end or time.time()-end>7200}
-

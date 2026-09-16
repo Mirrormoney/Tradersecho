@@ -22,3 +22,5 @@ backend/*
 work/
 
 !backend/live_collection.py
+
+!backend/digest.py

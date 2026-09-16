@@ -12,7 +12,7 @@ import pytest
 def isolate_tests(monkeypatch):
     monkeypatch.setattr(s,'CATALOG',dict(s.DEMO_CATALOG))
     with s.db() as c:
-        for table in ['post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
+        for table in ['digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
             c.execute('DELETE FROM '+table)
         c.execute("DELETE FROM posts WHERE source='x'")
         c.execute("DELETE FROM meta WHERE key!='demo_anchor'")
@@ -342,3 +342,39 @@ def test_bulk_history_and_live_freshness(monkeypatch):
     assert data['mentions_24h']==168 and data['coverage_hours']==24 and not data['stale']
     assert owner.post('/api/refresh/NVDA').json()['state']=='fresh'
 
+def test_digest_coverage_personalization_and_preferences(monkeypatch):
+    from . import digest
+    monkeypatch.setattr(s,'CATALOG',{'INTC':('Intel','Chips'),'MU':('Micron','Memory')})
+    member,u=make_account('digest@example.com')
+    other,v=make_account('other-digest@example.com')
+    assert TestClient(s.app).get('/api/digest').status_code==401
+    assert not member.get('/api/digest').json()['ready']
+    assert member.put('/api/digest/preferences',json={'frequency':'daily'}).status_code==403
+    assert member.put('/api/digest/preferences',json={'frequency':'weekly'}).status_code==200
+    assert other.get('/api/digest/preferences').json()['frequency']=='off'
+    end=int(time.time()//86400)*86400
+    with s.db() as c:
+        c.execute("INSERT INTO meta VALUES('completed_snapshot',?)",(str(end),))
+        for ticker in ['INTC','MU']:
+            c.executemany('INSERT INTO x_counts VALUES(?,?,?,?,?,?)',[(ticker,start,start+3600,4 if start>=end-86400 else 2,'test',time.time()) for start in range(end-172800,end,3600)])
+        c.execute('DELETE FROM x_counts WHERE ticker=? AND start=?',('MU',end-3600))
+    assert not digest.build()['ready']
+    with s.db() as c:c.execute('INSERT INTO x_counts VALUES(?,?,?,?,?,?)',('MU',end-3600,end,4,'test',time.time()))
+    result=digest.build()
+    assert result['ready'] and result['rows'][0]['mentions']==96 and result['rows'][0]['change']==100
+    assert len(result['x_draft'])<=280
+    with s.db() as c:
+        c.execute('UPDATE x_counts SET n=99')
+        c.execute("UPDATE accounts SET plan='premium' WHERE id=?",(u['id'],))
+    assert digest.build()==result  # An issued report is immutable.
+    member.put('/api/watchlist/INTC')
+    member.post('/api/handles',json={'handle':'scroogecap'})
+    s.ingest([{'id':'887766','author':'scroogecap','text':'$INTC buying','created_at':datetime.fromtimestamp(end-3600,timezone.utc).isoformat()}])
+    assert member.put('/api/digest/preferences',json={'frequency':'daily','watchlist_only':True}).status_code==200
+    personal=member.get('/api/digest').json()
+    assert [r['ticker'] for r in personal['rows']]==['INTC'] and len(personal['posts'])==1
+    assert other.get('/api/digest').json()['posts']==[]
+    assert member.get('/api/admin/digest').status_code==403
+    assert not digest.build(now=end+37*3600)['ready']
+    member.put('/api/digest/preferences',json={'frequency':'off'})
+    assert member.get('/api/digest/preferences').json()['frequency']=='off'

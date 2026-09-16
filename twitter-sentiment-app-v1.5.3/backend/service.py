@@ -21,6 +21,8 @@ CATALOG=Catalog()
 app = FastAPI(title='Tradersecho', version='2.0.0')
 app.include_router(community_router)
 app.include_router(stocks_router)
+from .digest import router as digest_router, migrate as migrate_digest
+app.include_router(digest_router)
 
 def db():
     return connect(DB_PATH)
@@ -43,6 +45,7 @@ def init():
         ''')
         migrate(c)
         migrate_stocks(c)
+        migrate_digest(c)
         c.execute('CREATE TABLE IF NOT EXISTS post_identity(source TEXT,post_id TEXT,author_id TEXT,PRIMARY KEY(source,post_id))')
     if DEMO: seed_demo()
 

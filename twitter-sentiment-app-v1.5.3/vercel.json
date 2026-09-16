@@ -31,5 +31,9 @@
     "deploymentEnabled": {
       "main": false
     }
-  }
+  },
+  "regions": [
+    "fra1"
+  ]
 }
+

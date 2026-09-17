@@ -1,13 +1,13 @@
 # Free-launch operating notes
 
-## Hosting decision still required
+## Hosting decision: Vercel Pro approved; payment pending
 Keep United Domains DNS and email. Its advertised PHP webspace is not confirmed to support this Python/FastAPI backend. Disk capacity is not a runtime guarantee. Ask support specifically about Python 3.12, ASGI hosting, custom packages, outbound HTTPS/PostgreSQL, HTTPS routing and scheduled jobs before any migration.
 
-Vercel Hobby cannot schedule this collector every 15 minutes natively. Pro or an external scheduler is needed for that cadence. Pro is also the appropriate Vercel plan for commercial use, including a free acquisition launch for a planned paid business. No upgrade has been purchased.
+Vercel Hobby cannot schedule this collector every 15 minutes natively. Pro or an external scheduler is needed for that cadence. Pro is also the appropriate Vercel plan for commercial use, including a free acquisition launch for a planned paid business. The owner approved Pro; checkout must finish before activation.
 
-After plan approval: add the following to the existing vercel.json, configure CRON_SECRET in Production, migrate the Production database, verify all runtime values, then deploy to Production:
+The following is prepared in vercel.json. After verifying Pro is active, configure CRON_SECRET in Production, migrate the Production database, verify all runtime values, then deploy to protected Production:
 
-    "crons": [{"path":"/api/cron/collect","schedule":"7,22,37,52 * * * *"}]
+    "crons": [{"path":"/api/cron/collect","schedule":"*/5 * * * *"}]
 
 Native Vercel cron only runs on Production deployments. Do not assume a preview alias enables it. Disable the GitHub fallback after the new scheduler has demonstrated repeated successful runs. Existing shared database worker leases prevent simultaneous collectors.
 
@@ -30,3 +30,13 @@ ACCOUNT_EMAIL_ENABLED=true plus RESEND_API_KEY enables reset and verification ma
 
 ## Data quality
 Long X posts now request note_tweet text. Older short stored excerpts only expand when collected again; historical text is not magically restored by a deploy. Default posts filter promotional templates, prioritize curated voices and remove identical text. All collected posts remain available through the feed selector. Automated language labels include unclear; percentages require 20 independent authors with classifiable language. This is a heuristic, not validated financial sentiment.
+
+## Approved staged launch — 17 September 2026
+- Owner approved upgrading the existing Vercel team to Pro ($20 base monthly). Payment entry remains with owner; do not report Pro active until verified.
+- Launch with free accounts for roughly 1–2 weeks. Keep FREE_LAUNCH=true, BILLING_ENABLED=false, BILLING_SANDBOX=false. No automatic paid conversion or time-based billing activation.
+- Prepared native Vercel cron: /api/cron/collect every five minutes, production only. Ticks drain bounded batches; existing hourly/daily database markers, shared-account collection, leases and spend limits control actual X purchases. This is not five-minute stock resampling.
+- Before activation: verify Pro and production environment (real public schema, X token, database, CRON_SECRET, account email and correct origin). Preserve deployment protection during scheduler commissioning. Never copy sandbox credentials or schema into production.
+- Verify at least two consecutive native scheduled invocations and freshness before removing the GitHub schedule; leave workflow_dispatch for operator recovery. Never claim a manual request proves the scheduler works.
+- Preserve the $185 X ceiling. Hosting usage is a separate budget; inspect spend-management controls after upgrade.
+- Public release still requires completed operator details and a verified restore drill. Do not expose the site as a side effect of enabling the scheduler.
+- Premium is a later explicit release with verified live Stripe configuration, tested cancellation/refund and announced plan terms. Keep existing owner/admin access and isolated payment test accounts intact.

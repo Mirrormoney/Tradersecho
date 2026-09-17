@@ -525,7 +525,7 @@ def test_digest_coverage_personalization_and_preferences(monkeypatch):
     assert digest.build()==result  # An issued report is immutable.
     member.put('/api/watchlist/INTC')
     member.post('/api/handles',json={'handle':'scroogecap'})
-    s.ingest([{'id':'887766','author':'scroogecap','text':'$INTC buying','created_at':datetime.fromtimestamp(end-3600,timezone.utc).isoformat()}])
+    s.ingest([{'id':'887766','author':'scroogecap','text':'$INTC buying','created_at':datetime.fromtimestamp(end,timezone.utc).isoformat()}])
     assert member.put('/api/digest/preferences',json={'frequency':'daily','watchlist_only':True}).status_code==200
     personal=member.get('/api/digest').json()
     assert [r['ticker'] for r in personal['rows']]==['INTC'] and len(personal['posts'])==1

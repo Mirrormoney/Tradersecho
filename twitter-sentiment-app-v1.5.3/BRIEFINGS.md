@@ -52,3 +52,6 @@
 
 ## Top-ten field notes redesign
 The owner preview now shows three responsive feature cards, relevant shared/followed X excerpts linked to those leaders, and ranks 4-10 as separate cards. Report ordering uses the Market Pulse heat formula for the completed UTC day (not the live rolling window). Posts are selected by likes and limited to one per author; missing qualifying posts are disclosed. Broader licensed market-news summaries and individual click tracking remain unimplemented. No tracking pixels or additional analytics cookies were added. Owner sample delivered September 17 via Resend; subscriber dispatch stays disabled.
+
+## Current-day takes
+Stock figures remain dated completed UTC-day snapshots. The separate takes section now queries only posts published since midnight UTC on the day the briefing is generated/refreshed. It never falls back to yesterday. It selects linked top-three posts from shared/personal voices by likes, newest first on ties, one per author, and displays timestamps. Web briefing rereads saved data every minute while visible; X collection remains hourly and budget-limited. An already-delivered email does not change afterward.

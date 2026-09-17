@@ -70,17 +70,20 @@ def save_preferences(payload:Preference,request:Request):
         audit(c,u,'digest_preferences_updated',detail=json.dumps(payload.model_dump()))
     return {**payload.model_dump(),'delivery_enabled':False}
 
-def personalized(report,u):
+def personalized(report,u,now=None):
     if not report.get('ready'):return report
     s=core();premium=u['plan']=='premium' or u['role'] in ('owner','admin')
     ranked=[{**r,'heat':round(math.log1p(r['mentions'])*(1+max(0,math.log2((r['mentions']+5)/(r.get('previous',0)+5))))*10,1)} for r in report['rows']]
     ranked.sort(key=lambda r:(-r['heat'],r['ticker']))
     report={**report,'rows':ranked}
+    now=time.time() if now is None else now
+    post_start=int(now//86400)*86400
     leaders={r['ticker'] for r in ranked[:3]}
     with s.db() as c:
         watched={r[0] for r in c.execute('SELECT ticker FROM watchlist WHERE user_id=?',(u['id'],))}
         prefs=preferences(c,u['id'])
-        posts=[dict(r) for r in c.execute("SELECT p.id,p.author,p.text,p.ts,p.sentiment,(SELECT GROUP_CONCAT(DISTINCT m.ticker) FROM mentions m WHERE m.post_id=p.id AND m.source=p.source) tickers FROM posts p WHERE p.source='x' AND p.ts>=? AND p.ts<? AND p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices) ORDER BY p.likes DESC,p.ts DESC LIMIT 100",(report['window_start'],report['window_end'],u['id']))] if premium else []
+        if premium and prefs['watchlist_only']:leaders=set(list(r['ticker'] for r in ranked if r['ticker'] in watched)[:3])
+        posts=[dict(r) for r in c.execute("SELECT p.id,p.author,p.text,p.ts,p.sentiment,(SELECT GROUP_CONCAT(DISTINCT m.ticker) FROM mentions m WHERE m.post_id=p.id AND m.source=p.source) tickers FROM posts p WHERE p.source='x' AND p.ts>=? AND p.ts<? AND p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices) ORDER BY p.likes DESC,p.ts DESC LIMIT 100",(post_start,now,u['id']))] if premium else []
     from .post_quality import research_text
     from .screening import fingerprint
     seen=set();authors=set();filtered=[]
@@ -92,7 +95,7 @@ def personalized(report,u):
     selected=[r for r in report['rows'] if r['ticker'] in watched]
     for p in posts:p['url']='https://x.com/i/web/status/'+p['id']
     visible=selected if premium and prefs['watchlist_only'] else report['rows'][:10 if premium else 3]
-    return {**report,'rows':visible,'watchlist':selected if premium else [],'posts':posts,'personalized':premium,'watchlist_only':bool(premium and prefs['watchlist_only']),'delivery_enabled':False}
+    return {**report,'post_window_start':post_start,'post_window_end':now,'post_date':datetime.fromtimestamp(now,timezone.utc).strftime('%Y-%m-%d'),'rows':visible,'watchlist':selected if premium else [],'posts':posts,'personalized':premium,'watchlist_only':bool(premium and prefs['watchlist_only']),'delivery_enabled':False}
 
 @router.get('/api/digest')
 def member_briefing(request:Request):

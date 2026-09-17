@@ -12,7 +12,7 @@ import pytest
 def isolate_tests(monkeypatch):
     monkeypatch.setattr(s,'CATALOG',dict(s.DEMO_CATALOG))
     with s.db() as c:
-        for table in ['admin_voices','voice_checkpoints','digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
+        for table in ['billing_checkouts','billing_entitlements','admin_voices','voice_checkpoints','digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
             c.execute('DELETE FROM '+table)
         c.execute("DELETE FROM posts WHERE source='x'")
         c.execute("DELETE FROM meta WHERE key!='demo_anchor'")
@@ -551,3 +551,83 @@ def test_free_rankings_are_server_limited_and_watchlist_survives():
     owner.patch('/api/admin/users/'+u['id'],json={'plan':'premium'})
     upgraded=free.get('/api/rankings').json()
     assert len(upgraded['rows'])==16 and not upgraded['ranking_locked']
+
+def test_checkout_tiers_reuse_and_account_binding(monkeypatch):
+    from . import payments as p
+    c=TestClient(s.app)
+    uid=c.post('/api/auth/signup',json={'email':'billing@example.com','password':'long-test-password'}).json()['id']
+    assert c.post('/api/billing/checkout',json={'tier':'invalid'}).status_code==422
+    assert c.post('/api/billing/checkout',json={'tier':'yearly'}).status_code==503
+    for k,v in {'BILLING_ENABLED':'true','STRIPE_SECRET_KEY':'sk_test_test','STRIPE_WEBHOOK_SECRET':'test','STRIPE_PRICE_MONTHLY':'price_monthly','STRIPE_PRICE_YEARLY':'price_yearly','STRIPE_PRICE_FOUNDER':'price_founder'}.items():monkeypatch.setenv(k,v)
+    calls=[];sessions={};counter=[0]
+    def stripe(method,path,data=None,idempotency=None):
+        calls.append((method,path,data,idempotency))
+        if path.startswith('prices/'):
+            tier=path.split('_')[-1];_,amount,interval=p.TIERS[tier]
+            return {'id':'price_'+tier,'currency':'usd','unit_amount':amount,'recurring':{'interval':interval,'interval_count':1} if interval else None}
+        if path=='customers':return {'id':'cus_own'}
+        if path=='checkout/sessions':
+            counter[0]+=1;sid='cs_'+str(counter[0]);sessions[sid]={'id':sid,'status':'open','url':'https://checkout.stripe.com/test/'+sid};return sessions[sid]
+        if path.endswith('/expire'):
+            sessions[path.split('/')[2]]['status']='expired';return {}
+        if path.startswith('checkout/sessions/'):return sessions[path.split('/')[-1]]
+        if path=='billing_portal/sessions':return {'url':'https://billing.stripe.com/test'}
+        raise AssertionError(path)
+    monkeypatch.setattr(p,'stripe',stripe)
+    first=c.post('/api/billing/checkout',json={'tier':'yearly','customer':'cus_attacker','price':'fake'});assert first.status_code==200
+    data=[x[2] for x in calls if x[1]=='checkout/sessions'][-1]
+    assert data['customer']=='cus_own' and data['client_reference_id']==uid and data['line_items[0][price]']=='price_yearly'
+    assert c.post('/api/billing/checkout',json={'tier':'yearly'}).json()==first.json() and counter[0]==1
+    assert c.post('/api/billing/checkout',json={'tier':'founder'}).status_code==200
+    assert sessions['cs_1']['status']=='expired'
+    assert [x[2] for x in calls if x[1]=='checkout/sessions'][-1]['mode']=='payment'
+    assert c.post('/api/billing/portal',json={'customer':'cus_attacker'}).status_code==200
+    assert calls[-1][2]['customer']=='cus_own'
+    with s.db() as db:db.execute("UPDATE accounts SET plan='premium' WHERE id=?",(uid,))
+    assert c.post('/api/billing/checkout',json={'tier':'monthly'}).status_code==409
+
+
+def test_billing_webhooks_canonical_state_replay_and_founder(monkeypatch):
+    from . import payments as p
+    c=TestClient(s.app);uid=c.post('/api/auth/signup',json={'email':'payer@example.com','password':'long-test-password'}).json()['id']
+    monkeypatch.setenv('STRIPE_SECRET_KEY','sk_test_test');monkeypatch.setenv('STRIPE_WEBHOOK_SECRET','test');monkeypatch.setenv('STRIPE_PRICE_MONTHLY','price_monthly')
+    with s.db() as db:
+        db.execute('UPDATE accounts SET stripe_customer=? WHERE id=?',('cus_own',uid))
+        db.execute('INSERT INTO billing_checkouts VALUES(?,?,?,?)',('cs_founder',uid,'founder',time.time()))
+    sub={'id':'sub_1','customer':'cus_own','metadata':{'account_id':uid,'tier':'monthly'},'status':'active','items':{'data':[{'price':{'id':'price_monthly','currency':'usd','unit_amount':1900,'recurring':{'interval':'month','interval_count':1}}}]}}
+    pi={'id':'pi_1','customer':'cus_own','metadata':{'account_id':uid,'tier':'founder'},'currency':'usd','amount':99900,'status':'succeeded','latest_charge':{'refunded':False,'disputed':False}}
+    calls=[]
+    def stripe(method,path,data=None,idempotency=None):
+        calls.append(path)
+        if path=='subscriptions/sub_1':return sub
+        if path=='payment_intents/pi_1':return pi
+        if path=='checkout/sessions/cs_founder':return {'client_reference_id':uid,'payment_status':'paid','payment_intent':'pi_1'}
+        raise AssertionError(path)
+    monkeypatch.setattr(p,'stripe',stripe)
+    def event(eid,kind,obj,live=False):
+        body=json.dumps({'id':eid,'type':kind,'livemode':live,'data':{'object':obj}}).encode();stamp=str(int(time.time()))
+        sig=hmac.new(b'test',stamp.encode()+b'.'+body,hashlib.sha256).hexdigest()
+        return c.post('/api/billing/webhook',content=body,headers={'stripe-signature':'t='+stamp+',v1='+sig})
+    assert event('evt_1','customer.subscription.created',{'id':'sub_1'}).status_code==200
+    assert c.get('/api/me').json()['plan']=='premium'
+    n=len(calls);assert event('evt_1','customer.subscription.created',{'id':'sub_1'}).status_code==200;assert len(calls)==n
+    sub['status']='canceled'
+    assert event('evt_2','customer.subscription.updated',{'id':'sub_1','status':'active'}).status_code==200
+    assert c.get('/api/me').json()['plan']=='free'
+    assert event('evt_3','checkout.session.completed',{'id':'cs_founder'}).status_code==200
+    assert c.get('/api/me').json()['billing_tier']=='founder'
+    assert event('evt_4','customer.subscription.deleted',{'id':'sub_1'}).status_code==200
+    assert c.get('/api/me').json()['plan']=='premium'
+    pi['latest_charge']['refunded']=True
+    assert event('evt_5','charge.refunded',{'payment_intent':'pi_1'}).status_code==200
+    assert c.get('/api/me').json()['plan']=='free'
+    pi['customer']='cus_other'
+    assert event('evt_6','checkout.session.completed',{'id':'cs_founder'}).status_code==200
+    assert c.get('/api/me').json()['plan']=='free'
+    assert event('evt_7','customer.subscription.created',{'id':'sub_1'},live=True).status_code==400
+
+
+def test_billing_price_mismatch_is_rejected():
+    from .payments import validate_price
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException):validate_price({'currency':'usd','unit_amount':190,'recurring':{'interval':'year','interval_count':1}},'yearly')

@@ -46,6 +46,8 @@ def init():
         CREATE TABLE IF NOT EXISTS webhook_events(id TEXT PRIMARY KEY);
         ''')
         migrate(c)
+        from .payments import migrate as migrate_payments
+        migrate_payments(c)
         migrate_stocks(c)
         migrate_digest(c)
         migrate_voices(c)
@@ -107,7 +109,8 @@ def account(request, required=True):
     return dict(row) if row else None
 
 def public_account(u):
-    return {k:u[k] for k in ['id','email','plan','role','status','display_name']} | {'demo':bool(u['demo'])}
+    from .payments import account_details
+    return {k:u[k] for k in ['id','email','plan','role','status','display_name']} | {'demo':bool(u['demo'])} | account_details(u)
 
 def session(response, uid):
     token=secrets.token_urlsafe(32)
@@ -208,7 +211,7 @@ def status():
     with db() as c:
         row=c.execute("SELECT COUNT(*) n,MAX(ts) latest,MIN(ts) earliest FROM posts WHERE source='x'").fetchone()
         sync=c.execute("SELECT value FROM meta WHERE key='last_sync'").fetchone()
-    return {'demo_enabled':DEMO,'x_configured':bool(os.getenv('X_BEARER_TOKEN')),'live_posts':row['n'],'latest_post':row['latest'],'earliest_post':row['earliest'],'last_sync':json.loads(sync[0]) if sync else None,'billing_configured':all(os.getenv(k) for k in ['STRIPE_SECRET_KEY','STRIPE_PRICE_ID','STRIPE_WEBHOOK_SECRET']),'catalog':[{'ticker':t,'name':v[0],'sector':v[1]} for t,v in CATALOG.items()]}
+    return {'demo_enabled':DEMO,'x_configured':bool(os.getenv('X_BEARER_TOKEN')),'live_posts':row['n'],'latest_post':row['latest'],'earliest_post':row['earliest'],'last_sync':json.loads(sync[0]) if sync else None,'billing_configured':any(billing_options().values()),'billing_options':billing_options(),'catalog':[{'ticker':t,'name':v[0],'sector':v[1]} for t,v in CATALOG.items()]}
 
 @app.get('/api/rankings')
 def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),scope:str=Query('market',pattern='^(market|watchlist)$')):
@@ -380,42 +383,8 @@ async def set_plan(request:Request):
     if not changed: raise HTTPException(404,'Account not found.')
     return {'ok':True}
 
-@app.post('/api/billing/checkout')
-async def checkout(request:Request):
-    import httpx
-    u=account(request)
-    if u['demo']: raise HTTPException(400,'Create a real account before subscribing.')
-    key=os.getenv('STRIPE_SECRET_KEY');price=os.getenv('STRIPE_PRICE_ID')
-    if not key or not price or not os.getenv('STRIPE_WEBHOOK_SECRET'): raise HTTPException(503,'Subscriptions are not open yet. No payment has been taken.')
-    async with httpx.AsyncClient(timeout=20) as client:
-        r=await client.post('https://api.stripe.com/v1/checkout/sessions',auth=(key,''),data={'mode':'subscription','customer_email':u['email'],'client_reference_id':u['id'],'subscription_data[metadata][account_id]':u['id'],'line_items[0][price]':price,'line_items[0][quantity]':'1','success_url':ORIGIN+'/?billing=success','cancel_url':ORIGIN+'/?billing=cancelled'})
-    if not r.is_success: raise HTTPException(502,'Checkout is unavailable. Please try again later.')
-    return {'url':r.json()['url']}
-
-@app.post('/api/billing/webhook')
-async def webhook(request:Request):
-    secret=os.getenv('STRIPE_WEBHOOK_SECRET','')
-    if not secret: raise HTTPException(503)
-    body=await request.body();parts=request.headers.get('stripe-signature','').split(',')
-    stamps=[v[2:] for v in parts if v.startswith('t=')];signatures=[v[3:] for v in parts if v.startswith('v1=')]
-    try: stamp=int(stamps[0])
-    except (IndexError,ValueError): raise HTTPException(400,'Invalid signature')
-    expected=hmac.new(secret.encode(),str(stamp).encode()+b'.'+body,hashlib.sha256).hexdigest()
-    if abs(time.time()-stamp)>300 or not any(hmac.compare_digest(expected,s) for s in signatures): raise HTTPException(400,'Invalid signature')
-    event=json.loads(body)
-    if event['type'] in ['customer.subscription.created','customer.subscription.updated','customer.subscription.deleted']:
-        # Fetch canonical status so out-of-order events cannot restore a cancelled plan.
-        import httpx
-        obj=event['data']['object']
-        async with httpx.AsyncClient(timeout=20) as client:
-            r=await client.get('https://api.stripe.com/v1/subscriptions/'+obj['id'],auth=(os.getenv('STRIPE_SECRET_KEY',''),''))
-        if not r.is_success: raise HTTPException(502,'Unable to verify subscription')
-        sub=r.json();uid=sub.get('metadata',{}).get('account_id')
-        with db() as c:
-            if not c.execute('SELECT 1 FROM webhook_events WHERE id=?',(event['id'],)).fetchone():
-                c.execute('UPDATE accounts SET plan=?,stripe_customer=? WHERE id=? AND demo=0',('premium' if sub['status'] in ['active','trialing'] else 'free',sub['customer'],uid))
-                c.execute('INSERT INTO webhook_events VALUES(?)',(event['id'],))
-    return {'received':True}
+from .payments import router as payments_router, options as billing_options
+app.include_router(payments_router)
 
 from .collection import router as collection_router
 app.include_router(collection_router)

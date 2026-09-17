@@ -26,3 +26,5 @@ work/
 !backend/digest.py
 
 !backend/voices.py
+
+!backend/payments.py

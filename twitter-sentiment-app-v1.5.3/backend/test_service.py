@@ -20,6 +20,21 @@ def isolate_tests(monkeypatch):
         c.execute("DELETE FROM meta WHERE key!='demo_anchor'")
     yield
 
+def test_custom_domain_login_and_origin_rejection(monkeypatch):
+    monkeypatch.setattr(s,'SECURE',True)
+    monkeypatch.setattr(s,'ORIGIN','https://tradersecho.com')
+    monkeypatch.setenv('APP_ADDITIONAL_ORIGINS','https://tradersecho-preview-sven-mais-projects.vercel.app')
+    c=TestClient(s.app,base_url='https://tradersecho.com')
+    body={'email':'domain-test@example.com','password':'long-test-password'}
+    assert c.post('/api/auth/signup',json=body,headers={'origin':s.ORIGIN}).status_code==200
+    assert c.post('/api/auth/login',json=body,headers={'origin':s.ORIGIN}).status_code==200
+    assert c.get('/api/me').status_code==200
+    assert c.post('/api/auth/login',json=body,headers={'origin':'https://tradersecho-preview-sven-mais-projects.vercel.app'}).status_code==200
+    rejected=c.post('/api/auth/login',json=body,headers={'origin':'https://tradersecho.com.attacker.example'})
+    assert rejected.status_code==403
+    assert 'website address' in rejected.json()['detail']
+
+
 def test_rankings_windows_and_separation():
     c=TestClient(s.app)
     c.post('/api/auth/demo?plan=premium')

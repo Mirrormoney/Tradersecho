@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from contextlib import contextmanager
 from fastapi import FastAPI, Request, Response, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from .community import router as community_router, migrate, claim_owner, available_default_name
@@ -84,10 +84,11 @@ async def security(request, call_next):
     if request.method not in ('GET','HEAD','OPTIONS'):
         origin = request.headers.get('origin')
         allowed = {ORIGIN,'http://127.0.0.1:5173','http://localhost:5173'} if not SECURE else {ORIGIN}
+        allowed.update(value.strip().rstrip('/') for value in os.getenv('APP_ADDITIONAL_ORIGINS','').split(',') if value.strip())
         for key in ['VERCEL_URL','VERCEL_BRANCH_URL','VERCEL_PROJECT_PRODUCTION_URL']:
             if os.getenv(key): allowed.add('https://'+os.environ[key])
         if origin and origin not in allowed:
-            return Response('Origin rejected',status_code=403)
+            return JSONResponse({'detail':'This website address is not enabled for account actions. Open Tradersecho at its official address or contact info@tradersecho.com.'},status_code=403)
         try:
             length=int(request.headers.get('content-length','0') or 0)
         except ValueError:

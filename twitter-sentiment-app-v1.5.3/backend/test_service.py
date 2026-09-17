@@ -671,3 +671,39 @@ def test_founder_dispute_resolution_and_payment_confirmation(monkeypatch):
     pi['latest_charge']['refunded']=True
     with s.db() as db:p.sync_entitlement(db,'payment','pi_dispute')
     assert c.get('/api/me').json()['plan']=='free'
+
+def test_change_password_rotates_sessions_and_rejects_bad_input():
+    first=TestClient(s.app);second=TestClient(s.app);other=TestClient(s.app)
+    creds={'email':'password-test@example.com','password':'old-long-password'}
+    uid=first.post('/api/auth/signup',json=creds).json()['id'];second.post('/api/auth/login',json=creds)
+    other.post('/api/auth/signup',json={'email':'unrelated@example.com','password':'other-long-password'})
+    old_cookie=first.cookies.get('te_session')
+    assert first.post('/api/auth/change-password',json={'current_password':'wrong','new_password':'new-long-password'}).status_code==400
+    assert first.post('/api/auth/change-password',json={'current_password':creds['password'],'new_password':creds['password']}).status_code==400
+    assert first.post('/api/auth/change-password',json={'current_password':creds['password'],'new_password':'short'}).status_code==422
+    assert second.get('/api/me').json()['id']==uid
+    response=first.post('/api/auth/change-password',json={'current_password':creds['password'],'new_password':'new-long-password'})
+    assert response.status_code==200
+    assert first.cookies.get('te_session')!=old_cookie
+    assert first.get('/api/me').json()['id']==uid
+    assert second.get('/api/me').json() is None
+    assert other.get('/api/me').json()['email']=='unrelated@example.com'
+    assert second.post('/api/auth/login',json=creds).status_code==401
+    assert second.post('/api/auth/login',json={**creds,'password':'new-long-password'}).status_code==200
+    with s.db() as db:
+        row=db.execute('SELECT password FROM accounts WHERE id=?',(uid,)).fetchone()
+        assert row[0]!='new-long-password'
+        audit=db.execute("SELECT detail FROM audit_log WHERE action='password_changed' AND target=?",(uid,)).fetchone()
+        assert audit and not audit[0]
+    anonymous=TestClient(s.app)
+    assert anonymous.post('/api/auth/change-password',json={'current_password':'old-long-password','new_password':'new-long-password'}).status_code==401
+    anonymous.post('/api/auth/demo')
+    assert anonymous.post('/api/auth/change-password',json={'current_password':'old-long-password','new_password':'new-long-password'}).status_code==403
+
+
+def test_login_session_refuses_outdated_password_hash():
+    from fastapi import Response,HTTPException
+    c=TestClient(s.app);uid=c.post('/api/auth/signup',json={'email':'race@example.com','password':'original-password'}).json()['id']
+    with s.db() as db:old=db.execute('SELECT password FROM accounts WHERE id=?',(uid,)).fetchone()[0]
+    c.post('/api/auth/change-password',json={'current_password':'original-password','new_password':'replacement-password'})
+    with pytest.raises(HTTPException):s.session(Response(),uid,old)

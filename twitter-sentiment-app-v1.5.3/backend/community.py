@@ -80,6 +80,30 @@ def claim(payload:Claim,request:Request):
 class Profile(BaseModel):
     display_name:str=Field(min_length=3,max_length=30)
 
+class PasswordChange(BaseModel):
+    current_password:str=Field(min_length=1,max_length=128)
+    new_password:str=Field(min_length=10,max_length=128)
+
+@router.post('/api/auth/change-password')
+def change_password(payload:PasswordChange,request:Request,response:Response):
+    s=core();u=s.account(request);s.throttle(request)
+    if u['demo']:raise HTTPException(403,'Sample accounts cannot change passwords. Create your own account first.')
+    token=secrets.token_urlsafe(32)
+    with s.db() as c:
+        c.execute('BEGIN IMMEDIATE')
+        current=c.execute('SELECT password,status FROM accounts WHERE id=?',(u['id'],)).fetchone()
+        if current['status']!='active':raise HTTPException(403,'This account is not active.')
+        stored=current['password']
+        if not stored or not hmac.compare_digest(s.password_hash(payload.current_password,stored.split(':')[0]),stored):
+            raise HTTPException(400,'Your current password is incorrect.')
+        if payload.current_password==payload.new_password:raise HTTPException(400,'Choose a different new password.')
+        c.execute('UPDATE accounts SET password=? WHERE id=?',(s.password_hash(payload.new_password),u['id']))
+        c.execute('DELETE FROM sessions WHERE user_id=?',(u['id'],))
+        c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),u['id'],time.time()+7*86400))
+        audit(c,u,'password_changed',u['id'])
+    response.set_cookie('te_session',token,httponly=True,secure=s.SECURE,samesite='lax',max_age=7*86400,path='/')
+    return {'ok':True}
+
 @router.put('/api/profile')
 def profile(payload:Profile,request:Request):
     s=core();u=s.account(request);name=' '.join(payload.display_name.split())

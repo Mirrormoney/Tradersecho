@@ -112,9 +112,14 @@ def public_account(u):
     from .payments import account_details
     return {k:u[k] for k in ['id','email','plan','role','status','display_name']} | {'demo':bool(u['demo'])} | account_details(u)
 
-def session(response, uid):
+def session(response, uid, expected_password=None):
     token=secrets.token_urlsafe(32)
     with db() as c:
+        c.execute('BEGIN IMMEDIATE')
+        if expected_password is not None:
+            current=c.execute('SELECT password,status FROM accounts WHERE id=?',(uid,)).fetchone()
+            if not current or current['status']!='active' or current['password']!=expected_password:
+                raise HTTPException(401,'Your account changed. Please sign in again.')
         c.execute('DELETE FROM sessions WHERE expires<?',(time.time(),))
         c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+7*86400))
     response.set_cookie('te_session',token,httponly=True,secure=SECURE,samesite='lax',max_age=7*86400,path='/')
@@ -164,7 +169,7 @@ def login(payload:Credentials,request:Request,response:Response):
         raise HTTPException(401,'Email or password is incorrect.')
     if u['status']!='active': raise HTTPException(403,'This account is suspended. Contact the site owner.')
     with db() as c: c.execute('UPDATE accounts SET last_login=? WHERE id=?',(time.time(),u['id']))
-    session(response,u['id'])
+    session(response,u['id'],stored)
     return public_account(u)
 
 @app.post('/api/auth/demo')

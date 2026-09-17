@@ -809,6 +809,19 @@ def test_newsletter_signature_and_timestamp():
     with pytest.raises(HTTPException):verify_event(raw,headers,secret,1731705422)
 
 
+def test_research_feed_excludes_group_promotions_and_ticker_stuffing():
+    from .post_quality import research_text,prepare_feed
+    spam="I've created a dedicated WhatsApp group for $NVDA $TSLA $AAPL shareholders. Click this link to join."
+    stuffed='$QQQ easy 50% gains! $SPY $TSLA $NVDA $MSFT $AAPL $GOOGL $META $AMZN $AMD'
+    assert not research_text(spam) and not research_text(stuffed)
+    assert not research_text('Our analyst on fire $NVDA +33%. Copy Trading doing its thing!')
+    assert research_text('$MU buying')
+    assert research_text('$NVDA and $TSM depend on continued data center investment and manufacturing capacity.')
+    rows=[{'id':'1','text':spam,'author':'promo','likes':0,'ts':time.time()}]
+    assert prepare_feed(rows,'NVDA',set(),'research','latest')==[]
+    assert len(prepare_feed(rows,'NVDA',set(),'all','latest'))==1
+
+
 def test_newsletter_optout_scanner_and_retry_gate(monkeypatch):
     from . import email_delivery as d,digest
     client,u=make_account('newsletter@example.com')

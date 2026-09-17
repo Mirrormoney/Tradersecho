@@ -2,10 +2,15 @@
 import re
 from .screening import fingerprint
 
-PROMOTION=re.compile(r'join.{0,45}(group|chat|telegram|whatsapp)|(?:stock|learning|trading).{0,20}group|(?:t\.me|wa\.me)/|guaranteed.{0,20}(profit|return)',re.I|re.S)
+PROMOTION=re.compile(r'join.{0,45}(group|chat|telegram|whatsapp)|(?:stock|learning|trading|whatsapp|telegram).{0,25}group|copy\s*trading|(?:t\.me|wa\.me)/|guaranteed.{0,20}(profit|return)',re.I|re.S)
 
 def research_text(text):
     clean=re.sub(r'https?://\S+|@[\w]+',' ',text)
+    # Ticker-stuffed promotions inflate relevance without offering stock research.
+    # Preserve short, specific takes such as "$MU buying" and multi-stock analysis.
+    tickers=set(re.findall(r'\$[A-Za-z]{1,5}\b',clean))
+    prose=re.sub(r'\$[A-Za-z]{1,5}\b',' ',clean)
+    if len(tickers)>=8 and len(re.findall(r'[A-Za-z]{2,}',prose))<len(tickers)*4:return False
     return (len(re.findall(r'[A-Za-z]+',clean))>=7 or bool(re.search(r'\$[A-Za-z]',clean)) and len(re.findall(r'[A-Za-z]+',clean))>=2) and not PROMOTION.search(text)
 
 def language_label(text,ticker=''):

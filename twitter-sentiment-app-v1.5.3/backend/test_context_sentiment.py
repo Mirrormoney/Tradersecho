@@ -38,6 +38,11 @@ def test_invalid_evidence_and_tickers_rejected():
     raw=answer();raw['tickers'][0]['confidence']=.4
     assert ai.validate(raw,p)['tickers'][0]['label']=='unclear'
 
+def test_evidence_preserves_source_entities_and_rejects_joined_snippets():
+    assert ai.source_quote('S&P is hard to ignore','The S&amp;P is hard to ignore.')=='S&amp;P is hard to ignore'
+    assert ai.source_quote('“Demand” is rising','"Demand" is rising.')=='"Demand" is rising'
+    with pytest.raises(ValueError):ai.source_quote('Demand is rising. Margins improved.','Demand is rising. But costs grew. Margins improved.')
+
 def test_budget_and_lease_prevent_duplicate_purchases(monkeypatch):
     monkeypatch.setenv('SENTIMENT_AI_ENABLED','true');p=seed()
     def unexpected(request):raise AssertionError('No request should be sent')

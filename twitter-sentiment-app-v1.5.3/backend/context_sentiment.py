@@ -3,7 +3,7 @@
 No model calls in page requests. The shared cron worker fills a versioned cache.
 Failed/uncertain calls keep their reservation; readers never fall back to keywords.
 """
-import hashlib,json,os,secrets,time,unicodedata
+import hashlib,html,json,os,secrets,time,unicodedata
 from datetime import datetime,timezone
 import httpx
 from fastapi import APIRouter,Request,HTTPException
@@ -78,6 +78,9 @@ def cache_key(p):
 
 def source_quote(quote,text):
     if not quote or quote in text:return quote
+    # X may retain HTML entities while the model quotes their visible text.
+    escaped=html.escape(quote,quote=False)
+    if escaped in text:return escaped
     # Typography/whitespace may be normalized by a model. Map a matching
     # normalized span back to the actual source, never invent a quotation.
     def normalized(value):

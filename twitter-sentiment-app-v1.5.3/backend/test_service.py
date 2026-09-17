@@ -692,6 +692,23 @@ def test_sandbox_cannot_unlock_main_members(monkeypatch):
     monkeypatch.setenv('STRIPE_SECRET_KEY','sk_live_test')
     assert not any(p.options().values())
 
+def test_live_key_override_is_isolated_from_sandbox(monkeypatch):
+    from . import payments as p
+    monkeypatch.setenv('STRIPE_SECRET_KEY','sk_test_marketplace')
+    monkeypatch.setenv('STRIPE_LIVE_SECRET_KEY','sk_live_production')
+    monkeypatch.setenv('BILLING_SANDBOX','false')
+    monkeypatch.setenv('TRADERSECHO_SCHEMA','public')
+    assert p.secret_key()=='sk_live_production'
+    assert p.environment_valid()
+    monkeypatch.setenv('BILLING_SANDBOX','true')
+    monkeypatch.setenv('TRADERSECHO_SCHEMA','billing_sandbox_tests')
+    assert p.secret_key()=='sk_test_marketplace'
+    assert p.environment_valid()
+    monkeypatch.delenv('STRIPE_LIVE_SECRET_KEY')
+    monkeypatch.setenv('BILLING_SANDBOX','false')
+    assert not p.environment_valid()
+
+
 def test_founder_dispute_resolution_and_payment_confirmation(monkeypatch):
     from . import payments as p
     c=TestClient(s.app)

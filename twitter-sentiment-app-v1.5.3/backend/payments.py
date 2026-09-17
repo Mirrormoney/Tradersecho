@@ -20,20 +20,26 @@ def migrate(c):
     ''')
 
 def options():
-    enabled=os.getenv('FREE_LAUNCH','false').lower()!='true' and environment_valid() and os.getenv('BILLING_ENABLED','false').lower()=='true' and all(os.getenv(k) for k in ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET'])
+    enabled=os.getenv('FREE_LAUNCH','false').lower()!='true' and environment_valid() and os.getenv('BILLING_ENABLED','false').lower()=='true' and bool(secret_key() and os.getenv('STRIPE_WEBHOOK_SECRET'))
     return {tier:bool(enabled and os.getenv(config[0])) for tier,config in TIERS.items()}
 
 def sandbox():
     return os.getenv('BILLING_SANDBOX','false').lower()=='true'
 
+def secret_key():
+    # Marketplace-managed sandbox credentials remain isolated from live billing.
+    if not sandbox() and os.getenv('STRIPE_LIVE_SECRET_KEY'):
+        return os.environ['STRIPE_LIVE_SECRET_KEY']
+    return os.getenv('STRIPE_SECRET_KEY','')
+
 def environment_valid():
-    key=os.getenv('STRIPE_SECRET_KEY','')
+    key=secret_key()
     if key.startswith(('sk_test_','rk_test_')):
         return sandbox() and os.getenv('TRADERSECHO_SCHEMA','').startswith('billing_sandbox_')
     return key.startswith(('sk_live_','rk_live_')) and not sandbox()
 
 def stripe(method,path,data=None,idempotency=None):
-    key=os.getenv('STRIPE_SECRET_KEY','')
+    key=secret_key()
     if not key: raise HTTPException(503,'Billing is not connected yet.')
     headers={'Stripe-Version':'2025-02-24.acacia'}
     if idempotency: headers['Idempotency-Key']=idempotency
@@ -108,7 +114,10 @@ def create_checkout(u,tier):
 def portal(request:Request):
     s=core();u=s.account(request);s.throttle(request)
     if u['demo'] or not u['stripe_customer']:raise HTTPException(400,'No billing account is connected to this membership.')
-    result=stripe('POST','billing_portal/sessions',{'customer':u['stripe_customer'],'return_url':s.ORIGIN+'/?billing=portal'})
+    data={'customer':u['stripe_customer'],'return_url':s.ORIGIN+'/?billing=portal'}
+    if os.getenv('STRIPE_PORTAL_CONFIGURATION'):
+        data['configuration']=os.environ['STRIPE_PORTAL_CONFIGURATION']
+    result=stripe('POST','billing_portal/sessions',data)
     return {'url':result['url']}
 
 def sync_entitlement(c,kind,object_id):
@@ -147,7 +156,7 @@ async def webhook(request:Request):
     try:
         event=json.loads(body);event_id=event['id'];kind=event['type'];obj=event['data']['object']
     except (ValueError,KeyError,TypeError):raise HTTPException(400,'Invalid event')
-    key=os.getenv('STRIPE_SECRET_KEY','')
+    key=secret_key()
     if event.get('livemode',False)!=(key.startswith('sk_live_') or key.startswith('rk_live_')):raise HTTPException(400,'Payment environment mismatch')
     return await run_in_threadpool(process_event,event_id,kind,obj)
 

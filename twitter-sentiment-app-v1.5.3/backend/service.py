@@ -211,7 +211,7 @@ def status():
     return {'demo_enabled':DEMO,'x_configured':bool(os.getenv('X_BEARER_TOKEN')),'live_posts':row['n'],'latest_post':row['latest'],'earliest_post':row['earliest'],'last_sync':json.loads(sync[0]) if sync else None,'billing_configured':all(os.getenv(k) for k in ['STRIPE_SECRET_KEY','STRIPE_PRICE_ID','STRIPE_WEBHOOK_SECRET']),'catalog':[{'ticker':t,'name':v[0],'sector':v[1]} for t,v in CATALOG.items()]}
 
 @app.get('/api/rankings')
-def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$')):
+def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),scope:str=Query('market',pattern='^(market|watchlist)$')):
     u=account(request,False)
     if not u and window!=1: raise HTTPException(401,'Create a free account to explore weekly and monthly rankings.')
     if window not in [1,7,30]: raise HTTPException(422,'Choose 1, 7 or 30 days.')
@@ -245,7 +245,14 @@ def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('de
         comparison=all(r.get('comparison_complete',False) for r in rows)
         with db() as c:
             earliest=c.execute('SELECT MIN(start) FROM x_counts').fetchone()[0]
-    return {'rows':rows if u else rows[:3],'total_tickers':total,'preview':not bool(u),'as_of':now,'sample_as_of':time.time() if source=='x' else now,'source':source,'window':window,'comparison_complete':comparison,'coverage_days':round((now-earliest)/86400,1) if earliest else 0}
+    full=bool(u and (u['plan']=='premium' or u['role'] in ('owner','admin')) and (not u['demo'] or source=='demo'))
+    total_mentions=sum(r['mentions'] for r in rows)
+    if scope=='watchlist':
+        if not u:raise HTTPException(401,'Sign in to view your watchlist.')
+        with db() as c:watched={r[0] for r in c.execute('SELECT ticker FROM watchlist WHERE user_id=? ORDER BY ticker LIMIT ?',(u['id'],50 if full else 5))}
+        rows=[r for r in rows if r['ticker'] in watched]
+    visible=rows if full else rows[:5 if u else 3]
+    return {'rows':visible,'total_tickers':total,'total_mentions':total_mentions,'ranking_locked':bool(u and not full and scope=='market'),'preview_limit':None if full else 5 if u else 3,'preview':not bool(u),'as_of':now,'sample_as_of':time.time() if source=='x' else now,'source':source,'window':window,'comparison_complete':comparison,'coverage_days':round((now-earliest)/86400,1) if earliest else 0}
 
 @app.get('/api/posts')
 def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),tracked:bool=False,order:str=Query('latest',pattern='^(latest|engagement)$')):

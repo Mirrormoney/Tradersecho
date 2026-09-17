@@ -20,7 +20,7 @@ def isolate_tests(monkeypatch):
 
 def test_rankings_windows_and_separation():
     c=TestClient(s.app)
-    c.post('/api/auth/demo?plan=free')
+    c.post('/api/auth/demo?plan=premium')
     day=c.get('/api/rankings?window=1').json()
     week=c.get('/api/rankings?window=7').json()
     month=c.get('/api/rankings?window=30').json()
@@ -131,7 +131,7 @@ def test_public_gate_owner_invitation_and_admin_controls():
     assert owner.post('/api/owner/claim',json={'code':code}).status_code==403
     member,m=make_account('member@example.com')
     assert m['role']=='member' and m['plan']=='free'
-    assert len(member.get('/api/rankings').json()['rows'])==16
+    assert len(member.get('/api/rankings').json()['rows'])==5
     assert member.get('/api/admin/users').status_code==403
     assert 'password' not in owner.get('/api/admin/users').text
     assert owner.patch('/api/admin/users/'+o['id'],json={'status':'suspended'}).status_code==403
@@ -529,3 +529,25 @@ def test_display_names_unique_and_chat_identity_updates():
     assert b.put('/api/profile',json={'display_name':'Sven Mai'}).status_code==200
     assert a.put('/api/profile',json={'display_name':'Trader-abcdef'}).status_code==200
     with s.db() as c:assert available_default_name(c,'abcdef0000')!='Trader-abcdef'
+
+
+def test_free_rankings_are_server_limited_and_watchlist_survives():
+    from .community import create_owner_invite
+    guest=TestClient(s.app)
+    assert len(guest.get('/api/rankings').json()['rows'])==3
+    free,u=make_account('ranking-free@example.com')
+    owner,_=make_account('ranking-owner@example.com',create_owner_invite('ranking-owner@example.com'))
+    full=owner.get('/api/rankings').json()
+    for window in (1,7,30):
+        preview=free.get(f'/api/rankings?window={window}').json()
+        assert len(preview['rows'])==5 and preview['ranking_locked']
+        assert preview['total_tickers']==16
+    outside=full['rows'][-1]['ticker']
+    assert free.put('/api/watchlist/'+outside).status_code==200
+    watched=free.get('/api/rankings?scope=watchlist').json()
+    assert [r['ticker'] for r in watched['rows']]==[outside]
+    assert len(free.get('/api/rankings?scope=market&limit=1000').json()['rows'])==5
+    assert guest.get('/api/rankings?scope=watchlist').status_code==401
+    owner.patch('/api/admin/users/'+u['id'],json={'plan':'premium'})
+    upgraded=free.get('/api/rankings').json()
+    assert len(upgraded['rows'])==16 and not upgraded['ranking_locked']

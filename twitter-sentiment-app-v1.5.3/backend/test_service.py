@@ -1033,3 +1033,27 @@ def test_individual_admin_voice_queries_and_links(monkeypatch):
     with s.db() as c:
         assert c.execute("SELECT COUNT(*) FROM mentions WHERE source='x'").fetchone()[0]==4
         assert c.execute('SELECT COUNT(*) FROM voice_checkpoints').fetchone()[0]==2
+
+
+def test_intraday_freshness_growth_and_discovery(monkeypatch):
+    from . import live_collection as live
+    from .community import create_owner_invite
+    owner,_=make_account('intraday@example.com',create_owner_invite('intraday@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'intraday_enabled':True})
+    monkeypatch.setenv('X_BEARER_TOKEN','mock')
+    end=int(time.time()//3600)*3600
+    with s.db() as c:
+        c.execute("INSERT INTO meta VALUES('completed_snapshot',?)",(str(end-86400),))
+        c.execute('INSERT INTO admin_voices VALUES(?,?,?)',('researcher','',time.time()))
+        for i in range(6):c.execute('INSERT INTO x_counts VALUES(?,?,?,?,?,?)',('NVDA',end-21600+i*3600,end-18000+i*3600,10 if i<3 else 20,'mock',time.time()))
+        c.execute('INSERT INTO x_counts VALUES(?,?,?,?,?,?)',('AAPL',end-90000,end-86400,999,'mock',time.time()))
+    s.ingest([{'id':'987654321','author':'researcher','text':'$AMD new product outlook','created_at':datetime.fromtimestamp(end-60,timezone.utc).isoformat()}])
+    result=owner.get('/api/intraday');assert result.status_code==200
+    rows={r['ticker']:r for r in result.json()['rows']}
+    assert rows['NVDA']['mentions']==60 and rows['NVDA']['previous']==30 and rows['NVDA']['change']==100
+    assert rows['AMD']['state']=='awaiting_counts' and rows['AMD']['posts'][0]['id']=='987654321'
+    assert 'AAPL' not in rows
+    live.plan_hour();live.plan_hour()
+    with s.db() as c:
+        assert c.execute("SELECT COUNT(*) FROM collection_jobs WHERE kind='request_counts' AND ticker='AMD'").fetchone()[0]==1
+    assert len(TestClient(s.app).get('/api/intraday').json()['rows'])<=2

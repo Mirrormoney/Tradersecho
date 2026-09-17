@@ -23,6 +23,13 @@ def plan_hour():
         cutoff=float(snapshot[0])
         top=[r[0] for r in c.execute('SELECT ticker FROM x_counts WHERE start>=? AND end<=? GROUP BY ticker ORDER BY SUM(n) DESC,ticker LIMIT ?',(cutoff-86400,cutoff,settings['hourly_top'])) if r[0] in s.CATALOG]
         for ticker in top:enqueue(c,slot,'hour_counts',ticker,end,f'${ticker} lang:en -is:retweet')
+        # A bounded discovery queue shares the existing daily on-demand count allowance.
+        recent=[r[0] for r in c.execute("SELECT m.ticker FROM mentions m JOIN posts p ON p.source=m.source AND p.id=m.post_id JOIN admin_voices a ON a.handle=LOWER(p.author) WHERE p.source='x' AND p.ts>? GROUP BY m.ticker ORDER BY MAX(p.ts) DESC,m.ticker",(end-6*3600,)) if r[0] in s.CATALOG and r[0] not in top]
+        used=c.execute("SELECT COUNT(*) FROM collection_jobs WHERE day LIKE ? AND kind='request_counts'",(slot[:10]+'%',)).fetchone()[0]
+        for ticker in recent[:min(5,max(0,settings['on_demand_daily_limit']-used))]:
+            if not c.execute("SELECT 1 FROM collection_jobs WHERE day=? AND ticker=? AND kind IN ('request_counts','hour_counts')",(slot,ticker)).fetchone():
+                enqueue(c,slot,'request_counts',ticker,end,f'${ticker} lang:en -is:retweet')
+
         # One rotating popular-stock sample and shared account groups/hour.
         # All readers, retries and demand requests share the same daily allowance.
         if top:
@@ -227,3 +234,27 @@ def live_ticker(ticker:str,request:Request):
         latest=c.execute("SELECT MAX(p.ts) FROM posts p JOIN mentions m ON m.source=p.source AND m.post_id=p.id WHERE p.source='x' AND m.ticker=?",(ticker,)).fetchone()[0]
         queued=c.execute("SELECT COUNT(*) FROM collection_jobs WHERE ticker=? AND kind IN ('hour_counts','request_counts') AND status IN ('pending','running')",(ticker,)).fetchone()[0]
     return {'ticker':ticker,'as_of':end,'mentions_24h':counts[0] or 0,'coverage_hours':counts[1],'latest_sample':latest,'queued':bool(queued),'stale':not end or time.time()-end>7200}
+
+
+@router.get('/api/intraday')
+def intraday(request:Request):
+    import math
+    s=core();u=s.account(request,False);now=time.time();rows=[]
+    with s.db() as c:
+        posts=[dict(r) for r in c.execute("SELECT p.id,p.author,p.text,p.ts,m.ticker FROM posts p JOIN mentions m ON m.source=p.source AND m.post_id=p.id JOIN admin_voices a ON a.handle=LOWER(p.author) WHERE p.source='x' AND p.ts>? AND p.ts<=? ORDER BY p.ts DESC,p.id DESC LIMIT 500",(now-6*3600,now))]
+        context={}
+        for post in posts:
+            if post['ticker'] in s.CATALOG and len(context.setdefault(post['ticker'],[]))<2:context[post['ticker']].append(post)
+        ends={r['ticker']:r['end'] for r in c.execute('SELECT ticker,MAX(end) AS end FROM x_counts WHERE end>? AND end<=? GROUP BY ticker',(now-7200,now)) if r['ticker'] in s.CATALOG}
+        for ticker in set(ends)|set(context):
+            end=ends.get(ticker);current=[];prior=[]
+            if end:
+                buckets=[dict(r) for r in c.execute('SELECT start,end,n FROM x_counts WHERE ticker=? AND start>=? AND end<=? ORDER BY start',(ticker,end-21600,end))]
+                current=[r for r in buckets if r['start']>=end-10800];prior=[r for r in buckets if r['start']<end-10800]
+            complete=bool(end and [r['start'] for r in current]==[end-10800+i*3600 for i in range(3)] and [r['start'] for r in prior]==[end-21600+i*3600 for i in range(3)] and all(r['end']-r['start']==3600 for r in current+prior))
+            n=sum(r['n'] for r in current) if complete else None;old=sum(r['n'] for r in prior) if complete else None
+            heat=round(10*math.log1p(n)*(1+max(0,math.log2((n+5)/(old+5)))),1) if complete else None
+            rows.append({'ticker':ticker,'name':s.CATALOG[ticker][0],'mentions':n,'previous':old,'change':round((n/old-1)*100,1) if old else None,'heat':heat,'as_of':end if complete else None,'posts':context.get(ticker,[]),'state':'measured' if complete else 'awaiting_counts'})
+    rows.sort(key=lambda r:(r['heat'] is None,-(r['heat'] or 0),r['ticker']))
+    full=bool(u and (u['plan']=='premium' or u['role'] in ('owner','admin') or os.getenv('FREE_LAUNCH','false').lower()=='true') and not u['demo'])
+    return {'rows':rows if full else rows[:5 if u else 2],'total':len(rows),'locked':not full,'as_of':now,'comparison_hours':3,'disclosure':'Latest three completed hours versus the preceding three. Selected hourly leaders and recent admin-voice discoveries; not a full-market scan. Fresh posts provide context, not proof of a catalyst.'}

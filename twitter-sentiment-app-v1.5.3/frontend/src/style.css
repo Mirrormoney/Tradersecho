@@ -22,3 +22,5 @@ th{position:relative}
 .trial-notice{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:20px 24px;margin-bottom:24px;border:1px solid #53674c;border-radius:14px;background:linear-gradient(110deg,#233629,#182525)}.trial-notice>div{flex:1;min-width:220px}.trial-notice p{color:#bac4bc;font-size:13px;line-height:1.6;margin:6px 0 0}.trial-notice .error{color:#f59c9c}.founder-badge{color:#f0d48d!important;border-color:#9b8147!important;background:#3b3220!important}
 
 .sidebar-brand-text{color:var(--text)!important}.sidebar-brand-text>span{color:var(--lime)}.sidebar-brand-text>small{display:block;font-size:6px;letter-spacing:.6px;color:var(--muted);margin-top:6px}.brand .brand-icon{width:42px;height:42px;flex-shrink:0;background:none}
+
+.intraday-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:24px 0}.intraday-grid>.panel{padding:24px;min-width:0}.intraday-grid .post{overflow-wrap:anywhere}.intraday-grid h3{margin:0}@media(max-width:850px){.intraday-grid{grid-template-columns:1fr}}

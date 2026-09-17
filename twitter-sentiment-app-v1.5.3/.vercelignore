@@ -37,3 +37,6 @@ work/
 !backend/email_delivery.py
 !backend/context_sentiment.py
 !backend/ai_monitor.py
+
+!backend/email_brand.py
+!backend/newsletter_schedule.py

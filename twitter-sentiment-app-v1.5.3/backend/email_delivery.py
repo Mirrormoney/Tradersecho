@@ -14,12 +14,18 @@ def migrate(c):
     CREATE TABLE IF NOT EXISTS email_deliveries(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,email TEXT NOT NULL,window_end REAL NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,provider_id TEXT,created_at REAL NOT NULL,first_attempt REAL,lease_until REAL NOT NULL DEFAULT 0,attempts INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS email_events(id TEXT PRIMARY KEY,provider_id TEXT NOT NULL,kind TEXT NOT NULL,received_at REAL NOT NULL);
     CREATE INDEX IF NOT EXISTS email_deliveries_provider ON email_deliveries(provider_id);
+    CREATE TABLE IF NOT EXISTS newsletter_preferences(user_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,editions TEXT NOT NULL DEFAULT '[]',trial_reminder INTEGER NOT NULL DEFAULT 1);
     ''')
 
 def email_hash(email):return hashlib.sha256(email.strip().lower().encode()).hexdigest()
-def valid_recipient(c,u):
-    prefs=c.execute('SELECT frequency FROM digest_preferences WHERE user_id=?',(u['id'],)).fetchone()
-    return bool(u['status']=='active' and not u['demo'] and u['email_verified'] and (u['plan']=='premium' or u['role'] in ('owner','admin')) and prefs and prefs['frequency']=='daily' and not c.execute('SELECT 1 FROM email_suppressions WHERE email_hash=?',(email_hash(u['email']),)).fetchone())
+def valid_recipient(c,u,kind='daily',now=None):
+    from .account_security import trial_account
+    from .newsletter_schedule import choices
+    now=time.time() if now is None else now
+    u=trial_account(u,now);prefs=choices(c,u['id'])
+    if u['status']!='active' or u['demo'] or not u['email_verified'] or c.execute('SELECT 1 FROM email_suppressions WHERE email_hash=?',(email_hash(u['email']),)).fetchone():return False
+    if kind=='trial':return bool(u['trial_active'] and u['role']=='member' and 0<u['trial_ends_at']-now<=86400 and prefs['trial_reminder'])
+    return bool((u['plan']=='premium' or u['role'] in ('owner','admin')) and (('morning' in prefs['editions'] or 'final' in prefs['editions']) if kind=='daily' else kind in prefs['editions']))
 
 def optout_token(c,u):
     token=secrets.token_urlsafe(32)
@@ -35,6 +41,7 @@ def unsubscribe(token):
         # Suppress the original recipient even if their account email later changes.
         c.execute('INSERT INTO email_suppressions VALUES(?,?,?) ON CONFLICT(email_hash) DO NOTHING',(email_hash(row['email']),'unsubscribed',time.time()))
         c.execute("UPDATE digest_preferences SET frequency='off',updated_at=? WHERE user_id=? AND EXISTS(SELECT 1 FROM accounts WHERE id=? AND email=?)",(time.time(),row['user_id'],row['user_id'],row['email']))
+        c.execute("INSERT INTO newsletter_preferences VALUES(?,'[]',0) ON CONFLICT(user_id) DO UPDATE SET editions='[]',trial_reminder=0",(row['user_id'],))
         c.execute("UPDATE email_deliveries SET status='cancelled' WHERE email=? AND status IN ('pending','uncertain')",(row['email'],))
 
 def page(body):
@@ -106,7 +113,9 @@ def delivery_status(request:Request):
         counts=[dict(r) for r in c.execute('SELECT status,COUNT(*) n FROM email_deliveries GROUP BY status')]
         verified=c.execute("SELECT COUNT(*) FROM accounts WHERE email_verified=1 AND status='active' AND demo=0").fetchone()[0]
         suppressed=c.execute('SELECT COUNT(*) FROM email_suppressions').fetchone()[0]
-    return {'sending_enabled':False,'verified_accounts':verified,'suppressed_addresses':suppressed,'deliveries':counts,'webhook_configured':bool(os.getenv('RESEND_WEBHOOK_SECRET')),'note':'Private preparation only. Subscriber delivery is not activated.'}
+    from .newsletter_schedule import enabled
+    with core().db() as c:worker=c.execute("SELECT value FROM meta WHERE key='email_worker_result'").fetchone()
+    return {'sending_enabled':enabled(),'verified_accounts':verified,'suppressed_addresses':suppressed,'deliveries':counts,'webhook_configured':bool(os.getenv('RESEND_WEBHOOK_SECRET')),'last_worker':json.loads(worker[0]) if worker else None,'note':'Opt-in editions in New York time. Launch allowance: 80 research/reminder emails daily, 2400 monthly; security emails are separate.'}
 
 
 def prepare_delivery(u):
@@ -139,9 +148,12 @@ def claim_delivery(key,now=None):
         row=c.execute('SELECT * FROM email_deliveries WHERE id=?',(key,)).fetchone()
         if not row or row['status'] not in ('pending','uncertain','sending') or row['lease_until']>now:return None
         u=c.execute('SELECT * FROM accounts WHERE id=?',(row['user_id'],)).fetchone()
-        if not u or u['email']!=row['email'] or not valid_recipient(c,u):
+        kind=json.loads(row['payload']).get('headers',{}).get('X-Tradersecho-Edition','daily')
+        if not u or u['email']!=row['email'] or not valid_recipient(c,u,kind,now):
             c.execute("UPDATE email_deliveries SET status='cancelled' WHERE id=?",(key,));return None
         if now-row['window_end']>36*3600 or row['first_attempt'] and now-row['first_attempt']>23*3600:
             c.execute("UPDATE email_deliveries SET status='manual_review' WHERE id=?",(key,));return None
+        if kind not in ('trial','daily') and not row['first_attempt'] and now-row['window_end']>2*3600:
+            c.execute("UPDATE email_deliveries SET status='cancelled' WHERE id=?",(key,));return None
         c.execute("UPDATE email_deliveries SET status='sending',first_attempt=COALESCE(first_attempt,?),lease_until=?,attempts=attempts+1 WHERE id=?",(now,now+120,key))
         return {'payload':json.loads(row['payload']),'idempotency_key':'newsletter-'+key}

@@ -556,7 +556,7 @@ def test_digest_coverage_personalization_and_preferences(monkeypatch):
     assert TestClient(s.app).get('/api/digest').status_code==401
     assert not member.get('/api/digest').json()['ready']
     assert member.put('/api/digest/preferences',json={'frequency':'daily'}).status_code==403
-    assert member.put('/api/digest/preferences',json={'frequency':'weekly'}).status_code==200
+    assert member.put('/api/digest/preferences',json={'frequency':'weekly'}).status_code==403
     assert other.get('/api/digest/preferences').json()['frequency']=='off'
     end=int(time.time()//86400)*86400
     with s.db() as c:
@@ -895,7 +895,7 @@ def test_newsletter_personalization_safe_html_and_inline_logo():
     assert '&lt;img' in result['html'] and 'src="data:image/png;base64,' in result['html']
     assert '$MU leads your watchlist' in result['html']
     assert 'view=market&amp;ticker=MU' in result['html'] and 'view=account' in result['text']
-    assert 'Automatic newsletter delivery is off' in result['html']
+    assert 'Design preview / owner test' in result['html']
     actual=render(report,'Sven','https://example.com')
     assert 'src="cid:tradersecho-pulse"' in actual['html']
     assert actual['attachments'][0]['content_id']=='tradersecho-pulse'

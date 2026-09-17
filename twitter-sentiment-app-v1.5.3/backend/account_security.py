@@ -49,9 +49,12 @@ def send_email(email,purpose,token):
     link=s.ORIGIN+'/#'+kind+'='+token
     subject='Reset your Tradersecho password' if kind=='reset' else 'Verify your Tradersecho email'
     text=subject+'\n\nOpen this link and confirm the action:\n'+link+'\n\nThis link expires '+('in one hour.' if kind=='reset' else 'in 24 hours.')+' If you did not request it, ignore this email.\n\nHelp: info@tradersecho.com'
+    from .email_brand import message
+    from html import escape
+    branded=message(subject,text,'<p style="line-height:1.8">'+escape(text).replace(escape(link),'<a href="'+escape(link,quote=True)+'">Open your secure link</a>').replace('\n','<br>')+'</p>')
     try:
         with httpx.Client(timeout=15) as client:
-            r=client.post('https://api.resend.com/emails',headers={'Authorization':'Bearer '+os.environ['RESEND_API_KEY'],'Idempotency-Key':'account-'+hashlib.sha256(token.encode()).hexdigest()},json={'from':os.getenv('ACCOUNT_EMAIL_FROM','Tradersecho <info@tradersecho.com>'),'to':[email],'reply_to':'info@tradersecho.com','subject':subject,'text':text})
+            r=client.post('https://api.resend.com/emails',headers={'Authorization':'Bearer '+os.environ['RESEND_API_KEY'],'Idempotency-Key':'account-'+hashlib.sha256(token.encode()).hexdigest()},json={'from':os.getenv('ACCOUNT_EMAIL_FROM','Tradersecho <info@tradersecho.com>'),'to':[email],'reply_to':'info@tradersecho.com',**branded})
         if not r.is_success:raise RuntimeError('Email provider rejected delivery')
     except (httpx.HTTPError,RuntimeError):raise HTTPException(503,'Account email is temporarily unavailable. Please retry later or contact info@tradersecho.com.')
 

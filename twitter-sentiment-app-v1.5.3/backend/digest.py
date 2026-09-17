@@ -3,7 +3,7 @@ import json, time, math
 from datetime import datetime, timezone
 from typing import Literal
 from fastapi import APIRouter, Request, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from .community import core, staff, audit
 
 router=APIRouter()
@@ -52,13 +52,16 @@ def preferences(c,uid):
     return dict(row) if row else {'frequency':'off','watchlist_only':False,'updated_at':None}
 
 class Preference(BaseModel):
-    frequency:Literal['off','weekly','daily']='off'
+    frequency:Literal['off','weekly','daily','monthly','all']='off'
     watchlist_only:bool=False
+    editions:list[Literal['morning','final','weekly','monthly']]|None=Field(default=None,max_length=4)
+    trial_reminder:bool=True
 
 @router.get('/api/digest/preferences')
 def get_preferences(request:Request):
     u=core().account(request)
-    with core().db() as c:return {**preferences(c,u['id']),'delivery_enabled':False}
+    from .newsletter_schedule import choices,enabled
+    with core().db() as c:return {**preferences(c,u['id']),**choices(c,u['id']),'delivery_enabled':enabled()}
 
 @router.put('/api/digest/preferences')
 def save_preferences(payload:Preference,request:Request):
@@ -66,14 +69,18 @@ def save_preferences(payload:Preference,request:Request):
     if u['demo']:raise HTTPException(403,'Create a real account to save email preferences.')
     if payload.frequency=='daily' and u['plan']!='premium' and u['role'] not in ('owner','admin'):raise HTTPException(403,'Daily briefings require Premium.')
     with core().db() as c:
+        from .newsletter_schedule import choices,enabled,EDITION_NAMES
+        editions=list(dict.fromkeys(payload.editions)) if payload.editions is not None else {'daily':['morning','final'],'weekly':['weekly'],'monthly':['monthly'],'all':list(EDITION_NAMES)}.get(payload.frequency,[])
+        if editions and u['plan']!='premium' and u['role'] not in ('owner','admin'):raise HTTPException(403,'Research emails require Premium or an active trial.')
+        c.execute('INSERT INTO newsletter_preferences VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET editions=excluded.editions,trial_reminder=excluded.trial_reminder',(u['id'],json.dumps(editions),int(payload.trial_reminder)))
         c.execute('INSERT INTO digest_preferences VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET frequency=excluded.frequency,watchlist_only=excluded.watchlist_only,updated_at=excluded.updated_at',(u['id'],payload.frequency,int(payload.watchlist_only),time.time()))
         audit(c,u,'digest_preferences_updated',detail=json.dumps(payload.model_dump()))
-    return {**payload.model_dump(),'delivery_enabled':False}
+    return {**payload.model_dump(),'editions':editions,'delivery_enabled':enabled()}
 
-def personalized(report,u,now=None):
+def personalized(report,u,now=None,preserve_ranking=False):
     if not report.get('ready'):return report
     s=core();premium=u['plan']=='premium' or u['role'] in ('owner','admin')
-    ranked=[{**r,'heat':round(math.log1p(r['mentions'])*(1+max(0,math.log2((r['mentions']+5)/(r.get('previous',0)+5))))*10,1)} for r in report['rows']]
+    ranked=report['rows'] if preserve_ranking else [{**r,'heat':round(math.log1p(r['mentions'])*(1+max(0,math.log2((r['mentions']+5)/(r.get('previous',0)+5))))*10,1)} for r in report['rows']]
     ranked.sort(key=lambda r:(-r['heat'],r['ticker']))
     report={**report,'rows':ranked}
     now=time.time() if now is None else now
@@ -95,7 +102,8 @@ def personalized(report,u,now=None):
     selected=[r for r in report['rows'] if r['ticker'] in watched]
     for p in posts:p['url']='https://x.com/i/web/status/'+p['id']
     visible=selected if premium and prefs['watchlist_only'] else report['rows'][:10 if premium else 3]
-    return {**report,'post_window_start':post_start,'post_window_end':now,'post_date':datetime.fromtimestamp(now,timezone.utc).strftime('%Y-%m-%d'),'rows':visible,'watchlist':selected if premium else [],'posts':posts,'personalized':premium,'watchlist_only':bool(premium and prefs['watchlist_only']),'delivery_enabled':False}
+    from .newsletter_schedule import enabled
+    return {**report,'post_window_start':post_start,'post_window_end':now,'post_date':datetime.fromtimestamp(now,timezone.utc).strftime('%Y-%m-%d'),'rows':visible,'watchlist':selected if premium else [],'posts':posts,'personalized':premium,'watchlist_only':bool(premium and prefs['watchlist_only']),'delivery_enabled':enabled()}
 
 @router.get('/api/digest')
 def member_briefing(request:Request):
@@ -103,10 +111,17 @@ def member_briefing(request:Request):
     return personalized(build(),u)
 
 @router.get('/api/admin/digest')
-def admin_briefing(request:Request):
+def admin_briefing(request:Request,edition:Literal['daily','morning','final','weekly','monthly','trial']='morning'):
     u=staff(request);report=build()
     preview=personalized(report,u)
     from .newsletter import render
+    from .newsletter_schedule import report_for,enabled
+    if edition in ('morning','final','weekly','monthly'):
+        try:preview=report_for({'edition':edition,'at':time.time()},u)
+        except ValueError as exc:preview={'ready':False,'reason':str(exc)}
     email=render(preview,u['display_name'],core().ORIGIN,preview=True) if preview.get('ready') else {}
+    if edition=='trial':
+        from .email_brand import trial_reminder
+        email=trial_reminder({**dict(u),'trial_ends_at':time.time()+86400},core().ORIGIN,preview=True)
     from .email_delivery import delivery_status
-    return {'report':preview,'email_preview':email.get('text',''),'email_html':email.get('html',''),'email_subject':email.get('subject',''),'x_draft':report.get('x_draft',''),'email_enabled':False,'x_enabled':False,'delivery_status':delivery_status(request),'requirements':['Connect and test signed Resend delivery events on the final public address','Activate and verify subscriber dispatch with delivery reconciliation','Public business details and reviewed public website address','New X account authorization before publishing'],'note':'Design preview only. Sending stays off during the private testing week. This preview uses your own watchlist and followed voices; public X drafts never include personal lists.'}
+    return {'report':preview,'email_preview':email.get('text',''),'email_html':email.get('html',''),'email_subject':email.get('subject',''),'x_draft':report.get('x_draft',''),'email_enabled':enabled(),'x_enabled':False,'delivery_status':delivery_status(request),'requirements':[],'note':'Preview uses your own watchlist and followed voices. Newsletter delivery is opt-in and follows New York time. X drafts are never published automatically.'}

@@ -423,6 +423,8 @@ app.include_router(payments_router)
 from .account_security import router as security_router
 app.include_router(security_router)
 from .email_delivery import router as delivery_router
+from .newsletter_schedule import router as newsletter_router
+app.include_router(newsletter_router)
 app.include_router(delivery_router)
 
 from .collection import router as collection_router

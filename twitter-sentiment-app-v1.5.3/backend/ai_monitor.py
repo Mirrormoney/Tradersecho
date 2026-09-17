@@ -36,8 +36,9 @@ def check(worker,token=None,client=None):
                 if c.execute('SELECT value FROM meta WHERE key=?',(marker,)).fetchone():continue
             if not os.getenv('RESEND_API_KEY'):snapshot['email_status']='not_configured';continue
             text=message+f'\n\nMonthly analysis usage: ${spent:.3f} / ${budget:.2f}.\nGateway balance: '+('unavailable' if snapshot['balance'] is None else f"${snapshot['balance']:.2f}")+'\n\nReview: https://vercel.com/sven-mais-projects/~/ai-gateway\nAdmin: https://tradersecho.com/admin\nNo automatic credit purchase was made.'
+            from .email_brand import message as branded_message
             try:
-                response=client.post('https://api.resend.com/emails',headers={'Authorization':'Bearer '+os.environ['RESEND_API_KEY'],'Idempotency-Key':'ai-alert-'+hashlib.sha256((recipient+key).encode()).hexdigest()},json={'from':os.getenv('ACCOUNT_EMAIL_FROM','Tradersecho <info@tradersecho.com>'),'to':[recipient],'subject':'Tradersecho: AI budget or credit alert','text':text})
+                response=client.post('https://api.resend.com/emails',headers={'Authorization':'Bearer '+os.environ['RESEND_API_KEY'],'Idempotency-Key':'ai-alert-'+hashlib.sha256((recipient+key).encode()).hexdigest()},json={'from':os.getenv('ACCOUNT_EMAIL_FROM','Tradersecho <info@tradersecho.com>'),'to':[recipient],**branded_message('Tradersecho: AI budget or credit alert',text)})
                 response.raise_for_status()
                 with s.db() as c:c.execute('INSERT INTO meta VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(marker,str(now)))
                 snapshot['email_status']='sent'

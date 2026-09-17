@@ -9,6 +9,7 @@ const features=[
  ['Shared tracked voices','Included','Included'],
  ['Personal tracked voices','Not included','Up to 5 accounts'],
  ['Daily web briefing','Top 3 stocks','Top 10 + your watchlist'],
+ ['Scheduled research emails','Not included','Four opt-in editions'],
  ['Trading room','Not included','Included'],
  ['Ticker refresh requests','Not included','Up to 5 per day'],
 ]
@@ -46,6 +47,6 @@ export function Pricing({user,status,onSignup,onAccount}){
    })}
   </div>
   {error&&<p className="error" role="alert">{error}</p>}
-  <div className="pricing-footnotes"><p>All prices in USD. Applicable taxes will be shown before payment. Founder access lasts while Tradersecho is operated as an active service; it is not a guarantee of perpetual operation.</p><p>Coverage depends on available X data. Paid membership does not guarantee complete coverage, investment returns or instant collection. Email delivery will be announced separately.</p>{!status?.billing_configured&&<p>Plans are available to compare during our private preview. Checkout opens after payment setup and testing.</p>}</div>
+  <div className="pricing-footnotes"><p>All prices in USD. Applicable taxes will be shown before payment. Founder access lasts while Tradersecho is operated as an active service; it is not a guarantee of perpetual operation.</p><p>Coverage depends on available X data. Paid membership does not guarantee complete coverage, investment returns or instant collection. Choose morning, closing, weekly and monthly research emails in My account.</p>{!status?.billing_configured&&<p>Plans are available to compare during our private preview. Checkout opens after payment setup and testing.</p>}</div>
  </div>
 }

@@ -240,6 +240,33 @@ def test_batched_collection_resumes_and_refuses_duplicate_purchases(monkeypatch)
     assert owner.get('/api/rankings?source=x').json()['rows'][0]['quality']['sufficient'] is False
 
 
+def test_daily_counts_ignore_newer_intraday_buckets(monkeypatch):
+    from . import collection as jobs
+    from .community import create_owner_invite
+    monkeypatch.setenv('X_BEARER_TOKEN','mock-only')
+    monkeypatch.setattr(s,'CATALOG',{'AAPL':('Apple','Chips')})
+    owner,_=make_account('owner@example.com',create_owner_invite('owner@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'monthly_budget':1,'intraday_enabled':True})
+    end=int(time.time()//86400)*86400
+    with s.db() as c:
+        c.executemany('INSERT INTO x_counts VALUES(?,?,?,?,?,?)',[
+            ('AAPL',t,t+3600,3,'test',time.time()) for t in range(end-6*86400,end+3*3600,3600)])
+    calls=[]
+    def handler(request):
+        start=datetime.fromisoformat(request.url.params['start_time'].replace('Z','+00:00')).timestamp()
+        finish=datetime.fromisoformat(request.url.params['end_time'].replace('Z','+00:00')).timestamp()
+        assert start==end-3600 and finish==end
+        calls.append(request)
+        return httpx.Response(200,json={'data':[{'start':jobs.iso(start),'end':jobs.iso(finish),'tweet_count':5}]})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert jobs.run_batch(10,client)['errors']==[]
+        assert jobs.run_batch(10,client)['completed']==0
+    assert len(calls)==1
+    with s.db() as c:
+        assert float(c.execute("SELECT value FROM meta WHERE key='completed_snapshot'").fetchone()[0])==end
+        assert c.execute('SELECT n FROM x_counts WHERE ticker=? AND start=?',('AAPL',end+7200)).fetchone()[0]==3
+
+
 def test_sample_screening_limits_authors_and_copy_templates():
     from .screening import screen,ticker_sentiment
     posts=[{'id':str(i),'author':'bot','text':'Buy $NVDA now!','ts':1000+i} for i in range(100)]

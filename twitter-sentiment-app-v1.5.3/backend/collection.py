@@ -64,7 +64,9 @@ def run_batch(max_jobs=10,client=None):
                 ticker=job['ticker'];query=f'${ticker} lang:en -is:retweet' if job['kind']!='voice' else f'from:{ticker} has:cashtags lang:en -is:retweet'
                 if job['kind']=='counts':
                     with s.db() as c:
-                        last=c.execute('SELECT MAX(end) FROM x_counts WHERE ticker=?',(ticker,)).fetchone()[0]
+                        # Intraday jobs may already contain today's hours. Daily jobs
+                        # must resume inside their own midnight snapshot boundary.
+                        last=c.execute('SELECT MAX(end) FROM x_counts WHERE ticker=? AND end<=?',(ticker,end)).fetchone()[0]
                     start=max(end-6*86400,(last-3600) if last else end-6*86400)
                     result=paid_request(client,'tweets/counts/recent',{'query':query,'start_time':iso(start),'end_time':iso(end),'granularity':'hour'},'counts',.005,token)
                     if result.get('meta',{}).get('next_token'):raise RuntimeError('Unexpected counts pagination; review this job before retrying.')

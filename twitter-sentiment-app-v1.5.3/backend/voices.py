@@ -14,9 +14,9 @@ def migrate(c):
     ''')
     # Retain existing shared collection progress when introducing the registry.
     if not c.execute("SELECT 1 FROM meta WHERE key='voice_checkpoints_v1'").fetchone():
-        for r in c.execute("SELECT ticker,MAX(window_end) latest FROM collection_jobs WHERE kind='hour_voice' AND status='done' GROUP BY ticker"):
+        for r in c.execute("SELECT ticker,MAX(window_end) latest,MAX(updated_at) checked FROM collection_jobs WHERE kind='hour_voice' AND status='done' GROUP BY ticker"):
             for handle in r['ticker'].split(','):
-                c.execute('INSERT INTO voice_checkpoints VALUES(?,?,?,0) ON CONFLICT(handle) DO UPDATE SET window_end=excluded.window_end WHERE excluded.window_end>voice_checkpoints.window_end',(handle,r['latest'],time.time()))
+                c.execute('INSERT INTO voice_checkpoints VALUES(?,?,?,0) ON CONFLICT(handle) DO UPDATE SET window_end=excluded.window_end WHERE excluded.window_end>voice_checkpoints.window_end',(handle,r['latest'],r['checked']))
         c.execute("INSERT INTO meta VALUES('voice_checkpoints_v1','1') ON CONFLICT(key) DO NOTHING")
 
 def normalize(value):
@@ -63,3 +63,4 @@ def remove_curated(handle:str,request:Request):
         c.execute('DELETE FROM admin_voices WHERE handle=?',(handle,))
         audit(c,u,'curated_voice_removed',target=handle)
     return {'ok':True}
+

@@ -20,6 +20,74 @@
       }
     },
     {
+      "source": "/marketpulse",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/daily-briefing",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/watchlist",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/tracked-voices",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/data-sources",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/trading-room",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/account",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/plans",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/how-it-works",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/contact",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/forgot-password",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/owner-setup",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/import",
+      "destination": "/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": {
         "type": "service",

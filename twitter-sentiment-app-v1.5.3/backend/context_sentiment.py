@@ -68,7 +68,8 @@ def status(request:Request):
         counts={r['status']:r['n'] for r in c.execute('SELECT status,COUNT(*) n FROM ai_sentiment GROUP BY status')}
         spent=c.execute('SELECT COALESCE(SUM(COALESCE(actual,reserved)),0) FROM ai_sentiment_spend WHERE month=?',(datetime.now(timezone.utc).strftime('%Y-%m'),)).fetchone()[0]
         last=c.execute("SELECT value FROM meta WHERE key='sentiment_worker_result'").fetchone()
-    return {'model':MODEL,'enabled':os.getenv('SENTIMENT_AI_ENABLED','false').lower()=='true','budget':min(5,max(0,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','5')))),'spent':spent,'done':counts.get('done',0),'pending':counts.get('pending',0)+counts.get('running',0),'errors':counts.get('error',0),'unsupported':counts.get('unsupported',0),'last_run':json.loads(last[0]) if last else None}
+        monitor=c.execute("SELECT value FROM meta WHERE key='ai_monitor_status'").fetchone()
+    return {'monitor':json.loads(monitor[0]) if monitor else None,'alerts_enabled':bool(os.getenv('AI_ALERT_EMAIL')),'model':MODEL,'enabled':os.getenv('SENTIMENT_AI_ENABLED','false').lower()=='true','budget':min(10,max(0,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','10')))),'spent':spent,'done':counts.get('done',0),'pending':counts.get('pending',0)+counts.get('running',0),'errors':counts.get('error',0),'unsupported':counts.get('unsupported',0),'last_run':json.loads(last[0]) if last else None}
 
 def targets(p):
     return sorted(set((p.get('tickers') or '').split(','))-{''})
@@ -159,7 +160,7 @@ def run_batch(limit=4,client=None,token=None):
                     c.execute("UPDATE ai_sentiment SET status='unsupported',error='Post exceeds analysis size limit' WHERE cache_key=?",(key,));continue
                 month=datetime.now(timezone.utc).strftime('%Y-%m')
                 spent=c.execute('SELECT COALESCE(SUM(COALESCE(actual,reserved)),0) FROM ai_sentiment_spend WHERE month=?',(month,)).fetchone()[0]
-                budget=min(5,max(0,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','5'))))
+                budget=min(10,max(0,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','10'))))
                 if spent+RESERVE>budget:state='budget_paused';break
                 c.execute('INSERT INTO ai_sentiment_spend(id,cache_key,month,reserved,actual,ts,status) VALUES(?,?,?,?,?,?,?)',(rid,key,month,RESERVE,None,time.time(),'reserved'))
                 c.execute("UPDATE ai_sentiment SET status='running',attempts=attempts+1,lease_token=?,lease_until=?,updated_at=? WHERE cache_key=?",(lease,time.time()+120,time.time(),key))

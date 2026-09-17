@@ -53,7 +53,8 @@ def perform(job,client):
     else:
         # Resolve tracked handles as a bounded shared lookup, then match every
         # returned post by stable author ID (even without a cashtag).
-        author_map={}
+        with s.db() as c:
+            author_map={r['id']:r['handle'] for r in c.execute('SELECT id,handle FROM post_authors')}
         if kind=='hour_voice':
             handles=ticker.split(',')
             with s.db() as c:
@@ -102,7 +103,7 @@ def profiles(client):
         c.execute("UPDATE posts SET author=(SELECT a.handle FROM post_identity i JOIN post_authors a ON a.id=i.author_id WHERE i.source=posts.source AND i.post_id=posts.id) WHERE source='x' AND EXISTS(SELECT 1 FROM post_identity i JOIN post_authors a ON a.id=i.author_id WHERE i.source=posts.source AND i.post_id=posts.id)")
         if not remaining:return
         # Author IDs remain stable even before their handles are resolved.
-        ids=[r[0] for r in c.execute('SELECT DISTINCT i.author_id FROM post_identity i JOIN posts p ON p.source=i.source AND p.id=i.post_id LEFT JOIN post_authors a ON a.id=i.author_id WHERE p.ts>? AND (a.id IS NULL OR a.fetched_at<?) ORDER BY i.author_id LIMIT ?',(end-86400,end-30*86400,remaining))]
+        ids=[r[0] for r in c.execute('SELECT i.author_id FROM post_identity i JOIN posts p ON p.source=i.source AND p.id=i.post_id LEFT JOIN post_authors a ON a.id=i.author_id WHERE p.ts>? AND (a.id IS NULL OR a.fetched_at<?) GROUP BY i.author_id ORDER BY MAX(p.ts) DESC LIMIT ?',(end-31*86400,end-30*86400,remaining))]
     if not ids:return
     result=paid_request(client,'users',{'ids':','.join(ids),'user.fields':'username,created_at,public_metrics'},'profiles',len(ids)*.01,os.environ['X_BEARER_TOKEN'])
     with s.db() as c:

@@ -36,3 +36,4 @@ work/
 
 !backend/email_delivery.py
 !backend/context_sentiment.py
+!backend/ai_monitor.py

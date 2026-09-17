@@ -144,6 +144,8 @@ def cron(request:Request):
     except RuntimeError as exc:result={'paused':True,'reason':str(exc)}
     from .context_sentiment import run_batch as analyze
     result['sentiment']=analyze(token=request.headers.get('x-vercel-oidc-token'))
+    from .ai_monitor import check
+    result['ai_monitor']=check(result['sentiment'],token=request.headers.get('x-vercel-oidc-token'))
     with core().db() as c:
         c.execute("INSERT INTO meta VALUES('sentiment_worker_result',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps({**result['sentiment'],'at':time.time()}),))
     return result

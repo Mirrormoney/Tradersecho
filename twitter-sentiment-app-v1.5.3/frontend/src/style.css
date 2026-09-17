@@ -10,3 +10,5 @@
 @media(max-width:1250px){.market-layout{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:850px){.voices-layout,.data-grid{grid-template-columns:minmax(0,1fr)}}
 th{position:relative}
+
+.premium-badge{display:inline-flex;align-items:center;border:1px solid #526541;border-radius:5px;padding:2px 7px;background:#263621;color:#d0f6a8;font-size:.65rem;font-weight:700;line-height:1.5;white-space:nowrap}.profile .premium-badge{margin-top:5px}.member-identity{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.member-identity strong{overflow-wrap:anywhere;min-width:0}.chat-message .member-identity{display:inline-flex;flex-wrap:wrap}.chat-message>div{flex-wrap:wrap}

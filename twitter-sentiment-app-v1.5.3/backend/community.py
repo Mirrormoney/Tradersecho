@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
+from .database import IntegrityError
 
 router=APIRouter()
 
@@ -11,11 +12,22 @@ def core():
     from . import service
     return service
 
+def available_default_name(c,uid,prefix='Trader'):
+    candidate=prefix+'-'+uid[:6]
+    while c.execute('SELECT 1 FROM accounts WHERE LOWER(TRIM(display_name))=?',(candidate.lower(),)).fetchone():
+        candidate=prefix+'-'+secrets.token_hex(8)
+    return candidate
+
 def migrate(c):
     columns={r['name'] for r in c.execute('PRAGMA table_info(accounts)')}
     for name,kind in {'role':"TEXT NOT NULL DEFAULT 'member'",'status':"TEXT NOT NULL DEFAULT 'active'",'display_name':"TEXT NOT NULL DEFAULT ''",'created_at':'REAL','last_seen':'REAL','last_login':'REAL'}.items():
         if name not in columns: c.execute(f'ALTER TABLE accounts ADD COLUMN {name} {kind}')
     c.execute("UPDATE accounts SET display_name='Trader-'||substr(id,1,6) WHERE display_name=''")
+    if not c.execute("SELECT 1 FROM meta WHERE key='unique_display_names_v1'").fetchone():
+        for row in c.execute('SELECT id,display_name FROM accounts').fetchall():
+            c.execute('UPDATE accounts SET display_name=? WHERE id=?',(' '.join(row['display_name'].split()),row['id']))
+        c.execute('CREATE UNIQUE INDEX IF NOT EXISTS accounts_display_name_unique ON accounts(LOWER(TRIM(display_name)))')
+        c.execute("INSERT INTO meta VALUES('unique_display_names_v1','1')")
     c.executescript('''
     CREATE TABLE IF NOT EXISTS owner_invites(hash TEXT PRIMARY KEY,email TEXT,expires REAL,used_by TEXT,created_at REAL);
     CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT,action TEXT,target TEXT,detail TEXT,ts REAL);
@@ -70,10 +82,16 @@ class Profile(BaseModel):
 
 @router.put('/api/profile')
 def profile(payload:Profile,request:Request):
-    s=core();u=s.account(request);name=payload.display_name.strip()
+    s=core();u=s.account(request);name=' '.join(payload.display_name.split())
     if not re.fullmatch(r'[A-Za-z0-9 _.-]{3,30}',name): raise HTTPException(422,'Use 3–30 letters, numbers, spaces, dots, dashes or underscores.')
-    with s.db() as c:
-        c.execute('UPDATE accounts SET display_name=? WHERE id=?',(name,u['id']))
+    if not re.search(r'[A-Za-z0-9]',name):raise HTTPException(422,'Include at least one letter or number in your name.')
+    try:
+        with s.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            if c.execute('SELECT 1 FROM accounts WHERE LOWER(TRIM(display_name))=? AND id!=?',(name.lower(),u['id'])).fetchone():
+                raise HTTPException(409,'That display name is already taken. Please choose another.')
+            c.execute('UPDATE accounts SET display_name=? WHERE id=?',(name,u['id']))
+    except IntegrityError:raise HTTPException(409,'That display name is already taken. Please choose another.')
     return s.public_account(s.account(request))
 
 @router.get('/api/admin/users')
@@ -152,7 +170,7 @@ def messages(request:Request,before:int|None=Query(None,ge=1),ticker:str=Query('
     if before: clause+=' AND m.id<?';args.append(before)
     if ticker: clause+=' AND m.ticker=?';args.append(ticker.upper())
     with core().db() as c:
-        rows=c.execute('SELECT m.id,m.body,m.ticker,m.ts,a.display_name,a.role FROM chat_messages m JOIN accounts a ON m.user_id=a.id '+clause+' ORDER BY m.id DESC LIMIT 50',args).fetchall()
+        rows=c.execute('SELECT m.id,m.body,m.ticker,m.ts,a.display_name,a.role,a.plan FROM chat_messages m JOIN accounts a ON m.user_id=a.id '+clause+' ORDER BY m.id DESC LIMIT 50',args).fetchall()
     return [dict(r) for r in reversed(rows)]
 
 @router.post('/api/community/messages')

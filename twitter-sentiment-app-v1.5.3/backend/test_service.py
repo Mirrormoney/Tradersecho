@@ -504,3 +504,28 @@ def test_daily_plan_picks_up_new_stocks(monkeypatch):
     plan_day();plan_day()
     with s.db() as c:
         assert [r[0] for r in c.execute("SELECT ticker FROM collection_jobs WHERE day=? AND kind='counts' ORDER BY ticker",(day,))]==['CAT','INTC']
+
+
+def test_display_names_unique_and_chat_identity_updates():
+    from .community import create_owner_invite,available_default_name
+    from .database import IntegrityError
+    owner,_=make_account('identity-owner@example.com',create_owner_invite('identity-owner@example.com'))
+    a,u=make_account('identity-a@example.com');b,v=make_account('identity-b@example.com')
+    assert a.put('/api/profile',json={'display_name':'  Sven   Mai  '}).json()['display_name']=='Sven Mai'
+    response=b.put('/api/profile',json={'display_name':'sVEN  mAI'})
+    assert response.status_code==409 and 'already taken' in response.json()['detail']
+    assert b.get('/api/me').json()['display_name']==v['display_name']
+    assert a.put('/api/profile',json={'display_name':'SVEN MAI'}).status_code==200
+    assert a.put('/api/profile',json={'display_name':'---'}).status_code==422
+    with pytest.raises(IntegrityError):
+        with s.db() as c:c.execute('UPDATE accounts SET display_name=? WHERE id=?',('sven mai',v['id']))
+    owner.patch('/api/admin/users/'+u['id'],json={'plan':'premium'})
+    assert a.post('/api/community/messages',json={'body':'A research idea'}).status_code==200
+    assert a.put('/api/profile',json={'display_name':'New Researcher'}).status_code==200
+    post=owner.get('/api/community/messages').json()[0]
+    assert post['display_name']=='New Researcher' and post['plan']=='premium' and 'email' not in post
+    owner.patch('/api/admin/users/'+u['id'],json={'plan':'free'})
+    assert owner.get('/api/community/messages').json()[0]['plan']=='free'
+    assert b.put('/api/profile',json={'display_name':'Sven Mai'}).status_code==200
+    assert a.put('/api/profile',json={'display_name':'Trader-abcdef'}).status_code==200
+    with s.db() as c:assert available_default_name(c,'abcdef0000')!='Trader-abcdef'

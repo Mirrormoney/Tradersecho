@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, Response, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from .community import router as community_router, migrate, claim_owner
+from .community import router as community_router, migrate, claim_owner, available_default_name
 from .database import connect, IntegrityError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -144,7 +144,8 @@ def signup(payload:Credentials,request:Request,response:Response):
         c.execute('BEGIN IMMEDIATE')
         reserved=c.execute('SELECT 1 FROM owner_invites WHERE email=? AND used_by IS NULL AND expires>?',(email,time.time())).fetchone()
         if reserved and not payload.owner_code: raise HTTPException(403,'This email is reserved. Use Owner setup with your private invitation.')
-        try: c.execute('INSERT INTO accounts(id,email,password,display_name,created_at,last_login) VALUES(?,?,?,?,?,?)',(uid,email,password_hash(payload.password),'Trader-'+uid[:6],time.time(),time.time()))
+        name=available_default_name(c,uid)
+        try: c.execute('INSERT INTO accounts(id,email,password,display_name,created_at,last_login) VALUES(?,?,?,?,?,?)',(uid,email,password_hash(payload.password),name,time.time(),time.time()))
         except IntegrityError: raise HTTPException(409,'An account with this email already exists.')
         if payload.owner_code: claim_owner(c,payload.owner_code,email,uid)
         u=c.execute('SELECT * FROM accounts WHERE id=?',(uid,)).fetchone()
@@ -169,7 +170,9 @@ def demo_account(request:Request,response:Response,plan:str=Query('premium',patt
     throttle(request)
     uid=secrets.token_hex(16)
     with db() as c:
-        c.execute('INSERT INTO accounts(id,email,plan,demo,display_name,created_at) VALUES(?,?,?,1,?,?)',(uid,f'{plan}-preview-{uid[:6]}@demo.local',plan,'Preview-'+uid[:6],time.time()))
+        c.execute('BEGIN IMMEDIATE')
+        name=available_default_name(c,uid,'Preview')
+        c.execute('INSERT INTO accounts(id,email,plan,demo,display_name,created_at) VALUES(?,?,?,1,?,?)',(uid,f'{plan}-preview-{uid[:6]}@demo.local',plan,name,time.time()))
         for t in ['NVDA','PLTR','RKLB']: c.execute('INSERT INTO watchlist VALUES(?,?)',(uid,t))
         c.execute('INSERT INTO handles VALUES(?,?,?)',(uid,'signal_lab','Fictional analyst in the sample dataset'))
         u=c.execute('SELECT * FROM accounts WHERE id=?',(uid,)).fetchone()

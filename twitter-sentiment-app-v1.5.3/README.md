@@ -1,3 +1,5 @@
+> Current plans, Stripe sandbox and live activation checklist: see [PAYMENTS.md](PAYMENTS.md).
+
 > Current hourly collection and scheduler configuration: see [AUTOMATION.md](AUTOMATION.md).
 
 # Tradersecho — protected online preview
@@ -8,7 +10,7 @@ An extension of the original `twitter-sentiment-app-v1.5.3` React/Python project
 
 ## Try it
 
-**Membership update:** see [MEMBERSHIPS.md](MEMBERSHIPS.md) for the private owner invitation, administration, visitor statistics, Premium trading room and the recommended count-first X collector. Logged-out visitors see three stocks; signed-in members unlock the full workspace. Existing v2 accounts are migrated additively without deleting their data.
+**Membership update:** see [MEMBERSHIPS.md](MEMBERSHIPS.md) for the private owner invitation, administration, visitor statistics, Premium trading room and the recommended count-first X collector. Logged-out visitors see three stocks; Free members see five ranked stocks; Premium unlocks full rankings. Existing v2 accounts are migrated additively without deleting their data.
 
 The local preview runs at http://127.0.0.1:8000. Choose **Create account → Try free / Try premium** to explore an isolated sample account. These are real server sessions over a fictional dataset. No shared passwords are shipped. Real signup creates a Free account.
 
@@ -17,7 +19,7 @@ The local preview runs at http://127.0.0.1:8000. Choose **Create account → Try
 - Rolling 24-hour, 7-day and 30-day rankings, heat score, growth, sentiment, sparklines, sector filters and search.
 - Ticker details and underlying posts; latest or most-liked sorting surfaces higher-engagement takes.
 - Free and Premium accounts, scrypt password hashes, opaque HttpOnly sessions, logout, basic sign-in throttling and same-origin checks.
-- Account-owned watchlists (5 Free / 50 Premium) and manually tracked X handles (25 Premium), with notes and a filtered post feed.
+- Account-owned watchlists (5 Free / 50 Premium) and manually tracked X handles (5 personal voices for Premium), with notes and a filtered post feed.
 - Separate fictional sample and collected-X datasets. Empty live data stays empty.
 - Administrator JSON import with full-batch validation and unique `(source, post, ticker)` deduplication.
 - Official X recent-search collector with pagination checkpoints, retry-safe writes and daily request caps.

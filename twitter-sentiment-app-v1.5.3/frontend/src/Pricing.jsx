@@ -21,7 +21,7 @@ export function Pricing({user,status,onSignup,onAccount}){
   try{const result=await api('/billing/checkout','POST',{tier});location.assign(result.url)}catch(e){setError(e.message)}finally{setBusy('')}
  }
  return <div className="pricing-content">
-  <p className="pricing-intro">Start with the pulse. Build your own research edge.</p>
+  {status?.billing_sandbox&&<div className="payment-sandbox-banner"><strong>Test checkout only.</strong> Use Stripe test card 4242 4242 4242 4242, any future expiry and any three-digit CVC. Do not enter a real card. Test purchases affect only this sandbox account.</div>}<p className="pricing-intro">Start with the pulse. Build your own research edge.</p>
   <div className="pricing-switch" role="group" aria-label="Premium billing interval">
    <button aria-pressed={!annual} onClick={()=>setAnnual(false)}>Monthly</button>
    <button aria-pressed={annual} onClick={()=>setAnnual(true)}>Yearly <span>2 months free</span></button>

@@ -211,7 +211,7 @@ def status():
     with db() as c:
         row=c.execute("SELECT COUNT(*) n,MAX(ts) latest,MIN(ts) earliest FROM posts WHERE source='x'").fetchone()
         sync=c.execute("SELECT value FROM meta WHERE key='last_sync'").fetchone()
-    return {'demo_enabled':DEMO,'x_configured':bool(os.getenv('X_BEARER_TOKEN')),'live_posts':row['n'],'latest_post':row['latest'],'earliest_post':row['earliest'],'last_sync':json.loads(sync[0]) if sync else None,'billing_configured':any(billing_options().values()),'billing_options':billing_options(),'catalog':[{'ticker':t,'name':v[0],'sector':v[1]} for t,v in CATALOG.items()]}
+    return {'demo_enabled':DEMO,'x_configured':bool(os.getenv('X_BEARER_TOKEN')),'live_posts':row['n'],'latest_post':row['latest'],'earliest_post':row['earliest'],'last_sync':json.loads(sync[0]) if sync else None,'billing_sandbox':billing_sandbox(),'billing_configured':any(billing_options().values()),'billing_options':billing_options(),'catalog':[{'ticker':t,'name':v[0],'sector':v[1]} for t,v in CATALOG.items()]}
 
 @app.get('/api/rankings')
 def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),scope:str=Query('market',pattern='^(market|watchlist)$')):
@@ -383,7 +383,7 @@ async def set_plan(request:Request):
     if not changed: raise HTTPException(404,'Account not found.')
     return {'ok':True}
 
-from .payments import router as payments_router, options as billing_options
+from .payments import router as payments_router, options as billing_options, sandbox as billing_sandbox
 app.include_router(payments_router)
 
 from .collection import router as collection_router
@@ -394,7 +394,10 @@ app.include_router(live_router)
 @app.get('/api/health')
 def health():
     try:
-        with db() as c: c.execute('SELECT 1').fetchone()
+        with db() as c:
+            c.execute('SELECT 1').fetchone()
+            c.execute('SELECT id FROM billing_checkouts LIMIT 0')
+            c.execute('SELECT id FROM billing_entitlements LIMIT 0')
         return {'ok':True,'storage':'postgres' if os.getenv('APP_DATABASE_URL') or os.getenv('DATABASE_URL') or os.getenv('POSTGRES_URL') else 'sqlite','universe':len(CATALOG)}
     except Exception as exc:
         import logging

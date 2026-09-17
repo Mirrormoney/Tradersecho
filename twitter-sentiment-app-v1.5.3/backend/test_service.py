@@ -10,6 +10,8 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def isolate_tests(monkeypatch):
+    monkeypatch.setenv('BILLING_SANDBOX','true')
+    monkeypatch.setenv('TRADERSECHO_SCHEMA','billing_sandbox_tests')
     monkeypatch.setattr(s,'CATALOG',dict(s.DEMO_CATALOG))
     with s.db() as c:
         for table in ['billing_checkouts','billing_entitlements','admin_voices','voice_checkpoints','digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
@@ -631,3 +633,41 @@ def test_billing_price_mismatch_is_rejected():
     from .payments import validate_price
     from fastapi import HTTPException
     with pytest.raises(HTTPException):validate_price({'currency':'usd','unit_amount':190,'recurring':{'interval':'year','interval_count':1}},'yearly')
+
+
+def test_sandbox_cannot_unlock_main_members(monkeypatch):
+    from . import payments as p
+    monkeypatch.setenv('STRIPE_SECRET_KEY','sk_test_test')
+    monkeypatch.setenv('BILLING_ENABLED','true')
+    monkeypatch.setenv('STRIPE_WEBHOOK_SECRET','test')
+    monkeypatch.setenv('STRIPE_PRICE_MONTHLY','price_test')
+    monkeypatch.setenv('TRADERSECHO_SCHEMA','public')
+    assert not any(p.options().values())
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException):p.process_event('evt_unsafe','customer.subscription.created',{'id':'sub_test'})
+    monkeypatch.setenv('TRADERSECHO_SCHEMA','billing_sandbox_tests')
+    assert p.options()['monthly']
+    monkeypatch.setenv('STRIPE_SECRET_KEY','sk_live_test')
+    assert not any(p.options().values())
+
+def test_founder_dispute_resolution_and_payment_confirmation(monkeypatch):
+    from . import payments as p
+    c=TestClient(s.app)
+    uid=c.post('/api/auth/signup',json={'email':'founder-dispute@example.com','password':'long-test-password'}).json()['id']
+    monkeypatch.setenv('STRIPE_SECRET_KEY','sk_test_test')
+    with s.db() as db:db.execute('UPDATE accounts SET stripe_customer=? WHERE id=?',('cus_dispute',uid))
+    pi={'id':'pi_dispute','customer':'cus_dispute','metadata':{'account_id':uid,'tier':'founder'},'currency':'usd','amount':99900,'status':'succeeded','latest_charge':{'id':'ch_dispute','refunded':False,'disputed':True}}
+    disputes={'data':[{'status':'under_review'}],'has_more':False}
+    def stripe(method,path,data=None,idempotency=None):
+        if path=='payment_intents/pi_dispute':return pi
+        if path=='disputes':return disputes
+        raise AssertionError(path)
+    monkeypatch.setattr(p,'stripe',stripe)
+    p.process_event('evt_founder_confirmation','payment_intent.succeeded',{'id':'pi_dispute'})
+    assert c.get('/api/me').json()['plan']=='free'
+    disputes['data'][0]['status']='won'
+    with s.db() as db:p.sync_entitlement(db,'payment','pi_dispute')
+    assert c.get('/api/me').json()['billing_tier']=='founder'
+    pi['latest_charge']['refunded']=True
+    with s.db() as db:p.sync_entitlement(db,'payment','pi_dispute')
+    assert c.get('/api/me').json()['plan']=='free'

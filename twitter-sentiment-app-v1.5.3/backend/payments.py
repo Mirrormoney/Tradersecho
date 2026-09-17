@@ -20,8 +20,17 @@ def migrate(c):
     ''')
 
 def options():
-    enabled=os.getenv('BILLING_ENABLED','false').lower()=='true' and all(os.getenv(k) for k in ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET'])
+    enabled=environment_valid() and os.getenv('BILLING_ENABLED','false').lower()=='true' and all(os.getenv(k) for k in ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET'])
     return {tier:bool(enabled and os.getenv(config[0])) for tier,config in TIERS.items()}
+
+def sandbox():
+    return os.getenv('BILLING_SANDBOX','false').lower()=='true'
+
+def environment_valid():
+    key=os.getenv('STRIPE_SECRET_KEY','')
+    if key.startswith(('sk_test_','rk_test_')):
+        return sandbox() and os.getenv('TRADERSECHO_SCHEMA','').startswith('billing_sandbox_')
+    return key.startswith(('sk_live_','rk_live_')) and not sandbox()
 
 def stripe(method,path,data=None,idempotency=None):
     key=os.getenv('STRIPE_SECRET_KEY','')
@@ -60,6 +69,7 @@ async def checkout(request:Request):
     return await run_in_threadpool(create_checkout,u,tier)
 
 def create_checkout(u,tier):
+    if not environment_valid():raise HTTPException(503,'Payment environment is not configured safely.')
     s=core()
     # Serialize checkout creation and entitlement changes across instances.
     with s.db() as c:
@@ -102,6 +112,7 @@ def portal(request:Request):
     return {'url':result['url']}
 
 def sync_entitlement(c,kind,object_id):
+    if not environment_valid():raise HTTPException(503,'Payment environment is not configured safely.')
     obj=stripe('GET',('subscriptions/' if kind=='subscription' else 'payment_intents/')+quote(object_id,safe=''),None if kind=='subscription' else {'expand[0]':'latest_charge'})
     uid=obj.get('metadata',{}).get('account_id');tier=obj.get('metadata',{}).get('tier')
     if tier not in TIERS or (kind=='subscription')==(tier=='founder'): return
@@ -115,7 +126,11 @@ def sync_entitlement(c,kind,object_id):
     else:
         charge=obj.get('latest_charge') or {}
         if obj.get('currency')!='usd' or obj.get('amount')!=99900:return
-        active=obj['status']=='succeeded' and not charge.get('refunded') and not charge.get('disputed')
+        disputed=charge.get('disputed',False)
+        if disputed:
+            disputes=stripe('GET','disputes',{'charge':charge['id'],'limit':100})
+            disputed=disputes.get('has_more',False) or not disputes.get('data') or any(d['status'] not in ['won','warning_closed'] for d in disputes['data'])
+        active=obj['status']=='succeeded' and not charge.get('refunded') and not disputed
     c.execute('INSERT INTO billing_entitlements VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET active=excluded.active,tier=excluded.tier,updated_at=excluded.updated_at',(obj['id'],uid,tier,int(active),time.time()))
     has_access=c.execute('SELECT 1 FROM billing_entitlements WHERE user_id=? AND active=1',(uid,)).fetchone()
     c.execute("UPDATE accounts SET plan=? WHERE id=? AND role='member'",('premium' if has_access else 'free',uid))
@@ -137,11 +152,14 @@ async def webhook(request:Request):
     return await run_in_threadpool(process_event,event_id,kind,obj)
 
 def process_event(event_id,kind,obj):
+    if not environment_valid():raise HTTPException(503,'Payment environment is not configured safely.')
     with core().db() as c:
         c.execute('BEGIN IMMEDIATE')
         if c.execute('SELECT 1 FROM webhook_events WHERE id=?',(event_id,)).fetchone():return {'received':True}
         if kind.startswith('customer.subscription.'):
             sync_entitlement(c,'subscription',obj['id'])
+        elif kind=='payment_intent.succeeded':
+            sync_entitlement(c,'payment',obj['id'])
         elif kind in ['checkout.session.completed','checkout.session.async_payment_succeeded']:
             saved=c.execute('SELECT * FROM billing_checkouts WHERE id=?',(obj['id'],)).fetchone()
             if saved:

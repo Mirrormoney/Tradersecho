@@ -20,11 +20,22 @@ def paid_request(client,path,params,kind,reserve,token):
         spent=c.execute('SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE month=?',(month,)).fetchone()[0]
         if round(spent+reserve,6)>settings['monthly_budget']: raise RuntimeError('Local monthly cost ceiling reached; no request sent.')
         today=int(time.time()//86400)*86400
-        if kind.startswith('sample') or kind=='profiles':
-            category='sample%' if kind.startswith('sample') else 'profiles'
+        if kind.startswith('sample') or kind.startswith('profiles'):
+            category='sample%' if kind.startswith('sample') else 'profiles%'
             limit=settings['daily_post_limit']*.005 if kind.startswith('sample') else settings['daily_profile_limit']*.01
-            used=c.execute('SELECT COALESCE(SUM(reserved),0) FROM x_spend WHERE ts>=? AND kind LIKE ?',(today,category)).fetchone()[0]
-            if round(used+reserve,6)>round(limit,6): raise RuntimeError(('Daily profile lookup allowance reached' if kind=='profiles' else 'Daily sampling allowance reached')+'; no request sent.')
+            used=c.execute('SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind LIKE ?',(today,category)).fetchone()[0]
+            if round(used+reserve,6)>round(limit,6): raise RuntimeError(('Daily profile lookup allowance reached' if kind.startswith('profiles') else 'Daily sampling allowance reached')+'; no request sent.')
+        # Confirmed reads release unused reservations; uncertain calls retain theirs.
+        if kind.startswith('sample'):
+            if kind.startswith('sample_admin:'):
+                account_used=c.execute('SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind=?',(today,kind)).fetchone()[0]
+                if round(account_used+reserve,6)>120*.005:raise RuntimeError('Daily account sampling allowance reached; no request sent.')
+            elif c.execute('SELECT 1 FROM admin_voices LIMIT 1').fetchone():
+                general=c.execute("SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind LIKE 'sample%' AND kind NOT LIKE 'sample_admin:%'",(today,)).fetchone()[0]
+                if round(general+reserve,6)>round(limit*.2,6):raise RuntimeError('Daily general sampling allowance reached; admin capacity reserved.')
+        if kind=='profiles':
+            general=c.execute("SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind='profiles'",(today,)).fetchone()[0]
+            if round(general+reserve,6)>round(limit*.25,6):raise RuntimeError('Daily general profile lookup allowance reached; tracked capacity reserved.')
         circuit=c.execute("SELECT value FROM meta WHERE key='x_retry_after'").fetchone()
         if circuit and float(circuit[0])>time.time(): raise CollectionDeferred(float(circuit[0]))
         # A rolling local guard leaves headroom below X's documented endpoint
@@ -55,7 +66,7 @@ def paid_request(client,path,params,kind,reserve,token):
             raise RuntimeError(f'X returned HTTP {r.status_code}; reservation retained. Check access, balance or rate limits.')
         result=r.json()
         if result.get('errors'): raise RuntimeError('X returned a partial response; reservation retained.')
-        estimate=.005 if kind.startswith('counts') else len(result.get('data',[]))*.01 if kind=='profiles' else len(result.get('data',[]))*.005+len(result.get('includes',{}).get('users',[]))*.01
+        estimate=.005 if kind.startswith('counts') else len(result.get('data',[]))*.01 if kind.startswith('profiles') else len(result.get('data',[]))*.005+len(result.get('includes',{}).get('users',[]))*.01
         with db() as c: c.execute('UPDATE x_spend SET actual_estimate=?,status=? WHERE id=?',(round(estimate,4),'received',rid))
         return result
     except Exception:

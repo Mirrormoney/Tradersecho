@@ -388,8 +388,8 @@ def test_hourly_planning_budget_and_shared_demand(monkeypatch):
     from .collect_economy import paid_request
     paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
     paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
-    with pytest.raises(RuntimeError,match='allowance'):paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
-    assert len(calls)==2
+    paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
+    assert len(calls)==3  # Confirmed empty results release the reservation.
 
 
 def test_shared_voices_limits_privacy_and_collection(monkeypatch):
@@ -981,3 +981,55 @@ def test_newsletter_webhook_suppression_and_replay(monkeypatch):
     with s.db() as c:
         assert c.execute('SELECT COUNT(*) FROM email_events').fetchone()[0]==2
         assert c.execute('SELECT reason FROM email_suppressions WHERE email_hash=?',(d.email_hash('bounced@example.com'),)).fetchone()[0]=='email.bounced'
+
+
+def test_admin_voice_budget_and_account_fairness(monkeypatch):
+    from .collect_economy import paid_request
+    from .community import create_owner_invite
+    owner,_=make_account('admin-budget@example.com',create_owner_invite('admin-budget@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'daily_post_limit':480,'daily_profile_limit':32})
+    owner.post('/api/admin/voices',json={'handle':'busy'})
+    now=time.time();month=datetime.now(timezone.utc).strftime('%Y-%m')
+    with s.db() as c:
+        c.execute('INSERT INTO x_spend(month,kind,reserved,actual_estimate,ts,status) VALUES(?,?,?,?,?,?)',(month,'sample_live',1,.48,now,'received'))
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200,json={'data':[]})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(RuntimeError,match='admin capacity'):paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
+        paid_request(client,'tweets/search/recent',{},'sample_admin:busy',.1,'mock')
+        paid_request(client,'tweets/search/recent',{},'sample_admin:busy',.1,'mock')
+        with s.db() as c:
+            c.execute('INSERT INTO x_spend(month,kind,reserved,ts,status) VALUES(?,?,?,?,?)',(month,'sample_admin:busy',.6,now,'failed_or_uncertain'))
+        with pytest.raises(RuntimeError,match='account sampling'):paid_request(client,'tweets/search/recent',{},'sample_admin:busy',.1,'mock')
+        paid_request(client,'tweets/search/recent',{},'sample_admin:quiet',.1,'mock')
+    assert len(calls)==3
+
+
+def test_individual_admin_voice_queries_and_links(monkeypatch):
+    from . import live_collection as live
+    from .community import create_owner_invite
+    owner,_=make_account('single-voice@example.com',create_owner_invite('single-voice@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'intraday_enabled':True,'daily_post_limit':480})
+    monkeypatch.setenv('X_BEARER_TOKEN','mock')
+    end=int(time.time()//3600)*3600
+    with s.db() as c:
+        c.execute("INSERT INTO meta VALUES('completed_snapshot',?)",(str(end-86400),))
+        for handle,aid in [('wallstengine','901'),('knockouttrader','902')]:
+            c.execute('INSERT INTO admin_voices VALUES(?,?,?)',(handle,'',time.time()))
+            c.execute('INSERT INTO post_authors(id,handle,fetched_at) VALUES(?,?,?)',(aid,handle,time.time()))
+    live.plan_hour()
+    with s.db() as c:jobs=[dict(r) for r in c.execute("SELECT * FROM collection_jobs WHERE kind='hour_voice'")]
+    assert len(jobs)==2 and all(',' not in j['ticker'] for j in jobs)
+    from .collect_economy import iso
+    def handler(request):
+        assert request.url.params['max_results']=='20'
+        handle='wallstengine' if 'wallstengine' in request.url.params['query'] else 'knockouttrader'
+        aid='901' if handle=='wallstengine' else '902'
+        return httpx.Response(200,json={'data':[{'id':aid,'author_id':aid,'text':'$NVDA and $AMD earnings outlook','created_at':iso(end-60)}]})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        for j in jobs:live.perform(j,client)
+    with s.db() as c:
+        assert c.execute("SELECT COUNT(*) FROM mentions WHERE source='x'").fetchone()[0]==4
+        assert c.execute('SELECT COUNT(*) FROM voice_checkpoints').fetchone()[0]==2

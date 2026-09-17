@@ -31,11 +31,28 @@ class Voice(BaseModel):
     handle:str=Field(min_length=1,max_length=16)
     note:str=Field(default='',max_length=250)
 
+def collection_states(c,rows):
+    jobs=[dict(r) for r in c.execute("SELECT ticker,status,error,updated_at FROM collection_jobs WHERE kind='hour_voice' ORDER BY id DESC LIMIT 1000")]
+    now=time.time();reset=(int(now//86400)+1)*86400
+    for row in rows:
+        latest=next((j for j in jobs if row['handle'] in j['ticker'].split(',')),None)
+        row['collection_message']='First check queued for the next hourly cycle'
+        if latest and (not row.get('checked_at') or latest['updated_at']>row['checked_at']):
+            error=latest.get('error') or ''
+            if 'allowance reached' in error:
+                row['collection_message']='Daily collection allowance reached';row['retry_at']=reset
+            elif 'ceiling reached' in error:row['collection_message']='Monthly spending ceiling reached'
+            elif latest['status']=='error':row['collection_message']='X check failed; admin review needed'
+            elif latest['status'] in ('pending','running'):row['collection_message']='Shared check queued'
+            else:row['collection_message']='Waiting for the next hourly cycle'
+        elif row.get('checked_at'):row['collection_message']='Shared collection active'
+    return rows
+
 @router.get('/api/voices/curated')
 def curated(request:Request):
     s=core();s.account(request)
     with s.db() as c:
-        return [dict(r) for r in c.execute('SELECT v.handle,v.note,p.window_end,p.checked_at,p.truncated FROM admin_voices v LEFT JOIN voice_checkpoints p ON p.handle=v.handle ORDER BY v.handle')]
+        return collection_states(c,[dict(r) for r in c.execute('SELECT v.handle,v.note,p.window_end,p.checked_at,p.truncated FROM admin_voices v LEFT JOIN voice_checkpoints p ON p.handle=v.handle ORDER BY v.handle')])
 
 @router.get('/api/admin/voices')
 def registry(request:Request):
@@ -45,6 +62,7 @@ def registry(request:Request):
         followers={r['handle']:r['n'] for r in c.execute("SELECT h.handle,COUNT(*) n FROM handles h JOIN accounts a ON a.id=h.user_id WHERE a.demo=0 AND a.status='active' AND (a.plan='premium' OR (a.email_verified=1 AND a.trial_ends_at>?) OR a.role IN ('owner','admin')) GROUP BY h.handle",(time.time(),))}
         checkpoints={r['handle']:dict(r) for r in c.execute('SELECT * FROM voice_checkpoints')}
         rows=[{'handle':h,'curated':h in common,'note':common.get(h,{}).get('note',''),'followers':followers.get(h,0),**{k:v for k,v in checkpoints.get(h,{}).items() if k!='handle'}} for h in shared_handles(c)]
+        collection_states(c,rows)
     return {'rows':rows,'unique_accounts':len(rows),'personal_limit':PERSONAL_LIMIT}
 
 @router.post('/api/admin/voices')

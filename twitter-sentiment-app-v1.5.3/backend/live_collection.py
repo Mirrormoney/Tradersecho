@@ -32,14 +32,11 @@ def plan_hour():
         if voices:
             checkpoints={r['handle']:max(end-86400,int(r['window_end'])) for r in c.execute('SELECT handle,window_end FROM voice_checkpoints')}
             eligible=[h for h in voices if checkpoints.get(h,end-86400)<end]
-            # Queue every cursor group, so a blocked profile lookup cannot
-            # starve accounts whose identities are already cached. Paid requests
-            # still share the existing daily and monthly spending guards.
-            for cursor in sorted({checkpoints.get(h,end-86400) for h in eligible}):
-                group_handles=[h for h in eligible if checkpoints.get(h,end-86400)==cursor]
-                for offset in range(0,len(group_handles),5):
-                    group=group_handles[offset:offset+5]
-                    enqueue(c,slot,'hour_voice',','.join(group),end,'('+' OR '.join('from:'+h for h in group)+') -is:retweet -is:reply')
+            admin={r[0] for r in c.execute('SELECT handle FROM admin_voices')}
+            # Individual jobs stop a busy author crowding others out of a shared response.
+            # Oldest coverage first within each priority class.
+            for handle in sorted(eligible,key=lambda h:(h not in admin,checkpoints.get(h,0),h)):
+                enqueue(c,slot,'hour_voice',handle,end,'from:'+handle+' -is:retweet -is:reply')
         c.execute('INSERT INTO meta VALUES(?,?)',('hour_planned:'+slot,str(end)))
 
 def perform(job,client):
@@ -66,7 +63,7 @@ def perform(job,client):
             known={r['handle'] for r in cached if r['fetched_at']>time.time()-30*86400}
             missing=[h for h in handles if h not in known]
             if missing:
-                result=paid_request(client,'users/by',{'usernames':','.join(missing)},'profiles',len(missing)*.01,token)
+                result=paid_request(client,'users/by',{'usernames':','.join(missing)},'profiles_tracked',len(missing)*.01,token)
                 with s.db() as c:
                     for a in result.get('data',[]):
                         author_map[a['id']]=a['username'].lower()
@@ -81,7 +78,11 @@ def perform(job,client):
                 checkpoints={r['handle']:int(r['window_end']) for r in c.execute('SELECT handle,window_end FROM voice_checkpoints')}
             if all(checkpoints.get(h,0)>=end for h in handles):return {'data':[]}
             start=max(end-86400,min(checkpoints.get(h,end-86400) for h in handles)-60)
-        result=paid_request(client,'tweets/search/recent',{'query':query,'start_time':iso(start),'end_time':iso(end),'max_results':10,'tweet.fields':'created_at,author_id,public_metrics,note_tweet'},'sample_live',.05,token)
+        with s.db() as c:
+            admin=kind=='hour_voice' and ',' not in ticker and bool(c.execute('SELECT 1 FROM admin_voices WHERE handle=?',(ticker,)).fetchone())
+        size=20 if admin else 10
+        spend_kind='sample_admin:'+ticker if admin else 'sample_live'
+        result=paid_request(client,'tweets/search/recent',{'query':query,'start_time':iso(start),'end_time':iso(end),'max_results':size,'tweet.fields':'created_at,author_id,public_metrics,note_tweet'},spend_kind,size*.005,token)
         items=[{'id':p['id'],'author':author_map.get(p['author_id'],'id'+p['author_id']),'author_id':p['author_id'],'text':(p.get('note_tweet') or {}).get('text') or p['text'],'created_at':p['created_at'],'likes':p.get('public_metrics',{}).get('like_count',0)} for p in result.get('data',[])]
         s.ingest(items,include_unmatched=kind=='hour_voice')
         with s.db() as c:
@@ -96,7 +97,7 @@ def profiles(client):
     s=core();end=int(time.time()//86400)*86400
     with s.db() as c:
         settings=data_settings(c)
-        used=c.execute("SELECT COALESCE(SUM(reserved),0) FROM x_spend WHERE kind='profiles' AND ts>=?",(end,)).fetchone()[0]
+        used=c.execute("SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE kind LIKE 'profiles%' AND ts>=?",(end,)).fetchone()[0]
         known={r[0] for r in c.execute('SELECT handle FROM post_authors WHERE fetched_at>?',(time.time()-30*86400,))}
         unresolved=len(set(shared_handles(c))-known)
         remaining=max(0,settings['daily_profile_limit']-round(used/.01)-unresolved)

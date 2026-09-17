@@ -270,9 +270,11 @@ def data_budget(request:Request):
         settings=data_settings(c)
         spent=c.execute('SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE month=?',(month,)).fetchone()[0]
         runs=[dict(r) for r in c.execute('SELECT kind,reserved,actual_estimate,ts,status FROM x_spend ORDER BY id DESC LIMIT 20')]
+        confirmed=c.execute('SELECT COALESCE(SUM(actual_estimate),0) FROM x_spend WHERE month=?',(month,)).fetchone()[0]
+        uncertain=c.execute('SELECT COALESCE(SUM(reserved),0) FROM x_spend WHERE month=? AND actual_estimate IS NULL',(month,)).fetchone()[0]
     extra=(24*settings['hourly_top']*.005+settings['on_demand_daily_limit']*.005) if settings['intraday_enabled'] else 0
     estimate=31*(len(core().CATALOG)*.005+settings['daily_post_limit']*.005+settings['daily_profile_limit']*.01+extra)
-    return {**settings,'active_stocks':len(core().CATALOG),'estimated_monthly_cost':round(estimate,2),'budget_fits':estimate<=settings['monthly_budget'],'reserved_or_estimated_spend':round(spent,3),'month':month,'recent_requests':runs}
+    return {**settings,'active_stocks':len(core().CATALOG),'estimated_monthly_cost':round(estimate,2),'budget_fits':estimate<=settings['monthly_budget'],'confirmed_estimate':round(confirmed,3),'unresolved_reservations':round(uncertain,3),'reserved_or_estimated_spend':round(spent,3),'month':month,'recent_requests':runs}
 
 @router.put('/api/admin/data-budget')
 def update_budget(payload:DataSettings,request:Request):

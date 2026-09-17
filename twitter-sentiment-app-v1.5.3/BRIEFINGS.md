@@ -49,3 +49,6 @@
 - Database ledger freezes a single test payload per recipient/report, checks verified membership and opt-in, leases attempts and keeps the same idempotency key. Retries older than 23 hours require review.
 - These are preparation primitives, not an active sender: subscriber dispatch and ambiguous provider-response reconciliation remain launch work. No environment switch enables broadcasts. Existing owner-test tooling is separate.
 - Regression coverage includes signature tampering/expiry, duplicate events, bounce suppression, scanner-safe opt-out and duplicate payload/attempt protection.
+
+## Top-ten field notes redesign
+The owner preview now shows three responsive feature cards, relevant shared/followed X excerpts linked to those leaders, and ranks 4-10 as separate cards. Report ordering uses the Market Pulse heat formula for the completed UTC day (not the live rolling window). Posts are selected by likes and limited to one per author; missing qualifying posts are disclosed. Broader licensed market-news summaries and individual click tracking remain unimplemented. No tracking pixels or additional analytics cookies were added. Owner sample delivered September 17 via Resend; subscriber dispatch stays disabled.

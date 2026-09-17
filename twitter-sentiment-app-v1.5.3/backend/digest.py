@@ -1,5 +1,5 @@
 """Verified daily briefings and opt-in preferences. External delivery is disabled."""
-import json, time
+import json, time, math
 from datetime import datetime, timezone
 from typing import Literal
 from fastapi import APIRouter, Request, HTTPException
@@ -73,18 +73,22 @@ def save_preferences(payload:Preference,request:Request):
 def personalized(report,u):
     if not report.get('ready'):return report
     s=core();premium=u['plan']=='premium' or u['role'] in ('owner','admin')
+    ranked=[{**r,'heat':round(math.log1p(r['mentions'])*(1+max(0,math.log2((r['mentions']+5)/(r.get('previous',0)+5))))*10,1)} for r in report['rows']]
+    ranked.sort(key=lambda r:(-r['heat'],r['ticker']))
+    report={**report,'rows':ranked}
+    leaders={r['ticker'] for r in ranked[:3]}
     with s.db() as c:
         watched={r[0] for r in c.execute('SELECT ticker FROM watchlist WHERE user_id=?',(u['id'],))}
         prefs=preferences(c,u['id'])
-        posts=[dict(r) for r in c.execute("SELECT p.id,p.author,p.text,p.ts,p.sentiment FROM posts p WHERE p.source='x' AND p.ts>=? AND p.ts<? AND p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices) ORDER BY p.ts DESC LIMIT 100",(report['window_start'],report['window_end'],u['id']))] if premium else []
+        posts=[dict(r) for r in c.execute("SELECT p.id,p.author,p.text,p.ts,p.sentiment,(SELECT GROUP_CONCAT(DISTINCT m.ticker) FROM mentions m WHERE m.post_id=p.id AND m.source=p.source) tickers FROM posts p WHERE p.source='x' AND p.ts>=? AND p.ts<? AND p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices) ORDER BY p.likes DESC,p.ts DESC LIMIT 100",(report['window_start'],report['window_end'],u['id']))] if premium else []
     from .post_quality import research_text
     from .screening import fingerprint
     seen=set();authors=set();filtered=[]
     for post in posts:
         fp=fingerprint(post['text'])
-        if not post['text'].lstrip().startswith('@') and research_text(post['text']) and fp not in seen and post['author'] not in authors:
+        if leaders.intersection((post.get('tickers') or '').split(',')) and not post['text'].lstrip().startswith('@') and research_text(post['text']) and fp not in seen and post['author'] not in authors:
             filtered.append(post);seen.add(fp);authors.add(post['author'])
-    posts=filtered[:5]
+    posts=filtered[:6]
     selected=[r for r in report['rows'] if r['ticker'] in watched]
     for p in posts:p['url']='https://x.com/i/web/status/'+p['id']
     visible=selected if premium and prefs['watchlist_only'] else report['rows'][:10 if premium else 3]

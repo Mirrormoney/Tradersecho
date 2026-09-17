@@ -42,3 +42,10 @@
 - Incomplete or stale reports produce no send payload. Empty personal lists remain empty rather than being replaced with unrelated stocks.
 - Sending remains disabled during private testing. Subscriber dispatch still needs unsubscribe tokens, delivery reconciliation, verified recipients, suppression handling and completed business details.
 - Inbox appearance still needs testing in Gmail, Outlook and Apple Mail; a browser preview is not a guarantee of identical rendering.
+
+## Delivery safeguards implemented during prelaunch
+- Scanner-safe unsubscribe: GET shows confirmation; POST performs opt-out without requiring login. Tokens are stored hashed, recipient-bound, and responses suppress referrers.
+- Signed Resend event endpoint validates raw-body signatures and timestamps, deduplicates event IDs, and retains suppression after out-of-order delivery events. Provider connection remains pending the public endpoint.
+- Database ledger freezes a single test payload per recipient/report, checks verified membership and opt-in, leases attempts and keeps the same idempotency key. Retries older than 23 hours require review.
+- These are preparation primitives, not an active sender: subscriber dispatch and ambiguous provider-response reconciliation remain launch work. No environment switch enables broadcasts. Existing owner-test tooling is separate.
+- Regression coverage includes signature tampering/expiry, duplicate events, bounce suppression, scanner-safe opt-out and duplicate payload/attempt protection.

@@ -53,6 +53,8 @@ def init():
         migrate_voices(c)
         from .account_security import migrate as migrate_security
         migrate_security(c)
+        from .email_delivery import migrate as migrate_email_delivery
+        migrate_email_delivery(c)
         c.execute('CREATE TABLE IF NOT EXISTS post_identity(source TEXT,post_id TEXT,author_id TEXT,PRIMARY KEY(source,post_id))')
     if DEMO: seed_demo()
 
@@ -94,7 +96,7 @@ async def security(request, call_next):
             return Response('Request too large',status_code=413)
     response = await call_next(request)
     response.headers['X-Content-Type-Options']='nosniff'
-    response.headers['Referrer-Policy']='strict-origin-when-cross-origin'
+    response.headers.setdefault('Referrer-Policy','strict-origin-when-cross-origin')
     response.headers['X-Frame-Options']='DENY'
     if request.url.path.startswith('/api/'):
         response.headers['Cache-Control']='no-store'
@@ -404,6 +406,8 @@ from .payments import router as payments_router, options as billing_options, san
 app.include_router(payments_router)
 from .account_security import router as security_router
 app.include_router(security_router)
+from .email_delivery import router as delivery_router
+app.include_router(delivery_router)
 
 from .collection import router as collection_router
 app.include_router(collection_router)

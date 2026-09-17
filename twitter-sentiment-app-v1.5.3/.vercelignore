@@ -33,3 +33,5 @@ work/
 !backend/post_quality.py
 
 !backend/newsletter.py
+
+!backend/email_delivery.py

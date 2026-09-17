@@ -14,7 +14,7 @@ def isolate_tests(monkeypatch):
     monkeypatch.setenv('TRADERSECHO_SCHEMA','billing_sandbox_tests')
     monkeypatch.setattr(s,'CATALOG',dict(s.DEMO_CATALOG))
     with s.db() as c:
-        for table in ['account_tokens','billing_checkouts','billing_entitlements','admin_voices','voice_checkpoints','digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
+        for table in ['email_events','email_deliveries','email_optouts','email_suppressions','account_tokens','billing_checkouts','billing_entitlements','admin_voices','voice_checkpoints','digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
             c.execute('DELETE FROM '+table)
         c.execute("DELETE FROM posts WHERE source='x'")
         c.execute("DELETE FROM meta WHERE key!='demo_anchor'")
@@ -796,3 +796,66 @@ def test_newsletter_personalization_safe_html_and_inline_logo():
     with pytest.raises(ValueError):render(report,origin='javascript:alert(1)')
     empty=render({**report,'rows':[],'posts':[]})
     assert 'No matching watchlist stocks' in empty['html'] and '$MU' not in empty['html']
+
+
+def test_newsletter_signature_and_timestamp():
+    from .email_delivery import verify_event
+    from fastapi import HTTPException
+    raw=b'{"event_type":"ping","data":{"success":true}}'
+    headers={'svix-id':'msg_loFOjxBNrRLzqYUf','svix-timestamp':'1731705121','svix-signature':'v1,rAvfW3dJ/X/qxhsaXPOyyCGmRKsaKWcsNccKXlIktD0='}
+    secret='whsec_plJ3nmyCDGBKInavdOK15jsl'
+    assert verify_event(raw,headers,secret,1731705121)[1]['event_type']=='ping'
+    with pytest.raises(HTTPException):verify_event(raw+b' ',headers,secret,1731705121)
+    with pytest.raises(HTTPException):verify_event(raw,headers,secret,1731705422)
+
+
+def test_newsletter_optout_scanner_and_retry_gate(monkeypatch):
+    from . import email_delivery as d,digest
+    client,u=make_account('newsletter@example.com')
+    other,v=make_account('different@example.com')
+    end=int(time.time()//86400)*86400
+    report={'ready':True,'window_start':end-86400,'window_end':end,'date':'2026-09-17','tracked_stocks':1,'rows':[{'ticker':'MU','name':'Micron','mentions':20,'previous':10,'change':100}]}
+    monkeypatch.setattr(digest,'build',lambda:report)
+    with s.db() as c:
+        c.execute("UPDATE accounts SET plan='premium',email_verified=1 WHERE id=?",(u['id'],))
+        c.execute('INSERT INTO digest_preferences VALUES(?,?,?,?)',(u['id'],'daily',0,time.time()))
+    with pytest.raises(ValueError):d.prepare_delivery(v)
+    key=d.prepare_delivery(u)
+    assert d.prepare_delivery(u)==key
+    claim=d.claim_delivery(key)
+    assert claim and d.claim_delivery(key) is None
+    assert claim['payload']['to']==['newsletter@example.com']
+    assert d.claim_delivery(key,now=time.time()+121)==claim
+    url=claim['payload']['headers']['List-Unsubscribe'][1:-1]
+    from urllib.parse import urlsplit,parse_qs
+    token=parse_qs(urlsplit(url).query)['token'][0]
+    anonymous=TestClient(s.app)
+    response=anonymous.get('/api/newsletter/unsubscribe',params={'token':token})
+    assert response.status_code==200 and response.headers['referrer-policy']=='no-referrer'
+    assert client.get('/api/digest/preferences').json()['frequency']=='daily'
+    assert anonymous.post('/api/newsletter/unsubscribe',params={'token':token},data={'List-Unsubscribe':'One-Click'}).status_code==200
+    assert client.get('/api/digest/preferences').json()['frequency']=='off'
+    assert other.get('/api/digest/preferences').json()['frequency']=='off'
+    assert d.claim_delivery(key,now=time.time()+250) is None
+    with pytest.raises(ValueError):d.prepare_delivery(u)
+
+
+def test_newsletter_webhook_suppression_and_replay(monkeypatch):
+    import base64
+    from . import email_delivery as d
+    secret='whsec_'+base64.b64encode(b'unit-test-webhook-key-32-bytes!!').decode()
+    monkeypatch.setenv('RESEND_WEBHOOK_SECRET',secret)
+    client=TestClient(s.app)
+    def send(kind,event_id='event-one',data=None):
+        raw=json.dumps({'type':kind,'data':data if data is not None else {'email_id':'provider-one','to':['bounced@example.com']}}).encode()
+        stamp=str(int(time.time()))
+        sig=base64.b64encode(hmac.new(base64.b64decode(secret[6:]),event_id.encode()+b'.'+stamp.encode()+b'.'+raw,hashlib.sha256).digest()).decode()
+        return client.post('/api/newsletter/events',content=raw,headers={'svix-id':event_id,'svix-timestamp':stamp,'svix-signature':'v1,'+sig})
+    assert client.post('/api/newsletter/events',json={}).status_code==400
+    assert send('email.bounced').status_code==200
+    assert send('email.bounced').json()['duplicate']
+    assert send('email.delivered','event-two').status_code==200
+    assert send('email.bounced','event-three',data=['bad']).status_code==400
+    with s.db() as c:
+        assert c.execute('SELECT COUNT(*) FROM email_events').fetchone()[0]==2
+        assert c.execute('SELECT reason FROM email_suppressions WHERE email_hash=?',(d.email_hash('bounced@example.com'),)).fetchone()[0]=='email.bounced'

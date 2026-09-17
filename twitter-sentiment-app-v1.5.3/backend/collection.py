@@ -16,9 +16,9 @@ def plan_day():
         settings=data_settings(c)
         if not settings['enabled']: raise RuntimeError('Collection is paused. Enable it in Administration after setting your X spending limit.')
         if not os.getenv('X_BEARER_TOKEN'): raise RuntimeError('X_BEARER_TOKEN is not configured. No paid call was sent.')
-        if c.execute('SELECT 1 FROM meta WHERE key=?',('day_planned:'+day,)).fetchone(): return day,end,settings
+        # Reconcile stocks added after the first run; existing jobs stay untouched.
         c.executemany('INSERT OR IGNORE INTO collection_jobs(day,kind,ticker,updated_at) VALUES(?,?,?,?)',[(day,'counts',ticker,now) for ticker in s.CATALOG])
-        c.execute('INSERT INTO meta VALUES(?,?)',('day_planned:'+day,str(end)))
+        c.execute('INSERT OR IGNORE INTO meta VALUES(?,?)',('day_planned:'+day,str(end)))
     return day,end,settings
 
 def claim_job(day):

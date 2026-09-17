@@ -490,3 +490,17 @@ def test_digest_coverage_personalization_and_preferences(monkeypatch):
     assert not digest.build(now=end+37*3600)['ready']
     member.put('/api/digest/preferences',json={'frequency':'off'})
     assert member.get('/api/digest/preferences').json()['frequency']=='off'
+
+
+def test_daily_plan_picks_up_new_stocks(monkeypatch):
+    from .collection import plan_day
+    from .community import create_owner_invite
+    monkeypatch.setenv('X_BEARER_TOKEN','mock-only')
+    owner,_=make_account('reconcile@example.com',create_owner_invite('reconcile@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'monthly_budget':5})
+    monkeypatch.setattr(s,'CATALOG',{'INTC':('Intel','Chips')})
+    day,_,_=plan_day()
+    monkeypatch.setattr(s,'CATALOG',{'INTC':('Intel','Chips'),'CAT':('Caterpillar','Infrastructure')})
+    plan_day();plan_day()
+    with s.db() as c:
+        assert [r[0] for r in c.execute("SELECT ticker FROM collection_jobs WHERE day=? AND kind='counts' ORDER BY ticker",(day,))]==['CAT','INTC']

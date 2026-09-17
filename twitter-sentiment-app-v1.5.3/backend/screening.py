@@ -22,19 +22,24 @@ def screen(posts,classifier,ticker):
         if not text or any(text==other or (len(text)>30 and SequenceMatcher(None,text,other).ratio()>.9) for other in templates):
             duplicates+=1;continue
         templates.append(text)
-        retained.append({**p,'label':ticker_sentiment(p['text'],ticker,classifier)})
+        stance=next((v['label'] for v in p.get('ticker_sentiments',[]) if v['ticker']==ticker),'unclear')
+        retained.append({**p,'label':stance if p.get('source')=='x' else ticker_sentiment(p['text'],ticker,classifier)})
     authors=len({p.get('author_id') or p['author'] for p in retained})
-    labels={label:sum(p['label']==label for p in retained) for label in ['bullish','bearish','neutral','unclear']}
+    labels={label:sum(p['label']==label for p in retained) for label in ['bullish','bearish','neutral','unclear','mixed']}
     return {'sample_posts':len(posts),'screened_posts':len(retained),'independent_authors':authors,
             'duplicate_posts':duplicates,'repeat_author_posts':repeated,
-            'sufficient':len({p.get('author_id') or p['author'] for p in retained if p['label']!='unclear'})>=20,'labels':labels,
+            'sufficient':len({p.get('author_id') or p['author'] for p in retained if p['label'] in ('bullish','bearish','neutral')})>=20,'labels':labels,
             'suspicious_share':round((duplicates+repeated)/len(posts),3) if posts else 0}
 
 def enrich(c,rows,now,window,classifier):
     grouped={}
-    for p in c.execute('SELECT p.*,i.author_id,m.ticker FROM posts p JOIN mentions m ON p.source=m.source AND p.id=m.post_id LEFT JOIN post_identity i ON p.source=i.source AND p.id=i.post_id WHERE p.source=? AND p.ts>? AND p.ts<=? ORDER BY p.ts DESC LIMIT 20000',('x',now-window*86400,now)):
-        group=grouped.setdefault(p['ticker'],[])
-        if len(group)<500:group.append(dict(p))
+    from .context_sentiment import annotate
+    rows_posts=[dict(r) for r in c.execute('SELECT p.*,i.author_id,GROUP_CONCAT(DISTINCT m.ticker) tickers FROM posts p JOIN mentions m ON p.source=m.source AND p.id=m.post_id LEFT JOIN post_identity i ON p.source=i.source AND p.id=i.post_id WHERE p.source=? AND p.ts>? AND p.ts<=? GROUP BY p.source,p.id,i.author_id ORDER BY p.ts DESC LIMIT 20000',('x',now-window*86400,now))]
+    annotate(c,rows_posts)
+    for p in rows_posts:
+        for ticker in (p['tickers'] or '').split(','):
+            group=grouped.setdefault(ticker,[])
+            if len(group)<500:group.append(p)
     for row in rows:
         posts=grouped.get(row['ticker'],[])
         quality=screen(posts,classifier,row['ticker'])

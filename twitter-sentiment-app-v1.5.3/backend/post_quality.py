@@ -39,5 +39,5 @@ def prepare_feed(rows,ticker,curated,feed,order):
         text=p['text'];fp=fingerprint(text)
         if feed=='research' and (not research_text(text) or fp in seen):continue
         seen.add(fp)
-        result.append({**p,'sentiment':language_label(text,ticker),'curated':p['author'] in curated,'sample_note':'Collected excerpt; open X for full context.'})
+        result.append({**p,'sentiment':p.get('sentiment','pending') if p.get('source')=='x' else language_label(text,ticker),'curated':p['author'] in curated,'sample_note':'AI interpretation of collected text; images, linked pages and thread context may be missing.' if p.get('sentiment_status')=='done' else 'Collected excerpt; open X for full context.'})
     return result

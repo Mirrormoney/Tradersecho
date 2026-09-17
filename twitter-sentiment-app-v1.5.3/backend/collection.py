@@ -140,8 +140,13 @@ def cron(request:Request):
     expected=os.getenv('CRON_SECRET','')
     if not expected or not hmac.compare_digest(request.headers.get('authorization',''),'Bearer '+expected):raise HTTPException(401,'Unauthorized')
     from .live_collection import tick
-    try:return tick(scheduled=True)
-    except RuntimeError as exc:return {'paused':True,'reason':str(exc)}
+    try:result=tick(scheduled=True)
+    except RuntimeError as exc:result={'paused':True,'reason':str(exc)}
+    from .context_sentiment import run_batch as analyze
+    result['sentiment']=analyze(token=request.headers.get('x-vercel-oidc-token'))
+    with core().db() as c:
+        c.execute("INSERT INTO meta VALUES('sentiment_worker_result',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps({**result['sentiment'],'at':time.time()}),))
+    return result
 
 @router.get('/api/cron/health')
 def scheduler_health(request:Request):

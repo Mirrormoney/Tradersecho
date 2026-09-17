@@ -14,7 +14,7 @@ def isolate_tests(monkeypatch):
     monkeypatch.setenv('TRADERSECHO_SCHEMA','billing_sandbox_tests')
     monkeypatch.setattr(s,'CATALOG',dict(s.DEMO_CATALOG))
     with s.db() as c:
-        for table in ['email_events','email_deliveries','email_optouts','email_suppressions','account_tokens','billing_checkouts','billing_entitlements','admin_voices','voice_checkpoints','digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
+        for table in ['ai_sentiment','ai_sentiment_spend','email_events','email_deliveries','email_optouts','email_suppressions','account_tokens','billing_checkouts','billing_entitlements','admin_voices','voice_checkpoints','digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
             c.execute('DELETE FROM '+table)
         c.execute("DELETE FROM posts WHERE source='x'")
         c.execute("DELETE FROM meta WHERE key!='demo_anchor'")

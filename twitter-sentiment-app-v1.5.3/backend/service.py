@@ -19,6 +19,8 @@ DEMO_CATALOG = {'NVDA':('NVIDIA','Semiconductors'), 'TSLA':('Tesla','Automotive'
 from .stocks import Catalog, router as stocks_router, migrate as migrate_stocks
 CATALOG=Catalog()
 app = FastAPI(title='Tradersecho', version='2.0.0')
+from .context_sentiment import router as sentiment_router
+app.include_router(sentiment_router)
 app.include_router(community_router)
 app.include_router(stocks_router)
 from .digest import router as digest_router, migrate as migrate_digest
@@ -55,6 +57,8 @@ def init():
         migrate_security(c)
         from .email_delivery import migrate as migrate_email_delivery
         migrate_email_delivery(c)
+        from .context_sentiment import migrate as migrate_sentiment
+        migrate_sentiment(c)
         c.execute('CREATE TABLE IF NOT EXISTS post_identity(source TEXT,post_id TEXT,author_id TEXT,PRIMARY KEY(source,post_id))')
     if DEMO: seed_demo()
 
@@ -274,7 +278,7 @@ def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:st
     with db() as c:
         now=time.time() if source=='x' else reference(source,c)
         clauses+=['p.ts>?','p.ts<=?'];args += [now-window*86400,now]
-        if ticker: clauses.append('m.ticker=?');args.append(ticker.upper())
+        if ticker: clauses.append('EXISTS(SELECT 1 FROM mentions filter_m WHERE filter_m.source=p.source AND filter_m.post_id=p.id AND filter_m.ticker=?)');args.append(ticker.upper())
         if tracked:
             u=account(request)
             if u['demo'] and source!='demo':raise HTTPException(403,'Sign in with a real account to view live voices.')
@@ -284,6 +288,8 @@ def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:st
         ordering='p.likes DESC,p.ts DESC' if order=='engagement' else 'p.ts DESC'
         rows=c.execute('SELECT p.*,GROUP_CONCAT(DISTINCT m.ticker) tickers FROM posts p LEFT JOIN mentions m ON p.source=m.source AND p.id=m.post_id WHERE '+' AND '.join(clauses)+' GROUP BY p.source,p.id ORDER BY '+ordering+' LIMIT 500',args).fetchall()
         curated={r[0] for r in c.execute('SELECT handle FROM admin_voices')}
+        from .context_sentiment import annotate
+        rows=annotate(c,[dict(r) for r in rows],ticker)
     from .post_quality import prepare_feed
     return prepare_feed([dict(r) for r in rows],ticker,curated,feed,order)[:50]
 

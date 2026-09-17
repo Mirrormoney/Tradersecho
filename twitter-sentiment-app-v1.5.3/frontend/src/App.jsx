@@ -6,7 +6,7 @@ import {displayInitials} from './identity.js'
 import {PremiumBadge} from './MemberIdentity.jsx'
 import {Voices} from './Voices.jsx'
 import {Briefing} from './Briefing.jsx'
-import React,{useEffect,useState} from 'react'
+import React,{useEffect,useState,useRef} from 'react'
 import './style.css'
 import {api} from './api.js'
 import {LiveTicker} from './LiveTicker.jsx'
@@ -25,6 +25,8 @@ function Posts({rows,source,loading,error}){if(loading)return <div className="em
 export default function App(){
 const [authReady,setAuthReady]=useState(false)
 const [page,setPage]=useState('home'),[windowDays,setWindowDays]=useState(1),[source,setSource]=useState('demo'),[status,setStatus]=useState(null),[data,setData]=useState(null),[user,setUser]=useState(null),[watchlist,setWatchlist]=useState([]),[handles,setHandles]=useState([]),[posts,setPosts]=useState([]),[postsLoading,setPostsLoading]=useState(false),[postsError,setPostsError]=useState(''),[postOrder,setPostOrder]=useState('latest'),[postFeed,setPostFeed]=useState('research'),[query,setQuery]=useState(''),[sort,setSort]=useState('heat'),[sector,setSector]=useState('All sectors'),[selected,setSelected]=useState(null),[modal,setModal]=useState(''),[authMode,setAuthMode]=useState('signup'),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[refresh,setRefresh]=useState(0)
+const handledEmailLink=useRef(false)
+useEffect(()=>{if(!authReady||!user||handledEmailLink.current)return;handledEmailLink.current=true;const q=new URLSearchParams(location.search);const view=q.get('view');if(['market','briefing','account'].includes(view)){setPage(view);const ticker=q.get('ticker');if(view==='market'&&ticker&&/^[A-Z]{1,5}(\.[A-Z])?$/.test(ticker))setSelected(ticker)}},[authReady,user?.id])
 useEffect(()=>{const billing=new URLSearchParams(location.search).get('billing');if(!billing)return;setPage('account');if(billing==='cancelled'){setNotice('Checkout cancelled. Your membership has not changed.');return}setNotice(billing==='success'?'Confirming your payment. Your plan updates after verification.':'Welcome back. Your membership is up to date.');let checks=0;const timer=setInterval(()=>{api('/me').then(u=>{setUser(u);if(u?.plan==='premium'){setNotice('Your Premium access is ready.');clearInterval(timer)}}).catch(()=>{});if(++checks>=10)clearInterval(timer)},3000);return()=>clearInterval(timer)},[])
 useEffect(()=>{Promise.all([api('/status'),api('/me')]).then(([s,u])=>{setStatus(s);setUser(u);if(!s.demo_enabled)setSource('x')}).catch(e=>setError(e.message)).finally(()=>setAuthReady(true))},[])
 useEffect(()=>{if(!authReady)return;let current=true;setLoading(true);setError('');api(`/rankings?window=${windowDays}&source=${source}&scope=${page==='watchlist'?'watchlist':'market'}`).then(d=>{if(current)setData(d)}).catch(e=>{if(current){setError(e.message);setData(null)}}).finally(()=>{if(current)setLoading(false)});return()=>{current=false}},[windowDays,source,refresh,user,page,authReady])

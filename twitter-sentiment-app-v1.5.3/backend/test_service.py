@@ -776,3 +776,23 @@ def test_free_launch_rankings_and_checkout_disabled(monkeypatch):
     assert not any(payments.options().values())
     assert c.post('/api/billing/checkout',json={'tier':'monthly'}).status_code==503
     assert c.get('/api/status').json()['free_launch']
+
+def test_newsletter_personalization_safe_html_and_inline_logo():
+    from .newsletter import render,LOGO
+    import base64
+    report={'ready':True,'date':'2026-09-16','tracked_stocks':357,'rows':[{'ticker':'MU','name':'Micron <script>bad</script>','mentions':900,'previous':600,'change':50}], 'watchlist_only':True,'watchlist':[],'posts':[{'id':'123','author':'researcher','text':'Watching $MU & <img src=x onerror=alert(1)>'}],'disclosure':'Sampled posts, not investment advice.'}
+    result=render(report,'<Sven>','https://example.com',preview=True)
+    assert '&lt;Sven&gt;' in result['html'] and '<script>' not in result['html']
+    assert '&lt;img' in result['html'] and 'src="data:image/png;base64,' in result['html']
+    assert '$MU leads your watchlist' in result['html']
+    assert 'view=market&amp;ticker=MU' in result['html'] and 'view=account' in result['text']
+    assert 'Automatic newsletter delivery is off' in result['html']
+    actual=render(report,'Sven','https://example.com')
+    assert 'src="cid:tradersecho-pulse"' in actual['html']
+    assert actual['attachments'][0]['content_id']=='tradersecho-pulse'
+    assert base64.b64decode(LOGO).startswith(b'\x89PNG')
+    assert len(actual['html'].encode())<90000
+    with pytest.raises(ValueError):render({'ready':False})
+    with pytest.raises(ValueError):render(report,origin='javascript:alert(1)')
+    empty=render({**report,'rows':[],'posts':[]})
+    assert 'No matching watchlist stocks' in empty['html'] and '$MU' not in empty['html']

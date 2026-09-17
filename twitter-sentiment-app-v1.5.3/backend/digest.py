@@ -76,11 +76,19 @@ def personalized(report,u):
     with s.db() as c:
         watched={r[0] for r in c.execute('SELECT ticker FROM watchlist WHERE user_id=?',(u['id'],))}
         prefs=preferences(c,u['id'])
-        posts=[dict(r) for r in c.execute("SELECT p.id,p.author,p.text,p.ts,p.sentiment FROM posts p WHERE p.source='x' AND p.ts>=? AND p.ts<? AND p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices) ORDER BY p.ts DESC LIMIT 5",(report['window_start'],report['window_end'],u['id']))] if premium else []
+        posts=[dict(r) for r in c.execute("SELECT p.id,p.author,p.text,p.ts,p.sentiment FROM posts p WHERE p.source='x' AND p.ts>=? AND p.ts<? AND p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices) ORDER BY p.ts DESC LIMIT 100",(report['window_start'],report['window_end'],u['id']))] if premium else []
+    from .post_quality import research_text
+    from .screening import fingerprint
+    seen=set();authors=set();filtered=[]
+    for post in posts:
+        fp=fingerprint(post['text'])
+        if not post['text'].lstrip().startswith('@') and research_text(post['text']) and fp not in seen and post['author'] not in authors:
+            filtered.append(post);seen.add(fp);authors.add(post['author'])
+    posts=filtered[:5]
     selected=[r for r in report['rows'] if r['ticker'] in watched]
     for p in posts:p['url']='https://x.com/i/web/status/'+p['id']
     visible=selected if premium and prefs['watchlist_only'] else report['rows'][:10 if premium else 3]
-    return {**report,'rows':visible,'watchlist':selected if premium else [],'posts':posts,'personalized':premium,'delivery_enabled':False}
+    return {**report,'rows':visible,'watchlist':selected if premium else [],'posts':posts,'personalized':premium,'watchlist_only':bool(premium and prefs['watchlist_only']),'delivery_enabled':False}
 
 @router.get('/api/digest')
 def member_briefing(request:Request):
@@ -91,9 +99,6 @@ def member_briefing(request:Request):
 def admin_briefing(request:Request):
     u=staff(request);report=build()
     preview=personalized(report,u)
-    text=''
-    if preview.get('ready'):
-        text=f"From: Tradersecho <newsletter@tradersecho.com>\nReply-To: info@tradersecho.com\n\nTradersecho daily briefing — {preview['date']} UTC\n\n"
-        text+='\n'.join(f"${r['ticker']}: {r['mentions']:,} mentions; previous day {r['previous']:,}" for r in preview['rows'])
-        text+='\n\n'+preview['disclosure']
-    return {'report':preview,'email_preview':text,'x_draft':report.get('x_draft',''),'email_enabled':False,'x_enabled':False,'requirements':['Verified email sending domain and sender address','Email service connection, unsubscribe and delivery-event handling','Public website address before marketing launch','New X account authorization with publishing permission'],'note':'Drafts only. No emails or X posts are sent. Email preview reflects your own preferences; individual member data is never put into the public X draft.'}
+    from .newsletter import render
+    email=render(preview,u['display_name'],core().ORIGIN,preview=True) if preview.get('ready') else {}
+    return {'report':preview,'email_preview':email.get('text',''),'email_html':email.get('html',''),'email_subject':email.get('subject',''),'x_draft':report.get('x_draft',''),'email_enabled':False,'x_enabled':False,'requirements':['Subscriber unsubscribe links and bounce/complaint handling','Durable delivery queue and verified-recipient checks','Public business details and reviewed public website address','New X account authorization before publishing'],'note':'Design preview only. Sending stays off during the private testing week. This preview uses your own watchlist and followed voices; public X drafts never include personal lists.'}

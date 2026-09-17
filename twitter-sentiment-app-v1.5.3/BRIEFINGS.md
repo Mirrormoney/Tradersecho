@@ -34,3 +34,11 @@
 - `ops/send_owner_test.cjs payload.json receipt.json --send` sends only an explicitly prepared test using server-side RESEND_API_KEY. The persisted receipt freezes the payload hash and idempotency key before transmission; successful retries do not resend, and ambiguous attempts older than 23 hours require reconciliation. Keep payloads, environment files and receipts outside the repository.
 - The first authorized owner test on 2026-09-16 was confirmed delivered by Resend. It used the September 15 UTC report, top ten stocks across the 357-stock universe, and the stable private preview link.
 - These are operator tools, not public endpoints or an automated newsletter launch. Subscriber delivery remains off pending the confirmation, unsubscribe, suppression and durable database delivery work above.
+
+## Branded daily field notes
+- The shared newsletter renderer provides HTML, plain text and the inline pulse-logo attachment for admin previews and owner tests.
+- Personal greetings, a lead-stock card, up to five watchlist highlights and three filtered voice excerpts use stored report data. No additional X requests.
+- Administration > Publishing includes desktop and mobile design previews. Links are disabled inside the sandboxed preview; email links open the appropriate app view and ticker after sign-in.
+- Incomplete or stale reports produce no send payload. Empty personal lists remain empty rather than being replaced with unrelated stocks.
+- Sending remains disabled during private testing. Subscriber dispatch still needs unsubscribe tokens, delivery reconciliation, verified recipients, suppression handling and completed business details.
+- Inbox appearance still needs testing in Gmail, Outlook and Apple Mail; a browser preview is not a guarantee of identical rendering.

@@ -31,3 +31,5 @@ work/
 
 !backend/account_security.py
 !backend/post_quality.py
+
+!backend/newsletter.py

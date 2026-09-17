@@ -1,5 +1,10 @@
 import React,{useEffect,useState} from 'react'
 import {api} from './api.js'
+export function TrialNotice({user,onUser,onPlans}){
+ const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
+ if(!user||user.demo||(!user.trial_active&&!user.trial_eligible))return null
+ return <section className="trial-notice" aria-label="Premium trial"><div><strong>{user.trial_active?'Your Premium trial is active':'Try Premium free for 7 days'}</strong><p>{user.trial_active?`Ends ${new Date(user.trial_ends_at*1000).toLocaleString()}. You return to Free automatically unless you buy a plan.`:'Full rankings, personal voices and the Trading room. Verify your email to start. No card required. No automatic charges.'}</p></div><button className="button primary" disabled={busy} onClick={async()=>{if(user.trial_active){onPlans();return}setBusy(true);setError('');try{if(user.email_verified){onUser(await api('/auth/start-trial','POST'))}else{const r=await api('/auth/send-verification','POST');setMessage(r.message)}}catch(e){setError(e.message)}finally{setBusy(false)}}}>{busy?'Please wait…':user.trial_active?'Keep Premium':user.email_verified?'Start my 7 days':'Verify email & start trial'}</button>{message&&<p role="status">{message}</p>}{error&&<p className="error" role="alert">{error}</p>}</section>
+}
 export function EmailVerification({user,onUser}){
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
  if(user.demo)return null

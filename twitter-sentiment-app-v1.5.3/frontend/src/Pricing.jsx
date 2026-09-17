@@ -14,7 +14,7 @@ const features=[
 ]
 export function Pricing({user,status,onSignup,onAccount}){
  const [annual,setAnnual]=useState(true),[busy,setBusy]=useState(''),[error,setError]=useState('')
- const premium=user?.plan==='premium'||['admin','owner'].includes(user?.role)
+ const premium=(user?.plan==='premium'&&!user?.trial_active)||['admin','owner'].includes(user?.role)
  async function choose(tier){
   if(!user||user.demo){onSignup();return}
   setBusy(tier);setError('')
@@ -22,14 +22,14 @@ export function Pricing({user,status,onSignup,onAccount}){
  }
  if(status?.free_launch)return <div className="pricing-content"><span className="eyebrow">FREE EARLY ACCESS</span><h2>Explore the full conversation.</h2><p>No payment or card required during our free launch.</p><ul><li>Full stock attention rankings across the tracked universe</li><li>Daily, weekly and growing monthly history</li><li>Five saved stocks and shared curated voices</li><li>Daily web briefing</li></ul><p className="muted">Personal voices and the trading room are planned membership extras. Email newsletters are not yet included. We’ll announce any future paid plans separately; no automatic charges.</p><button className="button primary" onClick={user?onAccount:onSignup}>{user?'My account':'Create a free account'}</button></div>
  return <div className="pricing-content">
-  {status?.billing_sandbox&&<div className="payment-sandbox-banner"><strong>Test checkout only.</strong> Use Stripe test card 4242 4242 4242 4242, any future expiry and any three-digit CVC. Do not enter a real card. Test purchases affect only this sandbox account.</div>}<p className="pricing-intro">Start with the pulse. Build your own research edge.</p>
-  <div className="pricing-switch" role="group" aria-label="Premium billing interval">
+  {status?.billing_sandbox&&<div className="payment-sandbox-banner"><strong>Test checkout only.</strong> Use Stripe test card 4242 4242 4242 4242, any future expiry and any three-digit CVC. Do not enter a real card. Test purchases affect only this sandbox account.</div>}<p className="pricing-intro">Start with 7 days of Premium, free. No card. No automatic charges.</p>
+  {!premium&&!user?.trial_active&&!user?.trial_started_at&&<div className="trial-notice"><div><strong>Try the full picture before choosing.</strong><p>Create your account and verify your email to start a one-time seven-day trial. Normal Premium limits apply. You return to Free automatically.</p></div><button className="button primary" onClick={user?onAccount:onSignup}>{user?'Start from My account':'Create account & try Premium'}</button></div>}<div className="pricing-switch" role="group" aria-label="Premium billing interval">
    <button aria-pressed={!annual} onClick={()=>setAnnual(false)}>Monthly</button>
    <button aria-pressed={annual} onClick={()=>setAnnual(true)}>Yearly <span>2 months free</span></button>
   </div>
   <div className="pricing-grid">
    {['free','premium','founder'].map(tier=>{
-    const paid=tier!=='free',founder=tier==='founder',selected=tier==='free'?!premium:founder?user?.billing_tier==='founder':premium&&user?.billing_tier!=='founder'
+    const paid=tier!=='free',founder=tier==='founder',selected=tier==='free'?!premium&&!user?.trial_active:founder?user?.billing_tier==='founder':premium&&user?.billing_tier!=='founder'
     const choice=founder?'founder':annual?'yearly':'monthly'
     const available=Boolean(status?.billing_options?.[choice])
     return <section key={tier} className={'pricing-card '+tier} aria-label={tier+' plan'}>

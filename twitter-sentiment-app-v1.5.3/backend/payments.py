@@ -54,7 +54,8 @@ def account_details(u):
     u=dict(u)
     with core().db() as c:
         founder=c.execute("SELECT 1 FROM billing_entitlements WHERE user_id=? AND tier='founder' AND active=1",(u['id'],)).fetchone()
-    return {'billing_tier':'founder' if founder else u['plan'],'billing_customer':bool(u.get('stripe_customer'))}
+        previous=c.execute('SELECT 1 FROM billing_entitlements WHERE user_id=?',(u['id'],)).fetchone()
+    return {'billing_tier':'founder' if founder else 'trial' if u.get('trial_active') else u['plan'],'billing_customer':bool(u.get('stripe_customer')),'trial_eligible':bool(not u['demo'] and u['role']=='member' and u['plan']=='free' and not u.get('trial_started_at') and not previous)}
 
 def validate_price(price,tier):
     _,amount,interval=TIERS[tier]

@@ -80,6 +80,14 @@ def claim(payload:Claim,request:Request):
 class Profile(BaseModel):
     display_name:str=Field(min_length=3,max_length=30)
 
+def validate_display_name(value):
+    name=' '.join(value.split())
+    if not re.fullmatch(r'[A-Za-z0-9 _.-]{3,30}',name):
+        raise HTTPException(422,'Use 3–30 letters, numbers, spaces, dots, dashes or underscores.')
+    if not re.search(r'[A-Za-z0-9]',name):
+        raise HTTPException(422,'Include at least one letter or number in your username.')
+    return name
+
 class PasswordChange(BaseModel):
     current_password:str=Field(min_length=1,max_length=128)
     new_password:str=Field(min_length=10,max_length=128)
@@ -107,9 +115,7 @@ def change_password(payload:PasswordChange,request:Request,response:Response):
 
 @router.put('/api/profile')
 def profile(payload:Profile,request:Request):
-    s=core();u=s.account(request);name=' '.join(payload.display_name.split())
-    if not re.fullmatch(r'[A-Za-z0-9 _.-]{3,30}',name): raise HTTPException(422,'Use 3–30 letters, numbers, spaces, dots, dashes or underscores.')
-    if not re.search(r'[A-Za-z0-9]',name):raise HTTPException(422,'Include at least one letter or number in your name.')
+    s=core();u=s.account(request);name=validate_display_name(payload.display_name)
     try:
         with s.db() as c:
             c.execute('BEGIN IMMEDIATE')
@@ -195,7 +201,7 @@ def messages(request:Request,before:int|None=Query(None,ge=1),ticker:str=Query('
     if before: clause+=' AND m.id<?';args.append(before)
     if ticker: clause+=' AND m.ticker=?';args.append(ticker.upper())
     with core().db() as c:
-        rows=c.execute('SELECT m.id,m.body,m.ticker,m.ts,a.display_name,a.role,a.plan FROM chat_messages m JOIN accounts a ON m.user_id=a.id '+clause+' ORDER BY m.id DESC LIMIT 50',args).fetchall()
+        rows=c.execute('SELECT m.id,m.body,m.ticker,m.ts,a.display_name,a.role,a.plan,CASE WHEN EXISTS(SELECT 1 FROM billing_entitlements e WHERE e.user_id=a.id AND e.tier=\'founder\' AND e.active=1) THEN \'founder\' ELSE a.plan END AS billing_tier FROM chat_messages m JOIN accounts a ON m.user_id=a.id '+clause+' ORDER BY m.id DESC LIMIT 50',args).fetchall()
     return [dict(r) for r in reversed(rows)]
 
 @router.post('/api/community/messages')

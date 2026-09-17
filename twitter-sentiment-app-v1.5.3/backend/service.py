@@ -115,11 +115,14 @@ def account(request, required=True):
     if row and row['status']!='active': raise HTTPException(403,'This account is suspended. Contact the site owner.')
     if row and (not row['last_seen'] or row['last_seen']<time.time()-300):
         with db() as c: c.execute('UPDATE accounts SET last_seen=? WHERE id=?',(time.time(),row['id']))
-    return dict(row) if row else None
+    from .account_security import trial_account
+    return trial_account(row) if row else None
 
 def public_account(u):
     from .payments import account_details
-    return {k:u[k] for k in ['id','email','plan','role','status','display_name','email_verified']} | {'demo':bool(u['demo'])} | account_details(u)
+    from .account_security import trial_account
+    u=trial_account(u) if 'trial_active' not in dict(u) else dict(u)
+    return {k:u[k] for k in ['id','email','plan','role','status','display_name','email_verified']} | {'demo':bool(u['demo']),'trial_active':u['trial_active'],'trial_started_at':u.get('trial_started_at'),'trial_ends_at':u.get('trial_ends_at')} | account_details(u)
 
 def session(response, uid, expected_password=None):
     token=secrets.token_urlsafe(32)
@@ -151,8 +154,11 @@ class Credentials(BaseModel):
     password:str=Field(min_length=10,max_length=128)
     owner_code:str=Field(default='',max_length=150)
 
+class SignupCredentials(Credentials):
+    display_name:str=Field(min_length=3,max_length=30)
+
 @app.post('/api/auth/signup')
-def signup(payload:Credentials,request:Request,response:Response):
+def signup(payload:SignupCredentials,request:Request,response:Response):
     throttle(request)
     email=payload.email.strip().lower()
     if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email): raise HTTPException(422,'Enter a valid email address.')
@@ -161,9 +167,12 @@ def signup(payload:Credentials,request:Request,response:Response):
         c.execute('BEGIN IMMEDIATE')
         reserved=c.execute('SELECT 1 FROM owner_invites WHERE email=? AND used_by IS NULL AND expires>?',(email,time.time())).fetchone()
         if reserved and not payload.owner_code: raise HTTPException(403,'This email is reserved. Use Owner setup with your private invitation.')
-        name=available_default_name(c,uid)
+        from .community import validate_display_name
+        name=validate_display_name(payload.display_name)
+        if c.execute('SELECT 1 FROM accounts WHERE LOWER(TRIM(display_name))=?',(name.lower(),)).fetchone():
+            raise HTTPException(409,'That username is already taken. Please choose another.')
         try: c.execute('INSERT INTO accounts(id,email,password,display_name,created_at,last_login) VALUES(?,?,?,?,?,?)',(uid,email,password_hash(payload.password),name,time.time(),time.time()))
-        except IntegrityError: raise HTTPException(409,'An account with this email already exists.')
+        except IntegrityError: raise HTTPException(409,'That email or username is already in use.')
         if payload.owner_code: claim_owner(c,payload.owner_code,email,uid)
         u=c.execute('SELECT * FROM accounts WHERE id=?',(uid,)).fetchone()
     session(response,uid)

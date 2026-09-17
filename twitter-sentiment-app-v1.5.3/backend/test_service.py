@@ -25,7 +25,7 @@ def test_custom_domain_login_and_origin_rejection(monkeypatch):
     monkeypatch.setattr(s,'ORIGIN','https://tradersecho.com')
     monkeypatch.setenv('APP_ADDITIONAL_ORIGINS','https://tradersecho-preview-sven-mais-projects.vercel.app')
     c=TestClient(s.app,base_url='https://tradersecho.com')
-    body={'email':'domain-test@example.com','password':'long-test-password'}
+    body={'display_name':'Domain Tester','email':'domain-test@example.com','password':'long-test-password'}
     assert c.post('/api/auth/signup',json=body,headers={'origin':s.ORIGIN}).status_code==200
     assert c.post('/api/auth/login',json=body,headers={'origin':s.ORIGIN}).status_code==200
     assert c.get('/api/me').status_code==200
@@ -50,13 +50,13 @@ def test_rankings_windows_and_separation():
 def test_accounts_isolation_limits_and_logout():
     c=TestClient(s.app); other=TestClient(s.app)
     assert c.get('/api/watchlist').status_code==401
-    assert c.post('/api/auth/signup',json={'email':'first@example.com','password':'long-test-password'}).status_code==200
+    assert c.post('/api/auth/signup',json={'display_name':'Signup Trader 52','email':'first@example.com','password':'long-test-password'}).status_code==200
     assert c.cookies.get('te_session')
     assert c.get('/api/handles').status_code==403
     for ticker in list(s.CATALOG)[:5]: assert c.put('/api/watchlist/'+ticker).status_code==200
     assert c.put('/api/watchlist/AMZN').status_code==403
     assert c.put('/api/watchlist/NVDA').status_code==200
-    other.post('/api/auth/signup',json={'email':'second@example.com','password':'long-test-password'})
+    other.post('/api/auth/signup',json={'display_name':'Signup Trader 58','email':'second@example.com','password':'long-test-password'})
     assert other.get('/api/watchlist').json()==[]
     assert c.delete('/api/watchlist/NVDA').status_code==200
     assert len(c.get('/api/watchlist').json())==4
@@ -89,7 +89,7 @@ def test_import_dedup_multiticker_validation_and_tracked():
     assert len(rows)==2 and all(r['mentions']==1 for r in rows)
     assert c.post('/api/admin/import',headers=headers,json={'posts':[{**post,'id':'2'}, {**post,'id':'bad'}]}).status_code==422
     with s.db() as conn: assert not conn.execute("SELECT 1 FROM posts WHERE id='2'").fetchone()
-    c.post('/api/auth/signup',json={'email':'importer@example.com','password':'long-test-password'})
+    c.post('/api/auth/signup',json={'display_name':'Signup Trader 91','email':'importer@example.com','password':'long-test-password'})
     c.post('/api/admin/plan',headers=headers,json={'email':'importer@example.com','plan':'premium'})
     c.post('/api/handles',json={'handle':'investor'})
     assert c.get('/api/posts?tracked=true&source=x').json()[0]['id']==post['id']
@@ -128,9 +128,59 @@ def test_collector_pagination_checkpoint_budget_and_retry():
 
 def make_account(email,code=''):
     client=TestClient(s.app)
-    response=client.post('/api/auth/signup',json={'email':email,'password':'long-test-password','owner_code':code})
+    response=client.post('/api/auth/signup',json={'display_name':'Trader-'+hashlib.sha256(email.encode()).hexdigest()[:10],'email':email,'password':'long-test-password','owner_code':code})
     assert response.status_code==200,response.text
     return client,response.json()
+
+def test_signup_requires_unique_normalized_username():
+    c=TestClient(s.app)
+    body={'email':'username@example.com','password':'long-test-password'}
+    assert c.post('/api/auth/signup',json=body).status_code==422
+    assert c.post('/api/auth/signup',json={**body,'display_name':'---'}).status_code==422
+    r=c.post('/api/auth/signup',json={**body,'display_name':'  Market   Mind  '})
+    assert r.status_code==200 and r.json()['display_name']=='Market Mind'
+    other=TestClient(s.app)
+    assert other.post('/api/auth/signup',json={**body,'email':'another@example.com','display_name':'market mind'}).status_code==409
+    assert other.post('/api/auth/login',json=body).status_code==200
+
+def test_verified_trial_starts_once_expires_and_preserves_paid_access(monkeypatch):
+    from .account_security import start_trial
+    from .voices import shared_handles
+    c,u=make_account('trial@example.com')
+    assert c.post('/api/auth/start-trial').status_code==403
+    token='trial-verification-token-that-is-long-enough'
+    with s.db() as db:
+        db.execute('INSERT INTO account_tokens VALUES(?,?,?,?,?,0)',(hashlib.sha256(token.encode()).hexdigest(),u['id'],'verify',u['email'],time.time()+60))
+    assert c.post('/api/auth/verify-email',json={'token':token}).status_code==200
+    trial=c.get('/api/me').json()
+    assert trial['plan']=='premium' and trial['billing_tier']=='trial' and trial['trial_active']
+    assert round(trial['trial_ends_at']-trial['trial_started_at'])==7*86400
+    assert c.post('/api/auth/start-trial').status_code==409
+    assert c.post('/api/auth/verify-email',json={'token':token}).status_code==400
+    assert c.post('/api/handles',json={'handle':'trialvoice'}).status_code==200
+    assert c.get('/api/community/messages').status_code==200
+    with s.db() as db:
+        assert 'trialvoice' in shared_handles(db)
+        db.execute('UPDATE accounts SET trial_ends_at=? WHERE id=?',(time.time()-1,u['id']))
+        assert 'trialvoice' not in shared_handles(db)
+    assert c.get('/api/me').json()['plan']=='free'
+    assert c.get('/api/community/messages').status_code==403
+    assert c.post('/api/auth/start-trial').status_code==409
+    with s.db() as db:
+        db.execute("UPDATE accounts SET plan='premium' WHERE id=?",(u['id'],))
+    assert c.get('/api/me').json()['plan']=='premium'
+    assert not c.get('/api/me').json()['trial_active']
+
+def test_founder_badge_tier_in_chat_tracks_entitlement():
+    c,u=make_account('founder-badge@example.com')
+    with s.db() as db:
+        db.execute("UPDATE accounts SET plan='premium' WHERE id=?",(u['id'],))
+        db.execute('INSERT INTO billing_entitlements VALUES(?,?,?,?,?)',('pi_founder_badge',u['id'],'founder',1,time.time()))
+    assert c.post('/api/community/messages',json={'body':'My first founder thesis'}).status_code==200
+    assert c.get('/api/community/messages').json()[0]['billing_tier']=='founder'
+    assert c.get('/api/me').json()['billing_tier']=='founder'
+    with s.db() as db:db.execute('UPDATE billing_entitlements SET active=0 WHERE user_id=?',(u['id'],))
+    assert c.get('/api/community/messages').json()[0]['billing_tier']=='premium'
 
 
 def test_public_gate_owner_invitation_and_admin_controls():
@@ -141,7 +191,7 @@ def test_public_gate_owner_invitation_and_admin_controls():
     assert guest.get('/api/posts').status_code==401
     assert guest.get('/api/admin/users').status_code==401
     code=create_owner_invite('Owner@example.com')
-    assert guest.post('/api/auth/signup',json={'email':'wrong@example.com','password':'long-test-password','owner_code':code}).status_code==403
+    assert guest.post('/api/auth/signup',json={'display_name':'Signup Trader 143','email':'wrong@example.com','password':'long-test-password','owner_code':code}).status_code==403
     with s.db() as conn: assert not conn.execute("SELECT 1 FROM accounts WHERE email='wrong@example.com'").fetchone()
     owner,o=make_account('OWNER@example.com',code)
     assert o['role']=='owner' and o['plan']=='premium'
@@ -306,7 +356,7 @@ def test_cron_requires_secret_and_owner_signup_is_reserved(monkeypatch):
     assert c.get('/api/cron/collect',headers={'Authorization':'Bearer wrong'}).status_code==401
     assert c.get('/api/cron/collect',headers={'Authorization':'Bearer private-test-secret'}).json()['paused']
     create_owner_invite('reserved@example.com')
-    assert c.post('/api/auth/signup',json={'email':'reserved@example.com','password':'long-test-password'}).status_code==403
+    assert c.post('/api/auth/signup',json={'display_name':'Signup Trader 308','email':'reserved@example.com','password':'long-test-password'}).status_code==403
 
 def test_hourly_planning_budget_and_shared_demand(monkeypatch):
     from . import live_collection as live
@@ -599,7 +649,7 @@ def test_free_rankings_are_server_limited_and_watchlist_survives():
 def test_checkout_tiers_reuse_and_account_binding(monkeypatch):
     from . import payments as p
     c=TestClient(s.app)
-    uid=c.post('/api/auth/signup',json={'email':'billing@example.com','password':'long-test-password'}).json()['id']
+    uid=c.post('/api/auth/signup',json={'display_name':'Signup Trader 601','email':'billing@example.com','password':'long-test-password'}).json()['id']
     assert c.post('/api/billing/checkout',json={'tier':'invalid'}).status_code==422
     assert c.post('/api/billing/checkout',json={'tier':'yearly'}).status_code==503
     for k,v in {'BILLING_ENABLED':'true','STRIPE_SECRET_KEY':'sk_test_test','STRIPE_WEBHOOK_SECRET':'test','STRIPE_PRICE_MONTHLY':'price_monthly','STRIPE_PRICE_YEARLY':'price_yearly','STRIPE_PRICE_FOUNDER':'price_founder'}.items():monkeypatch.setenv(k,v)
@@ -633,7 +683,7 @@ def test_checkout_tiers_reuse_and_account_binding(monkeypatch):
 
 def test_billing_webhooks_canonical_state_replay_and_founder(monkeypatch):
     from . import payments as p
-    c=TestClient(s.app);uid=c.post('/api/auth/signup',json={'email':'payer@example.com','password':'long-test-password'}).json()['id']
+    c=TestClient(s.app);uid=c.post('/api/auth/signup',json={'display_name':'Signup Trader 635','email':'payer@example.com','password':'long-test-password'}).json()['id']
     monkeypatch.setenv('STRIPE_SECRET_KEY','sk_test_test');monkeypatch.setenv('STRIPE_WEBHOOK_SECRET','test');monkeypatch.setenv('STRIPE_PRICE_MONTHLY','price_monthly')
     with s.db() as db:
         db.execute('UPDATE accounts SET stripe_customer=? WHERE id=?',('cus_own',uid))
@@ -712,7 +762,7 @@ def test_live_key_override_is_isolated_from_sandbox(monkeypatch):
 def test_founder_dispute_resolution_and_payment_confirmation(monkeypatch):
     from . import payments as p
     c=TestClient(s.app)
-    uid=c.post('/api/auth/signup',json={'email':'founder-dispute@example.com','password':'long-test-password'}).json()['id']
+    uid=c.post('/api/auth/signup',json={'display_name':'Signup Trader 714','email':'founder-dispute@example.com','password':'long-test-password'}).json()['id']
     monkeypatch.setenv('STRIPE_SECRET_KEY','sk_test_test')
     with s.db() as db:db.execute('UPDATE accounts SET stripe_customer=? WHERE id=?',('cus_dispute',uid))
     pi={'id':'pi_dispute','customer':'cus_dispute','metadata':{'account_id':uid,'tier':'founder'},'currency':'usd','amount':99900,'status':'succeeded','latest_charge':{'id':'ch_dispute','refunded':False,'disputed':True}}
@@ -733,9 +783,9 @@ def test_founder_dispute_resolution_and_payment_confirmation(monkeypatch):
 
 def test_change_password_rotates_sessions_and_rejects_bad_input():
     first=TestClient(s.app);second=TestClient(s.app);other=TestClient(s.app)
-    creds={'email':'password-test@example.com','password':'old-long-password'}
+    creds={'display_name':'Password Tester','email':'password-test@example.com','password':'old-long-password'}
     uid=first.post('/api/auth/signup',json=creds).json()['id'];second.post('/api/auth/login',json=creds)
-    other.post('/api/auth/signup',json={'email':'unrelated@example.com','password':'other-long-password'})
+    other.post('/api/auth/signup',json={'display_name':'Signup Trader 737','email':'unrelated@example.com','password':'other-long-password'})
     old_cookie=first.cookies.get('te_session')
     assert first.post('/api/auth/change-password',json={'current_password':'wrong','new_password':'new-long-password'}).status_code==400
     assert first.post('/api/auth/change-password',json={'current_password':creds['password'],'new_password':creds['password']}).status_code==400
@@ -762,7 +812,7 @@ def test_change_password_rotates_sessions_and_rejects_bad_input():
 
 def test_login_session_refuses_outdated_password_hash():
     from fastapi import Response,HTTPException
-    c=TestClient(s.app);uid=c.post('/api/auth/signup',json={'email':'race@example.com','password':'original-password'}).json()['id']
+    c=TestClient(s.app);uid=c.post('/api/auth/signup',json={'display_name':'Signup Trader 764','email':'race@example.com','password':'original-password'}).json()['id']
     with s.db() as db:old=db.execute('SELECT password FROM accounts WHERE id=?',(uid,)).fetchone()[0]
     c.post('/api/auth/change-password',json={'current_password':'original-password','new_password':'replacement-password'})
     with pytest.raises(HTTPException):s.session(Response(),uid,old)
@@ -775,7 +825,7 @@ def test_recovery_single_use_scope_expiry_sessions_and_provider_failure(monkeypa
     monkeypatch.setenv('RESEND_API_KEY','mock-only')
     monkeypatch.setattr(security,'send_email',lambda email,purpose,token:sent.append((email,purpose,token)))
     c=TestClient(s.app)
-    c.post('/api/auth/signup',json={'email':'recover@example.com','password':'old-password-for-test'})
+    c.post('/api/auth/signup',json={'display_name':'Signup Trader 777','email':'recover@example.com','password':'old-password-for-test'})
     assert c.post('/api/auth/send-verification').status_code==200
     verification=sent[-1][2]
     assert c.post('/api/auth/reset-password',json={'token':verification,'new_password':'new-password-for-test'}).status_code==400
@@ -830,7 +880,7 @@ def test_free_launch_rankings_and_checkout_disabled(monkeypatch):
     monkeypatch.setenv('STRIPE_WEBHOOK_SECRET','whsec_mock')
     monkeypatch.setenv('STRIPE_PRICE_MONTHLY','price_mock')
     c=TestClient(s.app)
-    assert c.post('/api/auth/signup',json={'email':'launch@example.com','password':'long-test-password'}).status_code==200
+    assert c.post('/api/auth/signup',json={'display_name':'Signup Trader 832','email':'launch@example.com','password':'long-test-password'}).status_code==200
     assert len(c.get('/api/rankings?source=demo').json()['rows'])==16
     assert not any(payments.options().values())
     assert c.post('/api/billing/checkout',json={'tier':'monthly'}).status_code==503

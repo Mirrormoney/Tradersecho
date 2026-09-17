@@ -25,7 +25,7 @@ def normalize(value):
     return handle
 
 def shared_handles(c):
-    return [r[0] for r in c.execute("SELECT handle FROM admin_voices UNION SELECT h.handle FROM handles h JOIN accounts a ON a.id=h.user_id WHERE a.demo=0 AND a.status='active' AND (a.plan='premium' OR a.role IN ('owner','admin')) ORDER BY handle")]
+    return [r[0] for r in c.execute("SELECT handle FROM admin_voices UNION SELECT h.handle FROM handles h JOIN accounts a ON a.id=h.user_id WHERE a.demo=0 AND a.status='active' AND (a.plan='premium' OR (a.email_verified=1 AND a.trial_ends_at>?) OR a.role IN ('owner','admin')) ORDER BY handle",(time.time(),))]
 
 class Voice(BaseModel):
     handle:str=Field(min_length=1,max_length=16)
@@ -42,7 +42,7 @@ def registry(request:Request):
     staff(request)
     with core().db() as c:
         common={r['handle']:dict(r) for r in c.execute('SELECT * FROM admin_voices')}
-        followers={r['handle']:r['n'] for r in c.execute("SELECT h.handle,COUNT(*) n FROM handles h JOIN accounts a ON a.id=h.user_id WHERE a.demo=0 AND a.status='active' AND (a.plan='premium' OR a.role IN ('owner','admin')) GROUP BY h.handle")}
+        followers={r['handle']:r['n'] for r in c.execute("SELECT h.handle,COUNT(*) n FROM handles h JOIN accounts a ON a.id=h.user_id WHERE a.demo=0 AND a.status='active' AND (a.plan='premium' OR (a.email_verified=1 AND a.trial_ends_at>?) OR a.role IN ('owner','admin')) GROUP BY h.handle",(time.time(),))}
         checkpoints={r['handle']:dict(r) for r in c.execute('SELECT * FROM voice_checkpoints')}
         rows=[{'handle':h,'curated':h in common,'note':common.get(h,{}).get('note',''),'followers':followers.get(h,0),**{k:v for k,v in checkpoints.get(h,{}).items() if k!='handle'}} for h in shared_handles(c)]
     return {'rows':rows,'unique_accounts':len(rows),'personal_limit':PERSONAL_LIMIT}

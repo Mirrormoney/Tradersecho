@@ -12,11 +12,37 @@ def core():
 def migrate(c):
     columns={r['name'] for r in c.execute('PRAGMA table_info(accounts)')}
     if 'email_verified' not in columns:c.execute('ALTER TABLE accounts ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0')
+    for name in ['trial_started_at','trial_ends_at']:
+        if name not in columns:c.execute('ALTER TABLE accounts ADD COLUMN '+name+' REAL')
     c.executescript('''CREATE TABLE IF NOT EXISTS account_tokens(hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,purpose TEXT NOT NULL,email TEXT NOT NULL,expires REAL NOT NULL,used INTEGER NOT NULL DEFAULT 0);
     CREATE INDEX IF NOT EXISTS account_tokens_user ON account_tokens(user_id,purpose);''')
 
 def configured():
     return bool(os.getenv('RESEND_API_KEY')) and os.getenv('ACCOUNT_EMAIL_ENABLED','false').lower()=='true'
+
+def trial_account(user,now=None):
+    u=dict(user);now=time.time() if now is None else now
+    u['trial_active']=bool(not u['demo'] and u['status']=='active' and u['email_verified'] and u['plan']=='free' and (u.get('trial_ends_at') or 0)>now)
+    if u['trial_active']:u['plan']='premium'
+    return u
+
+def start_trial(c,uid):
+    u=c.execute('SELECT * FROM accounts WHERE id=?',(uid,)).fetchone()
+    if not u or u['demo'] or u['status']!='active' or not u['email_verified'] or u['plan']!='free' or u['role']!='member' or u['trial_started_at']:
+        return False
+    if c.execute('SELECT 1 FROM billing_entitlements WHERE user_id=?',(uid,)).fetchone():return False
+    now=time.time()
+    c.execute('UPDATE accounts SET trial_started_at=?,trial_ends_at=? WHERE id=? AND trial_started_at IS NULL',(now,now+7*86400,uid))
+    return True
+
+@router.post('/api/auth/start-trial')
+def activate_trial(request:Request):
+    s=core();u=s.account(request);s.throttle(request)
+    if not u['email_verified']:raise HTTPException(403,'Verify your email to start your seven-day trial.')
+    with s.db() as c:
+        c.execute('BEGIN IMMEDIATE')
+        if not start_trial(c,u['id']):raise HTTPException(409,'This account is not eligible for another trial.')
+    return s.public_account(s.account(request))
 
 def send_email(email,purpose,token):
     s=core();kind='reset' if purpose=='reset' else 'verify'
@@ -93,5 +119,6 @@ def verify(payload:Token,request:Request):
     with s.db() as c:
         c.execute('BEGIN IMMEDIATE');row=consume(c,payload.token,'verify')
         c.execute('UPDATE accounts SET email_verified=1 WHERE id=?',(row['user_id'],))
+        started=start_trial(c,row['user_id'])
         c.execute("DELETE FROM account_tokens WHERE user_id=? AND purpose='verify'",(row['user_id'],))
-    return {'message':'Email verified. You can return to your account.'}
+    return {'message':'Email verified. Your seven-day Premium trial has started. No card required and no automatic charges.' if started else 'Email verified. You can return to your account.'}

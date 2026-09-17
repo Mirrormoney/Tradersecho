@@ -39,7 +39,7 @@ jobs:
               if result.get('paused'): print('Collection paused in owner settings.');break
               if result.get('errors'): raise SystemExit('Collection reported errors; inspect Administration > Collection.')
               print('Completed jobs:',result.get('completed',0))
-              if result.get('busy') or not result.get('completed'):break
+              if result.get('busy') or result.get('deferred') or not result.get('completed'):break
               time.sleep(2)
           else: raise SystemExit('Batch limit reached; inspect backlog.')
           PY

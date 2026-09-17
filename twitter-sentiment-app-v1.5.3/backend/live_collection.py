@@ -5,7 +5,7 @@ import httpx
 from fastapi import APIRouter, Request, HTTPException
 from .community import core, staff, data_settings
 from .voices import shared_handles
-from .collect_economy import paid_request, iso
+from .collect_economy import paid_request, iso, CollectionDeferred
 
 router=APIRouter()
 
@@ -121,7 +121,7 @@ def tick(scheduled=False,client=None):
         if active and json.loads(active[0])['until']>now:return {'completed':0,'busy':True}
         c.execute("INSERT INTO meta VALUES('worker_lease',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps({'token':lease,'until':now+300}),))
 
-    client=client or httpx.Client(timeout=12);completed=0;errors=[]
+    client=client or httpx.Client(timeout=12);completed=0;errors=[];deferred=None
     try:
         with s.db() as c:
             day=iso(now)[:10];marker=c.execute("SELECT value FROM meta WHERE key='maintenance_day'").fetchone()
@@ -144,6 +144,10 @@ def tick(scheduled=False,client=None):
                 perform(job,client)
                 with s.db() as c:c.execute("UPDATE collection_jobs SET status='done',error=NULL,lease_until=0,next_attempt=0,updated_at=? WHERE id=? AND lease_token=?",(time.time(),job['id'],lease))
                 completed+=1
+            except CollectionDeferred as exc:
+                deferred=exc.until
+                with s.db() as c:c.execute("UPDATE collection_jobs SET status='pending',attempts=attempts-1,lease_until=0,error=NULL,next_attempt=0,updated_at=? WHERE id=? AND lease_token=?",(time.time(),job['id'],lease))
+                break
             except Exception as exc:
                 message=str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__+': request failed'
                 transient=isinstance(exc,(httpx.TimeoutException,httpx.NetworkError)) or 'HTTP 429' in message or any('HTTP '+str(n) in message for n in range(500,600))
@@ -151,18 +155,20 @@ def tick(scheduled=False,client=None):
                 with s.db() as c:c.execute("UPDATE collection_jobs SET status=?,error=?,next_attempt=?,lease_until=0,updated_at=? WHERE id=? AND lease_token=?",('skipped' if quota else 'error',message[:300],time.time()+900 if transient else 0,time.time(),job['id'],lease))
                 if not quota:errors.append(message);break
         from .collection import run_batch
-        if not errors:
+        if not errors and not deferred:
             result=run_batch(30,client);completed+=result['completed'];errors+=result['errors']
-        if not errors:
+            deferred=result.get('retry_after') if result.get('deferred') else None
+        if not errors and not deferred:
             try:profiles(client)
+            except CollectionDeferred as exc:deferred=exc.until
             except RuntimeError as exc:
                 if 'allowance reached' not in str(exc) and 'ceiling reached' not in str(exc):errors.append(str(exc))
         with s.db() as c:
-            c.execute("INSERT INTO meta VALUES('worker_result',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps({'at':time.time(),'completed':completed,'errors':errors,'duration_seconds':round(time.time()-now,1)}),))
+            c.execute("INSERT INTO meta VALUES('worker_result',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps({'at':time.time(),'completed':completed,'errors':errors,'duration_seconds':round(time.time()-now,1),'deferred':bool(deferred),'retry_after':deferred}),))
         if not errors:
             from .digest import build
             build()
-        return {'completed':completed,'errors':errors}
+        return {'completed':completed,'errors':errors,**({'deferred':True,'retry_after':deferred} if deferred else {})}
     finally:
         if owned:client.close()
         with s.db() as c:
@@ -172,12 +178,13 @@ def tick(scheduled=False,client=None):
 def status():
     now=time.time();s=core()
     with s.db() as c:
+        cooldown=c.execute("SELECT value FROM meta WHERE key='x_retry_after'").fetchone()
         seen=c.execute("SELECT value FROM meta WHERE key='scheduler_seen'").fetchone()
         result=c.execute("SELECT value FROM meta WHERE key='worker_result'").fetchone()
         jobs=[dict(r) for r in c.execute("SELECT kind,status,COUNT(*) n FROM collection_jobs WHERE updated_at>? AND kind!='counts' GROUP BY kind,status",(now-86400,))]
         errors=[dict(r) for r in c.execute("SELECT ticker,kind,error,attempts,next_attempt FROM collection_jobs WHERE status='error' ORDER BY updated_at DESC LIMIT 10")]
     last=float(seen[0]) if seen else None
-    return {'automatic_preview':bool(last and now-last<5400),'scheduler_last_seen':last,'last_result':json.loads(result[0]) if result else None,'live_jobs':jobs,'live_errors':errors}
+    return {'automatic_preview':bool(last and now-last<5400),'scheduler_last_seen':last,'retry_after':float(cooldown[0]) if cooldown and float(cooldown[0])>now else None,'last_result':json.loads(result[0]) if result else None,'live_jobs':jobs,'live_errors':errors}
 
 @router.post('/api/admin/collection/tick')
 def manual_tick(request:Request):

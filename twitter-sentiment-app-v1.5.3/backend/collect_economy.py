@@ -7,6 +7,11 @@ from .community import data_settings
 
 def iso(ts): return datetime.fromtimestamp(ts,timezone.utc).isoformat().replace('+00:00','Z')
 
+class CollectionDeferred(RuntimeError):
+    """A resumable pause, not a failed collection job."""
+    def __init__(self,until,message='X cooldown active; no request sent.'):
+        super().__init__(message);self.until=until
+
 def paid_request(client,path,params,kind,reserve,token):
     month=datetime.now(timezone.utc).strftime('%Y-%m')
     with db() as c:
@@ -21,17 +26,32 @@ def paid_request(client,path,params,kind,reserve,token):
             used=c.execute('SELECT COALESCE(SUM(reserved),0) FROM x_spend WHERE ts>=? AND kind LIKE ?',(today,category)).fetchone()[0]
             if round(used+reserve,6)>round(limit,6): raise RuntimeError('Daily sampling allowance reached; no request sent.')
         circuit=c.execute("SELECT value FROM meta WHERE key='x_retry_after'").fetchone()
-        if circuit and float(circuit[0])>time.time(): raise RuntimeError('X cooldown active; no request sent.')
+        if circuit and float(circuit[0])>time.time(): raise CollectionDeferred(float(circuit[0]))
+        # A rolling local guard leaves headroom below X's documented endpoint
+        # limits and includes failed/uncertain purchases and all collection modes.
+        category='counts%' if kind.startswith('counts') else 'sample%' if kind.startswith('sample') else None
+        if category:
+            maximum=240 if category=='counts%' else 360
+            recent=c.execute('SELECT COUNT(*),MIN(ts) FROM x_spend WHERE kind LIKE ? AND ts>?',(category,time.time()-900)).fetchone()
+            if recent[0]>=maximum:
+                raise CollectionDeferred(float(recent[1])+905,'Collection pacing pause; no request sent.')
         rid=c.execute('INSERT INTO x_spend(month,kind,reserved,ts,status) VALUES(?,?,?,?,?)',(month,kind,reserve,time.time(),'reserved')).lastrowid
     # An uncertain or failed request keeps its full reservation: never refund a request that may have been billed.
     try:
         r=client.get('https://api.x.com/2/'+path,params=params,headers={'Authorization':'Bearer '+token})
+        try: reset=float(r.headers.get('x-rate-limit-reset',0))
+        except ValueError: reset=0
+        try: remaining=int(r.headers.get('x-rate-limit-remaining',-1))
+        except ValueError: remaining=-1
+        if 0<=remaining<=5 and reset>time.time():
+            with db() as c:c.execute("INSERT INTO meta VALUES('x_retry_after',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(reset+5),))
         if not r.is_success:
             if r.status_code==429 or r.status_code>=500:
-                try: reset=float(r.headers.get('x-rate-limit-reset',0))
-                except ValueError: reset=0
-                until=max(time.time()+900,min(reset,time.time()+3600))
+                try: retry=float(r.headers.get('retry-after',0))
+                except ValueError: retry=0
+                until=max(time.time()+60,reset+5,time.time()+retry) if reset>time.time() or retry>0 else time.time()+900
                 with db() as c:c.execute("INSERT INTO meta VALUES('x_retry_after',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(until),))
+                if r.status_code==429:raise CollectionDeferred(until,'X returned HTTP 429; paused until the provider reset. Reservation retained.')
             raise RuntimeError(f'X returned HTTP {r.status_code}; reservation retained. Check access, balance or rate limits.')
         result=r.json()
         if result.get('errors'): raise RuntimeError('X returned a partial response; reservation retained.')

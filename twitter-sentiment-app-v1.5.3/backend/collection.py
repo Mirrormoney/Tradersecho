@@ -5,7 +5,7 @@ import httpx
 from fastapi import APIRouter, Request, HTTPException
 from .community import core, staff, data_settings
 from .voices import shared_handles
-from .collect_economy import iso, paid_request
+from .collect_economy import iso, paid_request, CollectionDeferred
 
 router=APIRouter()
 
@@ -55,7 +55,7 @@ def add_samples(day,end,settings):
 
 def run_batch(max_jobs=10,client=None):
     day,end,settings=plan_day();s=core();owned=client is None;client=client or httpx.Client(timeout=12)
-    token=os.environ['X_BEARER_TOKEN'];completed=0;errors=[];deadline=time.monotonic()+100
+    token=os.environ['X_BEARER_TOKEN'];completed=0;errors=[];deferred=None;deadline=time.monotonic()+100
     try:
         add_samples(day,end,settings)
         while completed<max_jobs and time.monotonic()<deadline:
@@ -94,6 +94,10 @@ def run_batch(max_jobs=10,client=None):
                 with s.db() as c:c.execute("UPDATE collection_jobs SET status='done',lease_until=0,error=NULL,updated_at=? WHERE id=?",(time.time(),job['id']))
                 completed+=1
                 add_samples(day,end,settings)
+            except CollectionDeferred as exc:
+                deferred=exc.until
+                with s.db() as c:c.execute("UPDATE collection_jobs SET status='pending',attempts=attempts-1,lease_until=0,error=NULL,next_attempt=0,updated_at=? WHERE id=?",(time.time(),job['id']))
+                break
             except Exception as exc:
                 # Never place provider response bodies or credentials into audit/UI errors.
                 message=str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__+': collection failed; check server logs.'
@@ -103,7 +107,7 @@ def run_batch(max_jobs=10,client=None):
         with s.db() as c:
             pending=c.execute("SELECT COUNT(*) FROM collection_jobs WHERE day=? AND status!='done'",(day,)).fetchone()[0]
             c.execute("INSERT INTO meta VALUES('last_sync',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps({'at':time.time(),'mode':'daily batched counts + screened samples','window_end':end,'pending':bool(pending)}),))
-        return {'completed':completed,'errors':errors,'day':day}
+        return {'completed':completed,'errors':errors,'day':day,**({'deferred':True,'retry_after':deferred} if deferred else {})}
     finally:
         if owned:client.close()
 

@@ -253,8 +253,11 @@ def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:st
         clauses+=['p.ts>?','p.ts<=?'];args += [now-window*86400,now]
         if ticker: clauses.append('m.ticker=?');args.append(ticker.upper())
         if tracked:
-            u=account(request);premium(u,source)
-            clauses.append('p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices)');args.append(u['id'])
+            u=account(request)
+            if u['demo'] and source!='demo':raise HTTPException(403,'Sign in with a real account to view live voices.')
+            if u['plan']=='premium' or u['role'] in ('owner','admin'):
+                clauses.append('p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices)');args.append(u['id'])
+            else:clauses.append('p.author IN (SELECT handle FROM admin_voices)')
         ordering='p.likes DESC,p.ts DESC' if order=='engagement' else 'p.ts DESC'
         rows=c.execute('SELECT p.*,GROUP_CONCAT(DISTINCT m.ticker) tickers FROM posts p LEFT JOIN mentions m ON p.source=m.source AND p.id=m.post_id WHERE '+' AND '.join(clauses)+' GROUP BY p.source,p.id ORDER BY '+ordering+' LIMIT 50',args).fetchall()
     return [dict(r) for r in rows]
@@ -297,6 +300,8 @@ def add_handle(payload:Handle,request:Request):
     handle=normalize_handle(payload.handle)
     with db() as c:
         c.execute('BEGIN IMMEDIATE')
+        if c.execute('SELECT 1 FROM admin_voices WHERE handle=?',(handle,)).fetchone():
+            return {'ok':True,'already_curated':True,'message':'Already included in Tradersecho voices. Its posts are in your feed; no personal slot was used and no private note was saved.'}
         existing=c.execute('SELECT 1 FROM handles WHERE user_id=? AND handle=?',(u['id'],handle)).fetchone()
         if not existing and c.execute('SELECT COUNT(*) FROM handles WHERE user_id=?',(u['id'],)).fetchone()[0]>=5: raise HTTPException(403,'You can add up to 5 personal accounts. Remove one before adding another.')
         c.execute('INSERT INTO handles VALUES(?,?,?) ON CONFLICT(user_id,handle) DO UPDATE SET note=excluded.note',(u['id'],handle,payload.note))

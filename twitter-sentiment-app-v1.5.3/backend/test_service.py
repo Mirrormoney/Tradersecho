@@ -345,8 +345,14 @@ def test_shared_voices_limits_privacy_and_collection(monkeypatch):
     assert members[1][0].get('/api/handles').json()[0]['note']=='private1'
     assert a.post('/api/admin/voices',json={'handle':'forbidden'}).status_code==403
     free,_=make_account('voice-free@example.com')
-    assert free.get('/api/voices/curated').status_code==403
+    assert free.get('/api/voices/curated').status_code==200
     assert owner.post('/api/admin/voices',json={'handle':'@SHAREDVOICE','note':'public note'}).status_code==200
+    duplicate=a.post('/api/handles',json={'handle':'@SHAREDVOICE','note':'must not overwrite'})
+    assert duplicate.status_code==200 and duplicate.json()['already_curated']
+    assert len(a.get('/api/handles').json())==5
+    assert next(r for r in a.get('/api/handles').json() if r['handle']=='sharedvoice')['note']=='updated private'
+    fresh=members[1][0].post('/api/handles',json={'handle':'sharedvoice'})
+    assert fresh.json()['already_curated']
     for i in range(4):a.delete('/api/handles/'+f'extra{i}')
     registry=owner.get('/api/admin/voices').json()
     assert registry['unique_accounts']==1 and registry['rows'][0]['followers']==5
@@ -369,6 +375,7 @@ def test_shared_voices_limits_privacy_and_collection(monkeypatch):
     assert len(calls)==2  # one shared profile lookup + one shared post search, including retry
     for member,_ in members:assert len(member.get('/api/posts?source=x&tracked=true').json())==1
     assert len(owner.get('/api/posts?source=x&tracked=true').json())==1  # curated, no personal follow
+    assert len(free.get('/api/posts?source=x&tracked=true').json())==1
     assert a.delete('/api/handles/@SharedVoice').status_code==200
     assert len(a.get('/api/posts?source=x&tracked=true').json())==1  # still curated
     owner.delete('/api/admin/voices/sharedvoice')
@@ -376,6 +383,31 @@ def test_shared_voices_limits_privacy_and_collection(monkeypatch):
     assert a.get('/api/posts?source=x&tracked=true').json()==[]
     for _,u in members[1:]:owner.patch('/api/admin/users/'+u['id'],json={'status':'suspended'})
     with s.db() as c:assert shared_handles(c)==[]
+    for i in range(8):assert owner.post('/api/admin/voices',json={'handle':f'curated{i}'}).status_code==200
+    assert len(owner.get('/api/admin/voices').json()['rows'])==8
+    assert a.post('/api/handles',json={'handle':'CURATED0'}).json()['already_curated']
+    assert a.get('/api/handles').json()==[]
+
+
+def test_rate_pacing_and_provider_reset(monkeypatch):
+    from .collect_economy import paid_request,CollectionDeferred
+    from .community import create_owner_invite
+    owner,_=make_account('pacing@example.com',create_owner_invite('pacing@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'monthly_budget':5})
+    now=time.time();month=datetime.now(timezone.utc).strftime('%Y-%m');calls=[]
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200,headers={'x-rate-limit-remaining':'0','x-rate-limit-reset':str(now+7200)},json={'data':[]})
+    client=httpx.Client(transport=httpx.MockTransport(handler))
+    with s.db() as c:c.executemany('INSERT INTO x_spend(month,kind,reserved,ts,status) VALUES(?,?,?,?,?)',[(month,'counts_live',.005,now-30,'received')]*240)
+    with pytest.raises(CollectionDeferred):paid_request(client,'tweets/counts/recent',{},'counts',.005,'mock')
+    assert not calls
+    with s.db() as c:
+        assert c.execute('SELECT COUNT(*) FROM x_spend').fetchone()[0]==240
+        c.execute('UPDATE x_spend SET ts=?',(now-1000,))
+    paid_request(client,'tweets/counts/recent',{},'counts',.005,'mock')
+    with pytest.raises(CollectionDeferred) as pause:paid_request(client,'tweets/counts/recent',{},'counts',.005,'mock')
+    assert pause.value.until>=now+7200 and len(calls)==1
 
 
 def test_worker_lease_cooldown_and_tracked_posts(monkeypatch):

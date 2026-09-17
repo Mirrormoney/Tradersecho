@@ -33,7 +33,7 @@ class Voice(BaseModel):
 
 @router.get('/api/voices/curated')
 def curated(request:Request):
-    s=core();s.premium(s.account(request))
+    s=core();s.account(request)
     with s.db() as c:
         return [dict(r) for r in c.execute('SELECT v.handle,v.note,p.window_end,p.checked_at,p.truncated FROM admin_voices v LEFT JOIN voice_checkpoints p ON p.handle=v.handle ORDER BY v.handle')]
 
@@ -63,4 +63,3 @@ def remove_curated(handle:str,request:Request):
         c.execute('DELETE FROM admin_voices WHERE handle=?',(handle,))
         audit(c,u,'curated_voice_removed',target=handle)
     return {'ok':True}
-

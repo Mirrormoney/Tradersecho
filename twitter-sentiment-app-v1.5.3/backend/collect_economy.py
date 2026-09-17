@@ -99,12 +99,12 @@ def collect(client=None):
             key='economy-sample:'+day+':'+ticker
             with db() as c:
                 if c.execute('SELECT 1 FROM meta WHERE key=?',(key,)).fetchone(): continue
-            result=paid_request(client,'tweets/search/recent',{'query':f'${ticker} lang:en -is:retweet','start_time':iso(end-86400),'end_time':iso(end),'max_results':settings['sample_size'],'tweet.fields':'created_at,author_id,public_metrics','expansions':'author_id','user.fields':'username'},'sample',settings['sample_size']*.015,token)
+            result=paid_request(client,'tweets/search/recent',{'query':f'${ticker} lang:en -is:retweet','start_time':iso(end-86400),'end_time':iso(end),'max_results':settings['sample_size'],'tweet.fields':'created_at,author_id,public_metrics,note_tweet','expansions':'author_id','user.fields':'username'},'sample',settings['sample_size']*.015,token)
             authors={a['id']:a['username'] for a in result.get('includes',{}).get('users',[])}
             items=[]
             for p in result.get('data',[]):
                 if p['author_id'] not in authors: raise RuntimeError('Missing author expansion; sample not marked complete.')
-                items.append({'id':p['id'],'author':authors[p['author_id']],'text':p['text'],'created_at':p['created_at'],'likes':p.get('public_metrics',{}).get('like_count',0)})
+                items.append({'id':p['id'],'author':authors[p['author_id']],'text':(p.get('note_tweet') or {}).get('text') or p['text'],'created_at':p['created_at'],'likes':p.get('public_metrics',{}).get('like_count',0)})
             added+=ingest(items)['posts_added']
             with db() as c: c.execute('INSERT OR REPLACE INTO meta VALUES(?,?)',(key,str(end)))
         with db() as c: c.execute("INSERT INTO meta VALUES('last_sync',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps({'at':time.time(),'mode':'counts + sampled sentiment','window_end':end,'posts_added':added,'pending':False}),))

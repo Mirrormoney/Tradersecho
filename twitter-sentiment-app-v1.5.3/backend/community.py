@@ -99,6 +99,7 @@ def change_password(payload:PasswordChange,request:Request,response:Response):
         if payload.current_password==payload.new_password:raise HTTPException(400,'Choose a different new password.')
         c.execute('UPDATE accounts SET password=? WHERE id=?',(s.password_hash(payload.new_password),u['id']))
         c.execute('DELETE FROM sessions WHERE user_id=?',(u['id'],))
+        c.execute('DELETE FROM account_tokens WHERE user_id=?',(u['id'],))
         c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),u['id'],time.time()+7*86400))
         audit(c,u,'password_changed',u['id'])
     response.set_cookie('te_session',token,httponly=True,secure=s.SECURE,samesite='lax',max_age=7*86400,path='/')
@@ -152,7 +153,7 @@ def update_user(uid:str,payload:UserUpdate,request:Request):
 class Visit(BaseModel):
     event_id:str=Field(pattern=r'^[a-f0-9-]{32,36}$')
     visitor_id:str=Field(pattern=r'^[a-f0-9-]{32,36}$')
-    page:Literal['home','market','watchlist','voices','data','community','admin','account','owner']
+    page:Literal['home','market','briefing','watchlist','voices','data','community','admin','account','owner']
 
 @router.post('/api/analytics/visit')
 def visit(payload:Visit,request:Request):

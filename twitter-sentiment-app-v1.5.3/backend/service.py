@@ -51,6 +51,8 @@ def init():
         migrate_stocks(c)
         migrate_digest(c)
         migrate_voices(c)
+        from .account_security import migrate as migrate_security
+        migrate_security(c)
         c.execute('CREATE TABLE IF NOT EXISTS post_identity(source TEXT,post_id TEXT,author_id TEXT,PRIMARY KEY(source,post_id))')
     if DEMO: seed_demo()
 
@@ -110,7 +112,7 @@ def account(request, required=True):
 
 def public_account(u):
     from .payments import account_details
-    return {k:u[k] for k in ['id','email','plan','role','status','display_name']} | {'demo':bool(u['demo'])} | account_details(u)
+    return {k:u[k] for k in ['id','email','plan','role','status','display_name','email_verified']} | {'demo':bool(u['demo'])} | account_details(u)
 
 def session(response, uid, expected_password=None):
     token=secrets.token_urlsafe(32)
@@ -216,7 +218,7 @@ def status():
     with db() as c:
         row=c.execute("SELECT COUNT(*) n,MAX(ts) latest,MIN(ts) earliest FROM posts WHERE source='x'").fetchone()
         sync=c.execute("SELECT value FROM meta WHERE key='last_sync'").fetchone()
-    return {'demo_enabled':DEMO,'x_configured':bool(os.getenv('X_BEARER_TOKEN')),'live_posts':row['n'],'latest_post':row['latest'],'earliest_post':row['earliest'],'last_sync':json.loads(sync[0]) if sync else None,'billing_sandbox':billing_sandbox(),'billing_configured':any(billing_options().values()),'billing_options':billing_options(),'catalog':[{'ticker':t,'name':v[0],'sector':v[1]} for t,v in CATALOG.items()]}
+    return {'demo_enabled':DEMO,'x_configured':bool(os.getenv('X_BEARER_TOKEN')),'live_posts':row['n'],'latest_post':row['latest'],'earliest_post':row['earliest'],'last_sync':json.loads(sync[0]) if sync else None,'free_launch':os.getenv('FREE_LAUNCH','false').lower()=='true','billing_sandbox':billing_sandbox(),'billing_configured':any(billing_options().values()),'billing_options':billing_options(),'catalog':[{'ticker':t,'name':v[0],'sector':v[1]} for t,v in CATALOG.items()]}
 
 @app.get('/api/rankings')
 def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),scope:str=Query('market',pattern='^(market|watchlist)$')):
@@ -253,17 +255,17 @@ def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('de
         comparison=all(r.get('comparison_complete',False) for r in rows)
         with db() as c:
             earliest=c.execute('SELECT MIN(start) FROM x_counts').fetchone()[0]
-    full=bool(u and (u['plan']=='premium' or u['role'] in ('owner','admin')) and (not u['demo'] or source=='demo'))
+    full=bool(u and (u['plan']=='premium' or u['role'] in ('owner','admin') or os.getenv('FREE_LAUNCH','false').lower()=='true') and (not u['demo'] or source=='demo'))
     total_mentions=sum(r['mentions'] for r in rows)
     if scope=='watchlist':
         if not u:raise HTTPException(401,'Sign in to view your watchlist.')
         with db() as c:watched={r[0] for r in c.execute('SELECT ticker FROM watchlist WHERE user_id=? ORDER BY ticker LIMIT ?',(u['id'],50 if full else 5))}
         rows=[r for r in rows if r['ticker'] in watched]
     visible=rows if full else rows[:5 if u else 3]
-    return {'rows':visible,'total_tickers':total,'total_mentions':total_mentions,'ranking_locked':bool(u and not full and scope=='market'),'preview_limit':None if full else 5 if u else 3,'preview':not bool(u),'as_of':now,'sample_as_of':time.time() if source=='x' else now,'source':source,'window':window,'comparison_complete':comparison,'coverage_days':round((now-earliest)/86400,1) if earliest else 0}
+    return {'rows':visible,'total_tickers':total,'total_mentions':total_mentions,'ranking_locked':bool(u and not full and scope=='market'),'preview_limit':None if full else 5 if u else 3,'preview':not bool(u),'stale':source=='x' and time.time()-now>36*3600,'as_of':now,'sample_as_of':time.time() if source=='x' else now,'source':source,'window':window,'comparison_complete':comparison,'coverage_days':round((now-earliest)/86400,1) if earliest else 0}
 
 @app.get('/api/posts')
-def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),tracked:bool=False,order:str=Query('latest',pattern='^(latest|engagement)$')):
+def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),tracked:bool=False,order:str=Query('latest',pattern='^(latest|engagement)$'),feed:str=Query('research',pattern='^(research|all)$')):
     account(request)
     args=[source]; clauses=['p.source=?']
     with db() as c:
@@ -277,8 +279,10 @@ def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:st
                 clauses.append('p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices)');args.append(u['id'])
             else:clauses.append('p.author IN (SELECT handle FROM admin_voices)')
         ordering='p.likes DESC,p.ts DESC' if order=='engagement' else 'p.ts DESC'
-        rows=c.execute('SELECT p.*,GROUP_CONCAT(DISTINCT m.ticker) tickers FROM posts p LEFT JOIN mentions m ON p.source=m.source AND p.id=m.post_id WHERE '+' AND '.join(clauses)+' GROUP BY p.source,p.id ORDER BY '+ordering+' LIMIT 50',args).fetchall()
-    return [dict(r) for r in rows]
+        rows=c.execute('SELECT p.*,GROUP_CONCAT(DISTINCT m.ticker) tickers FROM posts p LEFT JOIN mentions m ON p.source=m.source AND p.id=m.post_id WHERE '+' AND '.join(clauses)+' GROUP BY p.source,p.id ORDER BY '+ordering+' LIMIT 500',args).fetchall()
+        curated={r[0] for r in c.execute('SELECT handle FROM admin_voices')}
+    from .post_quality import prepare_feed
+    return prepare_feed([dict(r) for r in rows],ticker,curated,feed,order)[:50]
 
 @app.get('/api/watchlist')
 def watchlist(request:Request):
@@ -367,7 +371,15 @@ def ingest(items,include_unmatched=False):
     with db() as c:
         added=c.executemany('INSERT OR IGNORE INTO posts VALUES(?,?,?,?,?,?,?)',[('x',pid,author,text,ts,sentiment,likes) for pid,author,text,ts,sentiment,likes,tickers,aid in normalized]).rowcount
         c.executemany('INSERT OR IGNORE INTO post_identity VALUES(?,?,?)',[('x',r[0],r[7]) for r in normalized if r[7]])
-        mentions=c.executemany('INSERT OR IGNORE INTO mentions VALUES(?,?,?)',[('x',r[0],ticker) for r in normalized for ticker in r[6]]).rowcount
+        mentions=0
+        for pid,author,text,ts,sentiment,likes,tickers,aid in normalized:
+            previous={r[0] for r in c.execute("SELECT ticker FROM mentions WHERE source='x' AND post_id=?",(pid,))}
+            existing=c.execute("SELECT text FROM posts WHERE source='x' AND id=?",(pid,)).fetchone()
+            if existing and len(text)>=len(existing['text']):
+                c.execute("UPDATE posts SET text=?,sentiment=?,likes=?,author=CASE WHEN ? LIKE 'id%' THEN author ELSE ? END WHERE source='x' AND id=?",(text,sentiment,likes,author,author,pid))
+                mentions+=len(tickers-previous)
+                c.execute("DELETE FROM mentions WHERE source='x' AND post_id=?",(pid,))
+                c.executemany('INSERT OR IGNORE INTO mentions VALUES(?,?,?)',[('x',pid,t) for t in tickers])
     return {'posts_added':added,'mentions_added':mentions,'received':len(items)}
 
 class ImportPayload(BaseModel):
@@ -390,6 +402,8 @@ async def set_plan(request:Request):
 
 from .payments import router as payments_router, options as billing_options, sandbox as billing_sandbox
 app.include_router(payments_router)
+from .account_security import router as security_router
+app.include_router(security_router)
 
 from .collection import router as collection_router
 app.include_router(collection_router)

@@ -35,7 +35,7 @@ def plan_hour():
             oldest=min((checkpoints.get(h,end-86400) for h in eligible),default=end)
             group=[h for h in eligible if checkpoints.get(h,end-86400)==oldest][:5]
             # One global job for accounts sharing a cursor; oldest checks first.
-            if group:enqueue(c,slot,'hour_voice',','.join(group),end,'('+' OR '.join('from:'+h for h in group)+') -is:retweet')
+            if group:enqueue(c,slot,'hour_voice',','.join(group),end,'('+' OR '.join('from:'+h for h in group)+') -is:retweet -is:reply')
         c.execute('INSERT INTO meta VALUES(?,?)',('hour_planned:'+slot,str(end)))
 
 def perform(job,client):
@@ -76,8 +76,8 @@ def perform(job,client):
                 checkpoints={r['handle']:int(r['window_end']) for r in c.execute('SELECT handle,window_end FROM voice_checkpoints')}
             if all(checkpoints.get(h,0)>=end for h in handles):return {'data':[]}
             start=max(end-86400,min(checkpoints.get(h,end-86400) for h in handles)-60)
-        result=paid_request(client,'tweets/search/recent',{'query':query,'start_time':iso(start),'end_time':iso(end),'max_results':10,'tweet.fields':'created_at,author_id,public_metrics'},'sample_live',.05,token)
-        items=[{'id':p['id'],'author':author_map.get(p['author_id'],'id'+p['author_id']),'author_id':p['author_id'],'text':p['text'],'created_at':p['created_at'],'likes':p.get('public_metrics',{}).get('like_count',0)} for p in result.get('data',[])]
+        result=paid_request(client,'tweets/search/recent',{'query':query,'start_time':iso(start),'end_time':iso(end),'max_results':10,'tweet.fields':'created_at,author_id,public_metrics,note_tweet'},'sample_live',.05,token)
+        items=[{'id':p['id'],'author':author_map.get(p['author_id'],'id'+p['author_id']),'author_id':p['author_id'],'text':(p.get('note_tweet') or {}).get('text') or p['text'],'created_at':p['created_at'],'likes':p.get('public_metrics',{}).get('like_count',0)} for p in result.get('data',[])]
         s.ingest(items,include_unmatched=kind=='hour_voice')
         with s.db() as c:
             truncated=int(bool(result.get('meta',{}).get('next_token')))

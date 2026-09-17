@@ -28,3 +28,6 @@ work/
 !backend/voices.py
 
 !backend/payments.py
+
+!backend/account_security.py
+!backend/post_quality.py

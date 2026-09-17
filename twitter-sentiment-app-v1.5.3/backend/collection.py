@@ -88,8 +88,8 @@ def run_batch(max_jobs=10,client=None):
                                 c.execute('INSERT INTO post_authors VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET handle=excluded.handle,followers=excluded.followers,following=excluded.following,posts=excluded.posts,fetched_at=excluded.fetched_at',(a['id'],a['username'].lower(),created,metrics.get('followers_count',0),metrics.get('following_count',0),metrics.get('tweet_count',0),time.time()))
                                 c.execute("UPDATE posts SET author=? WHERE source='x' AND id IN (SELECT post_id FROM post_identity WHERE author_id=?)",(a['username'].lower(),a['id']))
                 else:
-                    result=paid_request(client,'tweets/search/recent',{'query':query,'start_time':iso(end-86400),'end_time':iso(end),'max_results':10,'tweet.fields':'created_at,author_id,public_metrics'},'sample',.05,token)
-                    items=[{'id':p['id'],'author':ticker if job['kind']=='voice' else 'id'+p['author_id'],'author_id':p['author_id'],'text':p['text'],'created_at':p['created_at'],'likes':p.get('public_metrics',{}).get('like_count',0)} for p in result.get('data',[])]
+                    result=paid_request(client,'tweets/search/recent',{'query':query,'start_time':iso(end-86400),'end_time':iso(end),'max_results':10,'tweet.fields':'created_at,author_id,public_metrics,note_tweet'},'sample',.05,token)
+                    items=[{'id':p['id'],'author':ticker if job['kind']=='voice' else 'id'+p['author_id'],'author_id':p['author_id'],'text':(p.get('note_tweet') or {}).get('text') or p['text'],'created_at':p['created_at'],'likes':p.get('public_metrics',{}).get('like_count',0)} for p in result.get('data',[])]
                     s.ingest(items)
                 with s.db() as c:c.execute("UPDATE collection_jobs SET status='done',lease_until=0,error=NULL,updated_at=? WHERE id=?",(time.time(),job['id']))
                 completed+=1
@@ -142,3 +142,16 @@ def cron(request:Request):
     from .live_collection import tick
     try:return tick(scheduled=True)
     except RuntimeError as exc:return {'paused':True,'reason':str(exc)}
+
+@router.get('/api/cron/health')
+def scheduler_health(request:Request):
+    expected=os.getenv('CRON_SECRET','')
+    if not expected or not hmac.compare_digest(request.headers.get('authorization',''),'Bearer '+expected):raise HTTPException(401,'Unauthorized')
+    from .live_collection import status
+    result=status()
+    with core().db() as c:enabled=data_settings(c)['enabled']
+    if not enabled:return {'healthy':True,'paused':True}
+    errors=(result['last_result'] or {}).get('errors',[])
+    if not result['automatic_preview'] or errors:
+        raise HTTPException(503,{'healthy':False,'reason':'Scheduler overdue' if not result['automatic_preview'] else 'Collector reported errors','last_seen':result['scheduler_last_seen']})
+    return {'healthy':True,'last_seen':result['scheduler_last_seen'],'cooldown_until':result['retry_after']}

@@ -14,7 +14,7 @@ def isolate_tests(monkeypatch):
     monkeypatch.setenv('TRADERSECHO_SCHEMA','billing_sandbox_tests')
     monkeypatch.setattr(s,'CATALOG',dict(s.DEMO_CATALOG))
     with s.db() as c:
-        for table in ['billing_checkouts','billing_entitlements','admin_voices','voice_checkpoints','digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
+        for table in ['account_tokens','billing_checkouts','billing_entitlements','admin_voices','voice_checkpoints','digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
             c.execute('DELETE FROM '+table)
         c.execute("DELETE FROM posts WHERE source='x'")
         c.execute("DELETE FROM meta WHERE key!='demo_anchor'")
@@ -280,7 +280,7 @@ def test_sample_screening_limits_authors_and_copy_templates():
     assert result['duplicate_posts']==5 and result['independent_authors']==1
     assert ticker_sentiment('Bullish $NVDA but bearish $TSLA','NVDA',s.classify)=='bullish'
     assert ticker_sentiment('Bullish $NVDA but bearish $TSLA','TSLA',s.classify)=='bearish'
-    assert ticker_sentiment('Long $NVDA short $TSLA','NVDA',s.classify)=='neutral'
+    assert ticker_sentiment('Long $NVDA short $TSLA','NVDA',s.classify)=='unclear'
 
 
 def test_cron_requires_secret_and_owner_signup_is_reserved(monkeypatch):
@@ -707,3 +707,72 @@ def test_login_session_refuses_outdated_password_hash():
     with s.db() as db:old=db.execute('SELECT password FROM accounts WHERE id=?',(uid,)).fetchone()[0]
     c.post('/api/auth/change-password',json={'current_password':'original-password','new_password':'replacement-password'})
     with pytest.raises(HTTPException):s.session(Response(),uid,old)
+
+def test_recovery_single_use_scope_expiry_sessions_and_provider_failure(monkeypatch):
+    from . import account_security as security
+    from fastapi import HTTPException
+    sent=[]
+    monkeypatch.setenv('ACCOUNT_EMAIL_ENABLED','true')
+    monkeypatch.setenv('RESEND_API_KEY','mock-only')
+    monkeypatch.setattr(security,'send_email',lambda email,purpose,token:sent.append((email,purpose,token)))
+    c=TestClient(s.app)
+    c.post('/api/auth/signup',json={'email':'recover@example.com','password':'old-password-for-test'})
+    assert c.post('/api/auth/send-verification').status_code==200
+    verification=sent[-1][2]
+    assert c.post('/api/auth/reset-password',json={'token':verification,'new_password':'new-password-for-test'}).status_code==400
+    assert c.post('/api/auth/verify-email',json={'token':verification}).status_code==200
+    assert c.get('/api/me').json()['email_verified']
+    assert c.post('/api/auth/verify-email',json={'token':verification}).status_code==400
+    with s.db() as conn:conn.execute("DELETE FROM attempts")
+    response=c.post('/api/auth/forgot-password',json={'email':'recover@example.com'})
+    token=sent[-1][2]
+    assert c.post('/api/auth/forgot-password',json={'email':'unknown@example.com'}).json()==response.json()
+    with s.db() as conn:
+        assert not conn.execute('SELECT 1 FROM account_tokens WHERE hash=?',(token,)).fetchone()
+        conn.execute('UPDATE account_tokens SET expires=?',(time.time()-1,))
+    assert c.post('/api/auth/reset-password',json={'token':token,'new_password':'new-password-for-test'}).status_code==400
+    with s.db() as conn:conn.execute('DELETE FROM attempts')
+    c.post('/api/auth/forgot-password',json={'email':'recover@example.com'})
+    token=sent[-1][2]
+    assert c.post('/api/auth/reset-password',json={'token':token,'new_password':'new-password-for-test'}).status_code==200
+    assert c.get('/api/me').json() is None
+    assert c.post('/api/auth/reset-password',json={'token':token,'new_password':'new-password-for-test'}).status_code==400
+    assert c.post('/api/auth/login',json={'email':'recover@example.com','password':'old-password-for-test'}).status_code==401
+    assert c.post('/api/auth/login',json={'email':'recover@example.com','password':'new-password-for-test'}).status_code==200
+    with s.db() as conn:conn.execute('DELETE FROM attempts')
+    def fail(*args):raise HTTPException(503,'unavailable')
+    monkeypatch.setattr(security,'send_email',fail)
+    assert c.post('/api/auth/forgot-password',json={'email':'recover@example.com'}).json()==response.json()
+    with s.db() as conn:assert conn.execute('SELECT COUNT(*) FROM account_tokens').fetchone()[0]==0
+
+
+def test_full_text_refresh_links_and_conservative_language(monkeypatch):
+    from .post_quality import language_label,research_text
+    post={'id':'987654321','author':'researcher','text':'Bullish $NVDA','created_at':datetime.now(timezone.utc).isoformat()}
+    assert s.ingest([post])['mentions_added']==1
+    assert s.ingest([post])['mentions_added']==0
+    full={**post,'text':'Bullish $NVDA but bearish $MU. This is the full research text.'}
+    assert s.ingest([full])['mentions_added']==1
+    s.ingest([post])
+    with s.db() as conn:
+        assert conn.execute("SELECT text FROM posts WHERE id=?",(post['id'],)).fetchone()[0]==full['text']
+        assert conn.execute("SELECT COUNT(*) FROM mentions WHERE post_id=?",(post['id'],)).fetchone()[0]==2
+    assert language_label(full['text'],'MU')=='bearish'
+    assert language_label('Memory technology is advancing. $MU','MU')=='unclear'
+    assert language_label('Not bullish $NVDA','NVDA')=='bearish'
+    assert not research_text('Join our stock trading group today $NVDA https://t.me/free')
+
+
+def test_free_launch_rankings_and_checkout_disabled(monkeypatch):
+    from . import payments
+    monkeypatch.setenv('FREE_LAUNCH','true')
+    monkeypatch.setenv('BILLING_ENABLED','true')
+    monkeypatch.setenv('STRIPE_SECRET_KEY','sk_test_mock')
+    monkeypatch.setenv('STRIPE_WEBHOOK_SECRET','whsec_mock')
+    monkeypatch.setenv('STRIPE_PRICE_MONTHLY','price_mock')
+    c=TestClient(s.app)
+    assert c.post('/api/auth/signup',json={'email':'launch@example.com','password':'long-test-password'}).status_code==200
+    assert len(c.get('/api/rankings?source=demo').json()['rows'])==16
+    assert not any(payments.options().values())
+    assert c.post('/api/billing/checkout',json={'tier':'monthly'}).status_code==503
+    assert c.get('/api/status').json()['free_launch']

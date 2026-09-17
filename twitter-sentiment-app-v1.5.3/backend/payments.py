@@ -20,7 +20,7 @@ def migrate(c):
     ''')
 
 def options():
-    enabled=environment_valid() and os.getenv('BILLING_ENABLED','false').lower()=='true' and all(os.getenv(k) for k in ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET'])
+    enabled=os.getenv('FREE_LAUNCH','false').lower()!='true' and environment_valid() and os.getenv('BILLING_ENABLED','false').lower()=='true' and all(os.getenv(k) for k in ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET'])
     return {tier:bool(enabled and os.getenv(config[0])) for tier,config in TIERS.items()}
 
 def sandbox():

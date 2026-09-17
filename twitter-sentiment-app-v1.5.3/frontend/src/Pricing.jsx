@@ -20,6 +20,7 @@ export function Pricing({user,status,onSignup,onAccount}){
   setBusy(tier);setError('')
   try{const result=await api('/billing/checkout','POST',{tier});location.assign(result.url)}catch(e){setError(e.message)}finally{setBusy('')}
  }
+ if(status?.free_launch)return <div className="pricing-content"><span className="eyebrow">FREE EARLY ACCESS</span><h2>Explore the full conversation.</h2><p>No payment or card required during our free launch.</p><ul><li>Full stock attention rankings across the tracked universe</li><li>Daily, weekly and growing monthly history</li><li>Five saved stocks and shared curated voices</li><li>Daily web briefing</li></ul><p className="muted">Personal voices and the trading room are planned membership extras. Email newsletters are not yet included. We’ll announce any future paid plans separately; no automatic charges.</p><button className="button primary" onClick={user?onAccount:onSignup}>{user?'My account':'Create a free account'}</button></div>
  return <div className="pricing-content">
   {status?.billing_sandbox&&<div className="payment-sandbox-banner"><strong>Test checkout only.</strong> Use Stripe test card 4242 4242 4242 4242, any future expiry and any three-digit CVC. Do not enter a real card. Test purchases affect only this sandbox account.</div>}<p className="pricing-intro">Start with the pulse. Build your own research edge.</p>
   <div className="pricing-switch" role="group" aria-label="Premium billing interval">

@@ -1,7 +1,5 @@
-name: Tradersecho automatic collection
+name: Tradersecho manual collection recovery
 on:
-  schedule:
-    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
 permissions: {}
 concurrency:

@@ -1057,3 +1057,33 @@ def test_intraday_freshness_growth_and_discovery(monkeypatch):
     with s.db() as c:
         assert c.execute("SELECT COUNT(*) FROM collection_jobs WHERE kind='request_counts' AND ticker='AMD'").fetchone()[0]==1
     assert len(TestClient(s.app).get('/api/intraday').json()['rows'])<=2
+
+
+def test_budget_pressure_persists_and_adapts_within_ceiling(monkeypatch):
+    from .budget_monitor import record_limit,review,snapshot
+    from .collect_economy import paid_request
+    from .community import create_owner_invite,data_settings
+    owner,_=make_account('adaptive@example.com',create_owner_invite('adaptive@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'adaptive_budget_enabled':True,'monthly_budget':250,'daily_profile_limit':0,'daily_post_limit':480})
+    with httpx.Client(transport=httpx.MockTransport(lambda r:pytest.fail('No paid call allowed'))) as client:
+        with pytest.raises(RuntimeError,match='profile lookup'):paid_request(client,'users/by',{},'profiles_tracked',.01,'mock')
+    with s.db() as c:assert snapshot(c)['history'][0]['limits']['profiles']['blocked_attempts']==1
+    now=time.time();day=int(now//86400)*86400
+    for offset in [1,2]:record_limit('posts','sample_admin:test',day-offset*86400+12*3600)
+    review(now)
+    with s.db() as c:assert data_settings(c)['daily_post_limit']==576
+    review(now+1)
+    with s.db() as c:assert data_settings(c)['daily_post_limit']==576
+
+
+def test_budget_adaptation_refuses_unaffordable_increase():
+    from .budget_monitor import record_limit,review,snapshot
+    from .community import create_owner_invite,data_settings
+    owner,_=make_account('low-cap@example.com',create_owner_invite('low-cap@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'adaptive_budget_enabled':True,'monthly_budget':1,'daily_post_limit':480})
+    now=time.time();day=int(now//86400)*86400
+    for offset in [1,2]:record_limit('posts','sample_admin:test',day-offset*86400+12*3600)
+    review(now)
+    with s.db() as c:
+        assert data_settings(c)['daily_post_limit']==480
+        assert snapshot(c)['decision']['state']=='increase_needs_budget_headroom'

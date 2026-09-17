@@ -12,30 +12,41 @@ class CollectionDeferred(RuntimeError):
     def __init__(self,until,message='X cooldown active; no request sent.'):
         super().__init__(message);self.until=until
 
+class BudgetLimit(RuntimeError):
+    def __init__(self,message,category):
+        super().__init__(message);self.category=category
+
 def paid_request(client,path,params,kind,reserve,token):
+    try:return _paid_request(client,path,params,kind,reserve,token)
+    except BudgetLimit as exc:
+        from .budget_monitor import record_limit
+        record_limit(exc.category,kind)
+        raise
+
+def _paid_request(client,path,params,kind,reserve,token):
     month=datetime.now(timezone.utc).strftime('%Y-%m')
     with db() as c:
         c.execute('BEGIN IMMEDIATE');settings=data_settings(c)
         if not settings['enabled']: raise RuntimeError('Collection is paused in Admin → Data budget.')
         spent=c.execute('SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE month=?',(month,)).fetchone()[0]
-        if round(spent+reserve,6)>settings['monthly_budget']: raise RuntimeError('Local monthly cost ceiling reached; no request sent.')
+        if round(spent+reserve,6)>settings['monthly_budget']: raise BudgetLimit('Local monthly cost ceiling reached; no request sent.','monthly')
         today=int(time.time()//86400)*86400
         if kind.startswith('sample') or kind.startswith('profiles'):
             category='sample%' if kind.startswith('sample') else 'profiles%'
             limit=settings['daily_post_limit']*.005 if kind.startswith('sample') else settings['daily_profile_limit']*.01
             used=c.execute('SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind LIKE ?',(today,category)).fetchone()[0]
-            if round(used+reserve,6)>round(limit,6): raise RuntimeError(('Daily profile lookup allowance reached' if kind.startswith('profiles') else 'Daily sampling allowance reached')+'; no request sent.')
+            if round(used+reserve,6)>round(limit,6): raise BudgetLimit(('Daily profile lookup allowance reached' if kind.startswith('profiles') else 'Daily sampling allowance reached')+'; no request sent.','profiles' if kind.startswith('profiles') else 'posts')
         # Confirmed reads release unused reservations; uncertain calls retain theirs.
         if kind.startswith('sample'):
             if kind.startswith('sample_admin:'):
                 account_used=c.execute('SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind=?',(today,kind)).fetchone()[0]
-                if round(account_used+reserve,6)>120*.005:raise RuntimeError('Daily account sampling allowance reached; no request sent.')
+                if round(account_used+reserve,6)>120*.005:raise BudgetLimit('Daily account sampling allowance reached; no request sent.','account')
             elif c.execute('SELECT 1 FROM admin_voices LIMIT 1').fetchone():
                 general=c.execute("SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind LIKE 'sample%' AND kind NOT LIKE 'sample_admin:%'",(today,)).fetchone()[0]
-                if round(general+reserve,6)>round(limit*.2,6):raise RuntimeError('Daily general sampling allowance reached; admin capacity reserved.')
+                if round(general+reserve,6)>round(limit*.2,6):raise BudgetLimit('Daily general sampling allowance reached; admin capacity reserved.','general_posts')
         if kind=='profiles':
             general=c.execute("SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind='profiles'",(today,)).fetchone()[0]
-            if round(general+reserve,6)>round(limit*.25,6):raise RuntimeError('Daily general profile lookup allowance reached; tracked capacity reserved.')
+            if round(general+reserve,6)>round(limit*.25,6):raise BudgetLimit('Daily general profile lookup allowance reached; tracked capacity reserved.','general_profiles')
         circuit=c.execute("SELECT value FROM meta WHERE key='x_retry_after'").fetchone()
         if circuit and float(circuit[0])>time.time(): raise CollectionDeferred(float(circuit[0]))
         # A rolling local guard leaves headroom below X's documented endpoint

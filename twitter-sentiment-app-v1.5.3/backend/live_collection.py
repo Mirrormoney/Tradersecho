@@ -143,6 +143,8 @@ def tick(scheduled=False,client=None):
                 c.execute('DELETE FROM attempts WHERE reset<?',(now,))
                 c.execute("DELETE FROM collection_jobs WHERE updated_at<? AND status NOT IN ('pending','running')",(now-90*86400,))
                 c.execute("INSERT INTO meta VALUES('maintenance_day',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(day,))
+        from .budget_monitor import review
+        review()
         plan_hour()
         deadline=time.monotonic()+65
         # Prioritize current hourly/demand jobs. Past hourly slots are not bought

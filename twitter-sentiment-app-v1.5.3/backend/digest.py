@@ -76,7 +76,7 @@ def personalized(report,u):
     with s.db() as c:
         watched={r[0] for r in c.execute('SELECT ticker FROM watchlist WHERE user_id=?',(u['id'],))}
         prefs=preferences(c,u['id'])
-        posts=[dict(r) for r in c.execute("SELECT p.id,p.author,p.text,p.ts,p.sentiment FROM posts p WHERE p.source='x' AND p.ts>=? AND p.ts<? AND p.author IN (SELECT handle FROM handles WHERE user_id=?) ORDER BY p.ts DESC LIMIT 5",(report['window_start'],report['window_end'],u['id']))] if premium else []
+        posts=[dict(r) for r in c.execute("SELECT p.id,p.author,p.text,p.ts,p.sentiment FROM posts p WHERE p.source='x' AND p.ts>=? AND p.ts<? AND p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices) ORDER BY p.ts DESC LIMIT 5",(report['window_start'],report['window_end'],u['id']))] if premium else []
     selected=[r for r in report['rows'] if r['ticker'] in watched]
     for p in posts:p['url']='https://x.com/i/web/status/'+p['id']
     visible=selected if premium and prefs['watchlist_only'] else report['rows'][:10 if premium else 3]

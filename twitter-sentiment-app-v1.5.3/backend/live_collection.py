@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Request, HTTPException
 from .community import core, staff, data_settings
+from .voices import shared_handles
 from .collect_economy import paid_request, iso
 
 router=APIRouter()
@@ -27,12 +28,14 @@ def plan_hour():
         if top:
             ticker=top[int(end//3600)%len(top)]
             enqueue(c,slot,'hour_sample',ticker,end,f'${ticker} lang:en -is:retweet')
-        voices=[r[0] for r in c.execute("SELECT DISTINCT h.handle FROM handles h JOIN accounts a ON h.user_id=a.id WHERE a.demo=0 AND a.status='active' AND (a.plan='premium' OR a.role IN ('owner','admin')) ORDER BY h.handle")]
+        voices=shared_handles(c)
         if voices:
-            groups=[voices[i:i+5] for i in range(0,len(voices),5)]
-            group=groups[int(end//3600)%len(groups)]
-            # Cashtags only; identify author handles later through the profile cache.
-            enqueue(c,slot,'hour_voice',','.join(group),end,'('+' OR '.join('from:'+h for h in group)+') -is:retweet')
+            checkpoints={r['handle']:max(end-86400,int(r['window_end'])) for r in c.execute('SELECT handle,window_end FROM voice_checkpoints')}
+            eligible=[h for h in voices if checkpoints.get(h,end-86400)<end]
+            oldest=min((checkpoints.get(h,end-86400) for h in eligible),default=end)
+            group=[h for h in eligible if checkpoints.get(h,end-86400)==oldest][:5]
+            # One global job for accounts sharing a cursor; oldest checks first.
+            if group:enqueue(c,slot,'hour_voice',','.join(group),end,'('+' OR '.join('from:'+h for h in group)+') -is:retweet')
         c.execute('INSERT INTO meta VALUES(?,?)',('hour_planned:'+slot,str(end)))
 
 def perform(job,client):
@@ -50,6 +53,9 @@ def perform(job,client):
         if kind=='hour_voice':
             handles=ticker.split(',')
             with s.db() as c:
+                checkpoints={r['handle']:int(r['window_end']) for r in c.execute('SELECT handle,window_end FROM voice_checkpoints')}
+            if all(checkpoints.get(h,0)>=end for h in handles):return {'data':[]}
+            with s.db() as c:
                 cached=[dict(r) for r in c.execute('SELECT id,handle,fetched_at FROM post_authors')]
             author_map={r['id']:r['handle'] for r in cached}
             known={r['handle'] for r in cached if r['fetched_at']>time.time()-30*86400}
@@ -65,10 +71,20 @@ def perform(job,client):
         # Initial sample covers 24h; subsequent scans overlap a minute. A cap is
         # explicitly a sample, never a claim to have read the entire account.
         start=max(end-86400,int(previous)-60 if previous else end-86400)
+        if kind=='hour_voice':
+            with s.db() as c:
+                checkpoints={r['handle']:int(r['window_end']) for r in c.execute('SELECT handle,window_end FROM voice_checkpoints')}
+            if all(checkpoints.get(h,0)>=end for h in handles):return {'data':[]}
+            start=max(end-86400,min(checkpoints.get(h,end-86400) for h in handles)-60)
         result=paid_request(client,'tweets/search/recent',{'query':query,'start_time':iso(start),'end_time':iso(end),'max_results':10,'tweet.fields':'created_at,author_id,public_metrics'},'sample_live',.05,token)
         items=[{'id':p['id'],'author':author_map.get(p['author_id'],'id'+p['author_id']),'author_id':p['author_id'],'text':p['text'],'created_at':p['created_at'],'likes':p.get('public_metrics',{}).get('like_count',0)} for p in result.get('data',[])]
         s.ingest(items,include_unmatched=kind=='hour_voice')
-        with s.db() as c:c.execute('UPDATE collection_jobs SET truncated=? WHERE id=?',(int(bool(result.get('meta',{}).get('next_token'))),job['id']))
+        with s.db() as c:
+            truncated=int(bool(result.get('meta',{}).get('next_token')))
+            c.execute('UPDATE collection_jobs SET truncated=? WHERE id=?',(truncated,job['id']))
+            if kind=='hour_voice':
+                for handle in handles:
+                    c.execute('INSERT INTO voice_checkpoints VALUES(?,?,?,?) ON CONFLICT(handle) DO UPDATE SET window_end=excluded.window_end,checked_at=excluded.checked_at,truncated=excluded.truncated WHERE excluded.window_end>voice_checkpoints.window_end',(handle,end,time.time(),truncated))
     return result
 
 def profiles(client):
@@ -76,7 +92,8 @@ def profiles(client):
     with s.db() as c:
         settings=data_settings(c)
         used=c.execute("SELECT COALESCE(SUM(reserved),0) FROM x_spend WHERE kind='profiles' AND ts>=?",(end,)).fetchone()[0]
-        unresolved=c.execute("SELECT COUNT(DISTINCT h.handle) FROM handles h LEFT JOIN post_authors a ON a.handle=h.handle AND a.fetched_at>? WHERE a.id IS NULL",(time.time()-30*86400,)).fetchone()[0]
+        known={r[0] for r in c.execute('SELECT handle FROM post_authors WHERE fetched_at>?',(time.time()-30*86400,))}
+        unresolved=len(set(shared_handles(c))-known)
         remaining=max(0,settings['daily_profile_limit']-round(used/.01)-unresolved)
         c.execute("UPDATE posts SET author=(SELECT a.handle FROM post_identity i JOIN post_authors a ON a.id=i.author_id WHERE i.source=posts.source AND i.post_id=posts.id) WHERE source='x' AND EXISTS(SELECT 1 FROM post_identity i JOIN post_authors a ON a.id=i.author_id WHERE i.source=posts.source AND i.post_id=posts.id)")
         if not remaining:return

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Request, HTTPException
 from .community import core, staff, data_settings
+from .voices import shared_handles
 from .collect_economy import iso, paid_request
 
 router=APIRouter()
@@ -41,7 +42,7 @@ def add_samples(day,end,settings):
             c.execute('INSERT INTO meta VALUES(?,?)',(key,str(end)))
             return
         # Legacy daily-only mode; intraday sampling shares its own hourly queue.
-        voices=[r[0] for r in c.execute("SELECT DISTINCT h.handle FROM handles h JOIN accounts a ON h.user_id=a.id WHERE a.demo=0 AND a.status='active' AND (a.plan='premium' OR a.role IN ('admin','owner')) ORDER BY h.handle")]
+        voices=shared_handles(c)
         voices=sorted(voices,key=lambda h:hashlib.sha256((day+h).encode()).hexdigest())[:min(2,settings['daily_post_limit']//10)]
         maximum=max(0,settings['daily_post_limit']//10-len(voices))
         rows=c.execute('SELECT ticker,SUM(n) n FROM x_counts WHERE start>=? AND end<=? GROUP BY ticker ORDER BY n DESC,ticker LIMIT ?',(end-86400,end,maximum)).fetchall()

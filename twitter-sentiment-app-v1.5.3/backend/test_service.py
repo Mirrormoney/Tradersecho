@@ -12,7 +12,7 @@ import pytest
 def isolate_tests(monkeypatch):
     monkeypatch.setattr(s,'CATALOG',dict(s.DEMO_CATALOG))
     with s.db() as c:
-        for table in ['digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
+        for table in ['admin_voices','voice_checkpoints','digest_preferences','daily_briefings','post_identity','post_authors','collection_jobs','chat_reports','chat_messages','owner_invites','audit_log','traffic_events','x_counts','x_spend','settings','watchlist','handles','sessions','accounts','attempts','webhook_events']:
             c.execute('DELETE FROM '+table)
         c.execute("DELETE FROM posts WHERE source='x'")
         c.execute("DELETE FROM meta WHERE key!='demo_anchor'")
@@ -323,6 +323,59 @@ def test_hourly_planning_budget_and_shared_demand(monkeypatch):
     paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
     with pytest.raises(RuntimeError,match='allowance'):paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
     assert len(calls)==2
+
+
+def test_shared_voices_limits_privacy_and_collection(monkeypatch):
+    from . import live_collection as live
+    from .voices import shared_handles
+    from .community import create_owner_invite
+    monkeypatch.setenv('X_BEARER_TOKEN','mock-only')
+    owner,_=make_account('voice-owner@example.com',create_owner_invite('voice-owner@example.com'))
+    members=[]
+    for i in range(5):
+        member,u=make_account(f'voice{i}@example.com')
+        owner.patch('/api/admin/users/'+u['id'],json={'plan':'premium'})
+        assert member.post('/api/handles',json={'handle':'@SharedVoice','note':f'private{i}'}).status_code==200
+        members.append((member,u))
+    a,u=members[0]
+    for i in range(4):assert a.post('/api/handles',json={'handle':f'extra{i}'}).status_code==200
+    assert a.post('/api/handles',json={'handle':'sixth'}).status_code==403
+    assert a.post('/api/handles',json={'handle':'SHAREDVOICE','note':'updated private'}).status_code==200
+    assert len(a.get('/api/handles').json())==5
+    assert members[1][0].get('/api/handles').json()[0]['note']=='private1'
+    assert a.post('/api/admin/voices',json={'handle':'forbidden'}).status_code==403
+    free,_=make_account('voice-free@example.com')
+    assert free.get('/api/voices/curated').status_code==403
+    assert owner.post('/api/admin/voices',json={'handle':'@SHAREDVOICE','note':'public note'}).status_code==200
+    for i in range(4):a.delete('/api/handles/'+f'extra{i}')
+    registry=owner.get('/api/admin/voices').json()
+    assert registry['unique_accounts']==1 and registry['rows'][0]['followers']==5
+    assert 'private' not in json.dumps(registry)
+    owner.put('/api/admin/data-budget',json={'enabled':True,'intraday_enabled':True,'monthly_budget':5})
+    end=int(time.time()//3600)*3600
+    with s.db() as c:c.execute("INSERT INTO meta VALUES('completed_snapshot',?)",(str(end-86400),))
+    live.plan_hour();live.plan_hour()
+    with s.db() as c:
+        jobs=[dict(r) for r in c.execute("SELECT * FROM collection_jobs WHERE kind='hour_voice'")]
+    assert len(jobs)==1 and jobs[0]['query'].count('from:sharedvoice')==1
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        if '/users/' in request.url.path:return httpx.Response(200,json={'data':[{'id':'73','username':'SharedVoice'}]})
+        return httpx.Response(200,json={'data':[{'id':'987321001','author_id':'73','text':'Watching $NVDA','created_at':live.iso(end-20)}]})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        live.perform(jobs[0],client)
+        live.perform(jobs[0],client)
+    assert len(calls)==2  # one shared profile lookup + one shared post search, including retry
+    for member,_ in members:assert len(member.get('/api/posts?source=x&tracked=true').json())==1
+    assert len(owner.get('/api/posts?source=x&tracked=true').json())==1  # curated, no personal follow
+    assert a.delete('/api/handles/@SharedVoice').status_code==200
+    assert len(a.get('/api/posts?source=x&tracked=true').json())==1  # still curated
+    owner.delete('/api/admin/voices/sharedvoice')
+    with s.db() as c:assert shared_handles(c)==['sharedvoice']  # other subscribers retain it
+    assert a.get('/api/posts?source=x&tracked=true').json()==[]
+    for _,u in members[1:]:owner.patch('/api/admin/users/'+u['id'],json={'status':'suspended'})
+    with s.db() as c:assert shared_handles(c)==[]
 
 
 def test_worker_lease_cooldown_and_tracked_posts(monkeypatch):

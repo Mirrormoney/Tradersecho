@@ -23,6 +23,8 @@ app.include_router(community_router)
 app.include_router(stocks_router)
 from .digest import router as digest_router, migrate as migrate_digest
 app.include_router(digest_router)
+from .voices import router as voices_router, migrate as migrate_voices, normalize as normalize_handle
+app.include_router(voices_router)
 
 def db():
     return connect(DB_PATH)
@@ -46,6 +48,7 @@ def init():
         migrate(c)
         migrate_stocks(c)
         migrate_digest(c)
+        migrate_voices(c)
         c.execute('CREATE TABLE IF NOT EXISTS post_identity(source TEXT,post_id TEXT,author_id TEXT,PRIMARY KEY(source,post_id))')
     if DEMO: seed_demo()
 
@@ -251,7 +254,7 @@ def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:st
         if ticker: clauses.append('m.ticker=?');args.append(ticker.upper())
         if tracked:
             u=account(request);premium(u,source)
-            clauses.append('p.author IN (SELECT handle FROM handles WHERE user_id=?)');args.append(u['id'])
+            clauses.append('p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices)');args.append(u['id'])
         ordering='p.likes DESC,p.ts DESC' if order=='engagement' else 'p.ts DESC'
         rows=c.execute('SELECT p.*,GROUP_CONCAT(DISTINCT m.ticker) tickers FROM posts p LEFT JOIN mentions m ON p.source=m.source AND p.id=m.post_id WHERE '+' AND '.join(clauses)+' GROUP BY p.source,p.id ORDER BY '+ordering+' LIMIT 50',args).fetchall()
     return [dict(r) for r in rows]
@@ -291,18 +294,18 @@ def handles(request:Request):
 @app.post('/api/handles')
 def add_handle(payload:Handle,request:Request):
     u=account(request);premium(u)
-    handle=payload.handle.lstrip('@').lower()
-    if not re.fullmatch(r'[A-Za-z0-9_]{1,15}',handle): raise HTTPException(422,'Enter a valid X handle (letters, numbers, underscores).')
+    handle=normalize_handle(payload.handle)
     with db() as c:
         c.execute('BEGIN IMMEDIATE')
-        if c.execute('SELECT COUNT(*) FROM handles WHERE user_id=?',(u['id'],)).fetchone()[0]>=25: raise HTTPException(403,'You can track up to 25 accounts.')
+        existing=c.execute('SELECT 1 FROM handles WHERE user_id=? AND handle=?',(u['id'],handle)).fetchone()
+        if not existing and c.execute('SELECT COUNT(*) FROM handles WHERE user_id=?',(u['id'],)).fetchone()[0]>=5: raise HTTPException(403,'You can add up to 5 personal accounts. Remove one before adding another.')
         c.execute('INSERT INTO handles VALUES(?,?,?) ON CONFLICT(user_id,handle) DO UPDATE SET note=excluded.note',(u['id'],handle,payload.note))
     return {'ok':True}
 
 @app.delete('/api/handles/{handle}')
 def remove_handle(handle:str,request:Request):
     u=account(request);premium(u)
-    with db() as c: c.execute('DELETE FROM handles WHERE user_id=? AND handle=?',(u['id'],handle))
+    with db() as c: c.execute('DELETE FROM handles WHERE user_id=? AND handle=?',(u['id'],normalize_handle(handle)))
     return {'ok':True}
 
 def admin(request):

@@ -35,3 +35,10 @@ Counts measure raw attention. Sentiment uses a separate capped sample with repea
 Thirteen integration scenarios cover accounts, ownership, membership gates, moderation, analytics, counts, budgets and queue behavior using mocked X responses. Disposable PostgreSQL schema tests cover online SQL behavior. The protected Vercel preview additionally passed real HTTP signup, secure cookies, watchlist persistence, membership gates and logout; its disposable test account was removed.
 
 Hosting and persistent PostgreSQL are provisioned. X credentials/credits and automatic private-preview scheduling are not connected. Stripe payments remain disabled. Before public paying access, complete email verification/recovery, billing cancellation, account deletion, X compliance/deletion handling and production operations as described in README.
+
+## Shared tracked voices
+- Administration > tracked voices manages the global curated list and displays unique eligible accounts, aggregate follower counts and last successful check times. Personal research notes are never exposed in this registry.
+- Premium members see curated posts plus their own accounts, with at most five personal additions. Updating an existing note is allowed at the limit. Existing subscriptions/notes are preserved on migration.
+- Collection uses the distinct union of curated handles and active real Premium/staff follows, with canonical lowercase handles. One global hourly planning marker and worker lease prevent duplicate per-user requests; a common post store feeds all readers.
+- Persistent per-account checkpoints survive regrouping. The oldest cursor group (up to five handles) is sampled each scheduled hour, with a 60-second overlap and post-ID deduplication. A completed retry makes no additional X call. The existing daily sampling allowance, cooldown and monthly ceiling remain unchanged. This is capped sampling: at most ten posts per group; larger registries refresh less often.
+- Removing a curated entry does not delete another member’s follow or stored posts. Suspended/free/demo-only follows do not cause collection. All member views and briefings combine curated and personal sources.

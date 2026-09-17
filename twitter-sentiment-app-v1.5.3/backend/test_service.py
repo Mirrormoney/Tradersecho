@@ -406,6 +406,33 @@ def test_shared_voices_limits_privacy_and_collection(monkeypatch):
     assert a.get('/api/handles').json()==[]
 
 
+def test_blocked_new_voice_does_not_starve_cached_voices(monkeypatch):
+    from . import live_collection as live
+    from .community import create_owner_invite
+    owner,_=make_account('queue-owner@example.com',create_owner_invite('queue-owner@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'intraday_enabled':True,'monthly_budget':10,'daily_profile_limit':0})
+    monkeypatch.setenv('X_BEARER_TOKEN','mock-only')
+    end=int(time.time()//3600)*3600
+    with s.db() as c:
+        c.execute("INSERT INTO meta VALUES('completed_snapshot',?)",(str(end-86400),))
+        for handle in ['blocked','cached']:
+            c.execute('INSERT INTO admin_voices VALUES(?,?,?)',(handle,'',time.time()))
+        c.execute('INSERT INTO voice_checkpoints VALUES(?,?,?,0)',('cached',end-3600,time.time()))
+        c.execute('INSERT INTO post_authors(id,handle,fetched_at) VALUES(?,?,?)',('42','cached',time.time()))
+    live.plan_hour();live.plan_hour()
+    with s.db() as c:jobs=[dict(r) for r in c.execute("SELECT * FROM collection_jobs WHERE kind='hour_voice' ORDER BY id")]
+    assert len(jobs)==2
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200,json={'data':[]})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(RuntimeError,match='profile lookup allowance'):live.perform(jobs[0],client)
+        live.perform(jobs[1],client)
+    assert len(calls)==1 and 'from:cached' in calls[0].url.params['query']
+    with s.db() as c:assert c.execute("SELECT window_end FROM voice_checkpoints WHERE handle='cached'").fetchone()[0]==end
+
+
 def test_rate_pacing_and_provider_reset(monkeypatch):
     from .collect_economy import paid_request,CollectionDeferred
     from .community import create_owner_invite

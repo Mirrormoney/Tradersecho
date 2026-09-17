@@ -24,7 +24,7 @@ def paid_request(client,path,params,kind,reserve,token):
             category='sample%' if kind.startswith('sample') else 'profiles'
             limit=settings['daily_post_limit']*.005 if kind.startswith('sample') else settings['daily_profile_limit']*.01
             used=c.execute('SELECT COALESCE(SUM(reserved),0) FROM x_spend WHERE ts>=? AND kind LIKE ?',(today,category)).fetchone()[0]
-            if round(used+reserve,6)>round(limit,6): raise RuntimeError('Daily sampling allowance reached; no request sent.')
+            if round(used+reserve,6)>round(limit,6): raise RuntimeError(('Daily profile lookup allowance reached' if kind=='profiles' else 'Daily sampling allowance reached')+'; no request sent.')
         circuit=c.execute("SELECT value FROM meta WHERE key='x_retry_after'").fetchone()
         if circuit and float(circuit[0])>time.time(): raise CollectionDeferred(float(circuit[0]))
         # A rolling local guard leaves headroom below X's documented endpoint

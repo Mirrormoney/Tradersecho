@@ -23,7 +23,7 @@ def plan_hour():
         cutoff=float(snapshot[0])
         top=[r[0] for r in c.execute('SELECT ticker FROM x_counts WHERE start>=? AND end<=? GROUP BY ticker ORDER BY SUM(n) DESC,ticker LIMIT ?',(cutoff-86400,cutoff,settings['hourly_top'])) if r[0] in s.CATALOG]
         for ticker in top:enqueue(c,slot,'hour_counts',ticker,end,f'${ticker} lang:en -is:retweet')
-        # One rotating popular-stock sample and one rotating account group/hour.
+        # One rotating popular-stock sample and shared account groups/hour.
         # All readers, retries and demand requests share the same daily allowance.
         if top:
             ticker=top[int(end//3600)%len(top)]
@@ -32,10 +32,14 @@ def plan_hour():
         if voices:
             checkpoints={r['handle']:max(end-86400,int(r['window_end'])) for r in c.execute('SELECT handle,window_end FROM voice_checkpoints')}
             eligible=[h for h in voices if checkpoints.get(h,end-86400)<end]
-            oldest=min((checkpoints.get(h,end-86400) for h in eligible),default=end)
-            group=[h for h in eligible if checkpoints.get(h,end-86400)==oldest][:5]
-            # One global job for accounts sharing a cursor; oldest checks first.
-            if group:enqueue(c,slot,'hour_voice',','.join(group),end,'('+' OR '.join('from:'+h for h in group)+') -is:retweet -is:reply')
+            # Queue every cursor group, so a blocked profile lookup cannot
+            # starve accounts whose identities are already cached. Paid requests
+            # still share the existing daily and monthly spending guards.
+            for cursor in sorted({checkpoints.get(h,end-86400) for h in eligible}):
+                group_handles=[h for h in eligible if checkpoints.get(h,end-86400)==cursor]
+                for offset in range(0,len(group_handles),5):
+                    group=group_handles[offset:offset+5]
+                    enqueue(c,slot,'hour_voice',','.join(group),end,'('+' OR '.join('from:'+h for h in group)+') -is:retweet -is:reply')
         c.execute('INSERT INTO meta VALUES(?,?)',('hour_planned:'+slot,str(end)))
 
 def perform(job,client):

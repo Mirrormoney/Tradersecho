@@ -43,12 +43,12 @@ def candidates(now):
   if not any(now-6*3600<=p['ts']<=now and research_text(p['text']) and stock_context(p['text'],r['ticker']) for p in r.get('posts',[])):continue
   stamp=datetime.fromtimestamp(r['as_of'],ZoneInfo('America/New_York')).strftime('%I:%M %p %Z').lstrip('0')
   fact=f"${r['ticker']} recorded {r['mentions']:,} X mentions in the latest three completed hours, up {r['change']:g}% versus the preceding three (through {stamp})."
-  result.append((r['ticker'],f"attention:{r['ticker']}:{r['as_of']}",fact,'Attention is not a price signal. What context would you check before drawing a conclusion?'))
+  result.append((r['ticker'],f"attention:{r['ticker']}:{r['as_of']}",fact,''))
  with s.db() as c:
   rows=c.execute("SELECT f.accession,f.form,f.accepted,m.ticker FROM sec_filings f JOIN sec_companies m ON m.cik=f.cik JOIN stocks s ON s.ticker=m.ticker WHERE s.active=1 AND f.accepted>? AND f.accepted<=? ORDER BY f.accepted DESC LIMIT 20",(now-6*3600,now)).fetchall()
  for r in rows:
   if r['ticker'] in s.CATALOG and r['form'] in ('8-K','10-Q','10-K','6-K'):
-   result.append((r['ticker'],'sec:'+r['accession'],f"${r['ticker']} has a new {r['form']} filing in our SEC feed.",'Open the ticker details to read the original filing. Which disclosure is worth a closer look?'))
+   result.append((r['ticker'],'sec:'+r['accession'],f"${r['ticker']} has a new {r['form']} filing in our SEC feed.",''))
  return result
 
 def run(now=None):
@@ -70,8 +70,7 @@ def run(now=None):
   used={r['ticker'] for r in today}
   for ticker,key,fact,question in options:
    if ticker in used or c.execute('SELECT 1 FROM echo_posts WHERE event_key=?',(key,)).fetchone():continue
-   intros=['Worth a closer look:','A conversation starter:','On the research list:','One to discuss:']
-   body=intros[len(today)%4]+' '+fact+'\n\n'+question
+   body=fact
    mid=c.execute('INSERT INTO chat_messages(user_id,body,ticker,ts) VALUES(NULL,?,?,?)',(body,ticker,now)).lastrowid
    c.execute('INSERT INTO echo_posts VALUES(?,?,?,?)',(key,mid,ticker,now))
    return {'state':'posted','message_id':mid}

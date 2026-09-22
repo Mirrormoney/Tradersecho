@@ -1198,3 +1198,16 @@ def test_ai_requires_company_identity():
     for text in ['C3.ai $AI earnings growth', '$AI C3 AI enterprise contracts', 'NYSE:AI quarterly results']:
         assert stock_context(text, 'AI')
     assert stock_context('$NVDA enterprise AI demand', 'NVDA')
+
+
+def test_welcome_tour_completion_is_private_and_persistent():
+    first=TestClient(s.app); second=TestClient(s.app)
+    assert first.get('/api/welcome-tour').status_code==401
+    assert first.put('/api/welcome-tour',json={}).status_code==401
+    for client,name in [(first,'Tour One'),(second,'Tour Two')]:
+        assert client.post('/api/auth/signup',json={'display_name':name,'email':name.replace(' ','').lower()+'@example.com','password':'long-test-password'}).status_code==200
+        assert client.get('/api/welcome-tour').json()=={'completed':False}
+    assert first.put('/api/welcome-tour',json={}).json()=={'completed':True}
+    assert first.put('/api/welcome-tour',json={}).status_code==200
+    assert first.get('/api/welcome-tour').json()=={'completed':True}
+    assert second.get('/api/welcome-tour').json()=={'completed':False}

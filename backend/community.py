@@ -291,3 +291,19 @@ def delete_message(mid:int,request:Request):
         c.execute('DELETE FROM chat_messages WHERE id=?',(mid,))
         audit(c,u,'message_deleted',str(mid))
     return {'ok':True}
+
+
+@router.get('/api/welcome-tour')
+def welcome_tour(request: Request):
+    u=core().account(request)
+    with core().db() as c:
+        done=c.execute('SELECT value FROM meta WHERE key=?',('welcome_tour:v1:'+u['id'],)).fetchone()
+    return {'completed':bool(done)}
+
+
+@router.put('/api/welcome-tour')
+def complete_welcome_tour(request: Request):
+    u=core().account(request)
+    with core().db() as c:
+        c.execute('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('welcome_tour:v1:'+u['id'],str(time.time())))
+    return {'completed':True}

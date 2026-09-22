@@ -20,8 +20,9 @@ export function StockDetail({ticker,name,row,intraday,windowDays,asOf,coverageDa
  const [research,setResearch]=useState([]),[researchError,setResearchError]=useState('')
  const staff=['owner','admin'].includes(user?.role)
  const canResearch=staff||user?.plan==='premium'
- useEffect(()=>{let active=true;if(!canResearch)return;api('/member-research/'+encodeURIComponent(ticker)).then(d=>{if(active){setResearch(d.documents||[]);setResearchError('')}}).catch(()=>{if(active)setResearchError('Research is temporarily unavailable.')});return()=>{active=false}},[ticker,canResearch,refresh])
+ useEffect(()=>{let active=true;setResearch([]);setResearchError('');if(!canResearch)return;api('/member-research/'+encodeURIComponent(ticker)).then(d=>{if(active){setResearch(d.documents||[]);setResearchError('')}}).catch(()=>{if(active)setResearchError('Research is temporarily unavailable.')});return()=>{active=false}},[ticker,canResearch,refresh])
  const findings=research.flatMap(d=>(d.findings||[]).filter(f=>f.ticker===ticker).map(f=>({report:d,finding:f})))
+ findings.sort((a,b)=>(b.report.report_date||'').localeCompare(a.report.report_date||''))
  const latest=findings[0]
  const period=intraday?'latest three completed hours':windowDays===1?'24-hour snapshot':`${windowDays}-day snapshot`
  const measured=row&&Number.isFinite(row.mentions)&&(!intraday||row.state==='measured')
@@ -43,7 +44,7 @@ export function StockDetail({ticker,name,row,intraday,windowDays,asOf,coverageDa
    <Posts rows={posts.slice(0,2)} source={source} loading={postsLoading} error={postsError}/>
    {!postsLoading&&!postsError&&posts.length>2&&<MorePosts key={postOrder+postFeed} rows={posts.slice(2)} source={source} Posts={Posts}/>}
   </DetailSection>
-  {(findings.length>0||researchError)&&<DetailSection title={`Research${findings.length?' · '+findings.length:''}`}>
+  {(findings.length>0||researchError)&&<DetailSection title={`Latest research${findings.length?' · '+findings.length:''}`}>
    {researchError&&<p className="error">{researchError}</p>}
    {findings.map(({report,finding},i)=><article className="detail-research" key={report.id+'-'+i}><div className="section-head">{report.firm&&<strong>{report.firm}</strong>}<span className="tag">{finding.link_type==='sector_readthrough'?'Sector read-through · no stock rating':`${finding.stance} · author’s stance`}</span></div>{report.report_date&&<small className="muted">Report date · {report.report_date}</small>}{finding.link_type==='sector_readthrough'&&<p className="muted">{finding.link_reason}</p>}<p>{finding.summary}</p>{finding.catalysts?.length>0&&<p><strong>What to watch: </strong>{finding.catalysts.join(' · ')}</p>}{finding.risks?.length>0&&<p><strong>Risks: </strong>{finding.risks.join(' · ')}</p>}</article>)}
   </DetailSection>}

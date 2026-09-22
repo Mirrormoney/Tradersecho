@@ -1,0 +1,36 @@
+.research-ranking{margin-top:18px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.research-ranking-row+.research-ranking-row{border-top:1px solid var(--line)}
+.research-ranking-summary{display:grid;grid-template-columns:30px 140px minmax(0,1fr) 60px;gap:16px;padding:20px;width:100%;text-align:left;align-items:center}
+.research-ranking-summary:hover{background:#1d2d27}
+.research-ranking-summary strong{display:block;font-size:13px;font-weight:500;line-height:1.6}
+.research-ranking-summary small{display:block;color:var(--muted);margin-top:5px}
+.research-position{color:var(--lime);font-variant-numeric:tabular-nums}
+.research-ranking-summary>span:last-child{font-size:12px;color:var(--lime)}
+.research-ranking-expanded{padding:0 24px 24px 66px;font-size:14px}
+.research-ranking-expanded>div{border-left:2px solid var(--lime);padding-left:16px;margin-bottom:18px}
+.research-more-heading{margin-top:30px}
+@media(max-width:650px){.research-ranking-summary{grid-template-columns:24px minmax(0,1fr);padding:16px;gap:10px}.research-ranking-summary>span:nth-child(3){grid-column:2}.research-ranking-summary>span:last-child{grid-column:2}.research-ranking-expanded{padding:0 16px 20px}}
+
+.research-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.research-actions a{text-decoration:none}
+.research-actions{justify-content:flex-start;padding:0;margin:18px 0;border:0}
+
+.research-paywall .supply-fade-preview{display:grid;gap:8px;height:160px;grid-template-columns:1fr}.research-paywall .supply-fade-preview>div{display:grid;grid-template-columns:40px 160px 1fr;gap:18px;border-bottom:1px solid #35423c;padding:10px}.research-paywall .supply-fade-preview i{margin:0;height:18px}.research-paywall .ranking-upgrade{margin-top:-65px}@media(max-width:600px){.research-paywall .supply-fade-preview>div{grid-template-columns:24px 75px 1fr;gap:12px}}
+
+.research-featured-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin-top:22px;align-items:start}
+.research-featured-card,.research-featured-locked{border:1px solid #38543d!important;border-radius:20px;background:#142523;overflow:hidden;min-width:0}
+.research-featured-card .research-ranking-summary{display:flex;flex-direction:column;align-items:stretch;gap:18px;padding:28px;min-height:370px}
+.research-featured-card .research-position{align-self:flex-end;font-size:15px}
+.research-featured-card .research-ranking-summary>span:nth-child(2)>strong{font-size:30px;line-height:1.2;color:var(--lime);font-weight:600}
+.research-featured-card .research-ranking-summary>span:nth-child(2)>small{font-size:14px}
+.research-featured-card .research-ranking-summary>span:nth-child(3){border-top:1px solid #38543d;padding-top:20px}
+.research-featured-card .research-ranking-summary>span:nth-child(3)>strong{font-size:15px;line-height:1.7}
+.research-featured-card .research-ranking-summary>span:nth-child(3)>small{margin-top:16px;font-size:12px;line-height:1.5}
+.research-featured-card .research-ranking-summary>span:last-child{margin-top:auto;font-weight:600}
+.research-featured-card .research-ranking-expanded{padding:0 28px 28px}
+.research-featured-card .research-actions{align-items:stretch;flex-direction:column}
+.research-featured-locked{padding:28px;min-height:370px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;background:linear-gradient(180deg,#142523,#0b1718)}
+@media(max-width:1100px){.research-featured-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.research-featured-grid{grid-template-columns:1fr}.research-featured-card .research-ranking-summary{min-height:0;padding:24px}.research-featured-card .research-ranking-expanded{padding:0 24px 24px}}
+.research-featured-card .research-ranking-summary{height:420px}.research-featured-card .research-ranking-summary>span:nth-child(3)>strong{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden}.research-featured-card .research-ranking-summary>span:nth-child(3)>small{min-height:36px}@media(max-width:700px){.research-featured-card .research-ranking-summary{height:auto;min-height:340px}}
+
+.research-featured-card .research-position{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 8px;border:1px solid #71984e;border-radius:7px;background:#203529;color:var(--lime);font-weight:600;letter-spacing:.04em}

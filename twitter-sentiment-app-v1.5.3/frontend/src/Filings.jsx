@@ -1,0 +1,23 @@
+import {dualTime} from './time.js'
+import React,{useEffect,useState,useRef} from 'react'
+import {api} from './api.js'
+import './filings.css'
+
+export function Filings({ticker='',onTicker,refresh=0,compact=false}){
+ const loadedQuery=useRef('')
+ const [data,setData]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(true)
+ const [days,setDays]=useState(30),[kind,setKind]=useState(''),[search,setSearch]=useState(''),[filter,setFilter]=useState(''),[offset,setOffset]=useState(0),[retry,setRetry]=useState(0)
+ useEffect(()=>{const timer=setTimeout(()=>{setFilter(search.trim().replace(/^\$/,'').toUpperCase());setOffset(0)},350);return()=>clearTimeout(timer)},[search])
+ useEffect(()=>{let active=true;const key=JSON.stringify([ticker,filter,days,kind,offset,compact]);if(loadedQuery.current!==key){setLoading(true);loadedQuery.current=key}setError('');api(`/filings?ticker=${encodeURIComponent(ticker||filter)}&kind=${kind}&days=${days}&offset=${offset}&limit=${compact?8:30}`).then(d=>{if(active)setData(d)}).catch(e=>{if(active){setError(e.message)}}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[ticker,filter,days,kind,offset,refresh,retry,compact])
+ const last=ticker?data?.company?.checked_at:data?.last_run?.at
+ return <section className={'sec-feed '+(compact?'sec-compact':'')} aria-label="SEC filings">
+  <div className="section-head"><h2>{compact?'Company filings':'Straight from the source.'}</h2><span className="tag neutral">SEC EDGAR</span></div>
+  <p className="muted">Official disclosures for our covered companies. Filing labels describe the document type, not its investment impact.</p>
+  {!compact&&<div className="sec-controls"><label>Ticker<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="e.g. NVDA" maxLength={10}/></label><label>Type<select value={kind} onChange={e=>{setKind(e.target.value);setOffset(0)}}><option value="">All filings</option><option value="updates">Company updates</option><option value="reports">Financial reports</option><option value="insiders">Insider disclosures</option></select></label><label>Period<select value={days} onChange={e=>{setDays(Number(e.target.value));setOffset(0)}}><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option></select></label></div>}
+  <p className="muted sec-status">{last?`Last ${ticker?'company check':'collection'}: ${dualTime(last)}`:'Awaiting first collection'}{!compact&&data?.coverage?` · ${data.coverage.checked} of ${data.coverage.mapped} matched SEC issuers checked`:''}</p>
+  {(data?.upstream_error||data?.company?.error)&&<p role="status" className="coverage">SEC updates are temporarily delayed. Previously collected filings remain available; collection retries automatically.</p>}
+  {error?<div role="alert" className="error">{error} <button className="button" onClick={()=>setRetry(v=>v+1)}>Retry</button></div>:loading?<p role="status" className="muted">Loading filings…</p>:data?.rows?.length?<div className="sec-list">{data.rows.map(r=><article className="sec-card" key={r.accession+r.ticker}><div className="sec-card-top"><span className="tag neutral">{r.form}</span>{onTicker?<button className="sec-ticker" onClick={()=>onTicker(r.ticker)}>${r.ticker} <span>View ticker →</span></button>:<strong>${r.ticker}</strong>}<time dateTime={r.filed}>Filed {r.filed}</time></div><h3>{r.title}</h3><p>{r.name}</p><div className="sec-card-bottom"><span>{r.report_date?`Report date ${r.report_date}`:'Company disclosure'}</span><a href={r.url} target="_blank" rel="noopener noreferrer">Read SEC filing ↗</a></div></article>)}</div>:<div className="empty">{ticker&&!data?.company?'No SEC issuer match is available for this ticker.':ticker&&!data?.company?.checked_at?'This company is waiting for its first shared SEC check.':'No collected filings in this period. Try a longer period or another category.'}</div>}
+  {!compact&&<div className="sec-pagination"><button className="button" disabled={loading||offset===0} onClick={()=>setOffset(v=>Math.max(0,v-30))}>Previous</button><span>Page {offset/30+1}</span><button className="button" disabled={loading||!data?.has_more} onClick={()=>setOffset(v=>v+30)}>Next</button></div>}
+  <p className="muted sec-footnote">Shared collection runs every five minutes and rotates through covered SEC issuers. Each company is checked on a rolling cycle, not every five minutes. Insider disclosures are not live order flow. <a href="https://www.sec.gov/edgar/search/" target="_blank" rel="noopener noreferrer">Explore EDGAR ↗</a></p>
+ </section>
+}

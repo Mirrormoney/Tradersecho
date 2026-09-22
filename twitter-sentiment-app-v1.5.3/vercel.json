@@ -20,6 +20,25 @@
       }
     },
     {
+      "source": "/share/:path*",
+      "destination": {
+        "type": "service",
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/trending-research",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/ai-supply-chain",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/sec-filings",
+      "destination": "/index.html"
+    },
+    {
       "source": "/marketpulse",
       "destination": "/index.html"
     },
@@ -110,6 +129,26 @@
     },
     {
       "path": "/api/cron/email",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/social",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sec",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/research",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/drive",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/echo",
       "schedule": "*/5 * * * *"
     }
   ]

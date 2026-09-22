@@ -1,0 +1,22 @@
+import React,{createContext,useContext,useEffect,useRef,useState} from 'react'
+import {api} from './api.js'
+import './engagement.css'
+const RadarContext=createContext(null)
+export function RadarProvider({user,children}){
+ const [data,setData]=useState({counts:{},mine:{}}),[pending,setPending]=useState({}),[error,setError]=useState('')
+ const revision=useRef(0),inFlight=useRef(false)
+ const identity=useRef(user?.id);identity.current=user?.id
+ useEffect(()=>{let active=true;setData({counts:{},mine:{}});setError('');if(!user||user.demo)return;const load=()=>{const version=revision.current;return api('/radar').then(d=>{if(active&&version===revision.current&&!inFlight.current)setData(d)}).catch(()=>{})};load();const timer=setInterval(()=>{if(document.visibilityState==='visible')load()},60000);return()=>{active=false;clearInterval(timer)}},[user?.id,user?.demo])
+ async function toggle(ticker){if(inFlight.current)return;inFlight.current=true;revision.current++;const id=user?.id;setPending(p=>({...p,[ticker]:true}));setError('');try{const d=await api('/radar/'+ticker,'PUT',{active:!(data.mine[ticker]>Date.now()/1000)});if(identity.current===id)setData(d)}catch(e){setError(e.message)}finally{inFlight.current=false;revision.current++;setPending(p=>({...p,[ticker]:false}))}}
+ return <RadarContext.Provider value={{user,data,pending,toggle}}>{children}{error&&<div className="radar-error" role="alert">{error}<button onClick={()=>setError('')} aria-label="Dismiss reaction error">×</button></div>}</RadarContext.Provider>
+}
+export function RadarButton({ticker,compact=false,tile=false}){
+ const ctx=useContext(RadarContext);if(!ctx?.user||ctx.user.demo)return null
+ const active=ctx.data.mine[ticker]>Date.now()/1000,count=ctx.data.counts[ticker]||0
+ return <button className={'radar-vote '+(active?'selected':'')+(compact?' compact':'')+(tile?' tile-flame':'')} aria-pressed={active} aria-label={`${active?'Remove':'Add'} On fire reaction for ${ticker}. ${count} active reactions.`} title="Think this stock is hot? React for 24 hours. Does not affect rankings. Click again to remove." disabled={Object.values(ctx.pending).some(Boolean)} onClick={e=>{e.stopPropagation();ctx.toggle(ticker)}}><svg className="reaction-flame" viewBox="0 0 24 24" width="16" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" aria-hidden="true"><path d="M13 2c1 5-4 6-4 10-2-1-2-3-2-3-3 3-4 6-2 9a8 8 0 0 0 14 0c3-5-1-10-3-12 0 3-1 4-2 5 1-4 0-7-1-9Z"/><path d="M12 14c-1 2-3 3-2 5a2.5 2.5 0 0 0 4 0c1-2-1-3-2-5Z"/></svg><span className="reaction-label">On fire{count>0&&<b>{count}</b>}</span></button>
+}
+export function StockActions({ticker,intraday,windowDays,source}){
+ const [share,setShare]=useState(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
+ async function create(){setBusy(true);setMessage('');try{setShare(await api('/shares','POST',{ticker,window:intraday?'intraday':String(windowDays)}))}catch(e){setMessage(e.message)}finally{setBusy(false)}}
+ return <section className="stock-actions"><div className="button-row stock-action-menu" role="group" aria-label="Stock actions"><RadarButton ticker={ticker}/>{source==='x'&&<button className="button" disabled={busy} onClick={create}>{busy?'Preparing…':'Share snapshot ↗'}</button>}</div>{share&&<div className="share-panel"><strong>Share this attention snapshot</strong><p>Only the saved activity figures and timestamp are public. Broker research and account details stay private.</p><input aria-label="Public snapshot link" readOnly value={share.url} onFocus={e=>e.target.select()}/><div className="button-row"><button className="button primary" onClick={async()=>{try{await navigator.clipboard.writeText(share.url);setMessage('Link copied')}catch{setMessage('Select the link above and copy it.')}}}>Copy link</button><a className="button" href={share.url} target="_blank" rel="noopener noreferrer">Preview</a><a className="button" href={'https://twitter.com/intent/tweet?text='+encodeURIComponent(`What is getting attention? $${ticker} on Traders Echo`)+'&url='+encodeURIComponent(share.url)} target="_blank" rel="noopener noreferrer">Share on X</a><a className="button" href={share.image_url} download={`${ticker}-tradersecho.png`}>Save image</a><button className="button quiet" onClick={()=>setShare(null)}>Close</button></div></div>}{message&&<p role="status">{message}</p>}</section>
+}

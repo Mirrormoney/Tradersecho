@@ -115,15 +115,8 @@ def change_password(payload:PasswordChange,request:Request,response:Response):
 
 @router.put('/api/profile')
 def profile(payload:Profile,request:Request):
-    s=core();u=s.account(request);name=validate_display_name(payload.display_name)
-    try:
-        with s.db() as c:
-            c.execute('BEGIN IMMEDIATE')
-            if c.execute('SELECT 1 FROM accounts WHERE LOWER(TRIM(display_name))=? AND id!=?',(name.lower(),u['id'])).fetchone():
-                raise HTTPException(409,'That display name is already taken. Please choose another.')
-            c.execute('UPDATE accounts SET display_name=? WHERE id=?',(name,u['id']))
-    except IntegrityError:raise HTTPException(409,'That display name is already taken. Please choose another.')
-    return s.public_account(s.account(request))
+    core().account(request)
+    raise HTTPException(403,'Usernames are fixed after registration.')
 
 @router.get('/api/admin/users')
 def users(request:Request,q:str=Query('',max_length=100),page:int=Query(1,ge=1),include_demo:bool=False):
@@ -201,7 +194,7 @@ def messages(request:Request,before:int|None=Query(None,ge=1),ticker:str=Query('
     if before: clause+=' AND m.id<?';args.append(before)
     if ticker: clause+=' AND m.ticker=?';args.append(ticker.upper())
     with core().db() as c:
-        rows=c.execute('SELECT m.id,m.body,m.ticker,m.ts,a.display_name,a.role,a.plan,CASE WHEN EXISTS(SELECT 1 FROM billing_entitlements e WHERE e.user_id=a.id AND e.tier=\'founder\' AND e.active=1) THEN \'founder\' ELSE a.plan END AS billing_tier FROM chat_messages m JOIN accounts a ON m.user_id=a.id '+clause+' ORDER BY m.id DESC LIMIT 50',args).fetchall()
+        rows=c.execute('SELECT m.id,m.body,m.ticker,m.ts,CASE WHEN b.message_id IS NOT NULL THEN \'Echo Assistant\' ELSE a.display_name END AS display_name,CASE WHEN b.message_id IS NOT NULL THEN \'Automated\' ELSE a.role END AS role,a.plan,CASE WHEN EXISTS(SELECT 1 FROM billing_entitlements e WHERE e.user_id=a.id AND e.tier=\'founder\' AND e.active=1) THEN \'founder\' ELSE a.plan END AS billing_tier FROM chat_messages m LEFT JOIN accounts a ON m.user_id=a.id LEFT JOIN echo_posts b ON b.message_id=m.id '+clause+' ORDER BY m.id DESC LIMIT 50',args).fetchall()
     return [dict(r) for r in reversed(rows)]
 
 @router.post('/api/community/messages')
@@ -233,7 +226,7 @@ def report(mid:int,payload:Report,request:Request):
 def reports(request:Request):
     staff(request)
     with core().db() as c:
-        return [dict(r) for r in c.execute('SELECT r.message_id,r.reason,r.ts,m.body,m.hidden,a.display_name FROM chat_reports r JOIN chat_messages m ON m.id=r.message_id JOIN accounts a ON a.id=m.user_id WHERE r.resolved=0 ORDER BY r.ts DESC LIMIT 100')]
+        return [dict(r) for r in c.execute('SELECT r.message_id,r.reason,r.ts,m.body,m.hidden,COALESCE(a.display_name,\'Echo Assistant\') AS display_name FROM chat_reports r JOIN chat_messages m ON m.id=r.message_id LEFT JOIN accounts a ON a.id=m.user_id WHERE r.resolved=0 ORDER BY r.ts DESC LIMIT 100')]
 
 class Moderate(BaseModel):
     hidden:bool
@@ -285,4 +278,16 @@ def update_budget(payload:DataSettings,request:Request):
     with core().db() as c:
         c.execute("INSERT INTO settings VALUES('x_collection',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(payload.model_dump()),))
         audit(c,u,'data_budget_updated',detail=json.dumps(payload.model_dump()))
+    return {'ok':True}
+
+@router.delete('/api/admin/messages/{mid}')
+def delete_message(mid:int,request:Request):
+    u=staff(request)
+    with core().db() as c:
+        c.execute('BEGIN IMMEDIATE')
+        if not c.execute('SELECT 1 FROM chat_messages WHERE id=?',(mid,)).fetchone():
+            raise HTTPException(404,'Message not found.')
+        c.execute('DELETE FROM chat_reports WHERE message_id=?',(mid,))
+        c.execute('DELETE FROM chat_messages WHERE id=?',(mid,))
+        audit(c,u,'message_deleted',str(mid))
     return {'ok':True}

@@ -1,3 +1,4 @@
+from .screening import stock_query
 """Hourly, shared collection with bounded spend, deduplication and visible freshness."""
 import json, os, time, secrets
 from datetime import datetime, timezone
@@ -12,6 +13,53 @@ router=APIRouter()
 def enqueue(c, slot, kind, ticker, end, query):
     c.execute('INSERT OR IGNORE INTO collection_jobs(day,kind,ticker,updated_at,window_end,query) VALUES(?,?,?,?,?,?)', (slot,kind,ticker,time.time(),end,query))
 
+def sample_candidate(c,cutoff,end,top):
+    from .count_metrics import enrich
+    ranked=sorted(enrich(c,[],cutoff,1),key=lambda r:(-r['heat'],r['ticker']))
+    # Match the visible 24h heat ranking, not only absolute query volume.
+    for row in ranked[:5]:
+        ticker=row['ticker']
+        if ticker not in core().CATALOG or not row['mentions']:continue
+        fresh=c.execute("SELECT 1 FROM mentions m JOIN posts p ON p.source=m.source AND p.id=m.post_id WHERE m.ticker=? AND p.source='x' AND p.ts>? LIMIT 1",(ticker,end-86400)).fetchone()
+        attempted=c.execute("SELECT 1 FROM collection_jobs WHERE ticker=? AND kind IN ('hour_sample','request_sample') AND window_end>? AND status IN ('done','running','pending','error') LIMIT 1",(ticker,end-6*3600)).fetchone()
+        if not fresh and not attempted:return ticker
+    return top[int(end//3600)%len(top)] if top else None
+
+def leader_candidates(c,cutoff,end,intraday):
+    """One shared evidence target per ticker, across the four visible rankings."""
+    from .count_metrics import enrich
+    from .post_quality import research_text
+    from .screening import stock_context
+    leaders={}
+    rankings=[intraday]+[sorted(enrich(c,[],cutoff,w),key=lambda r:-r['heat']) for w in (1,7,30)]
+    for rows in rankings:
+        for rank,row in enumerate(rows[:5]):
+            ticker=row['ticker']
+            if ticker in core().CATALOG and row.get('mentions'):
+                leaders[ticker]=min(rank,leaders.get(ticker,rank))
+    candidates=[]
+    for ticker,rank in leaders.items():
+        posts=c.execute("SELECT p.text,p.ts FROM mentions m JOIN posts p ON p.source=m.source AND p.id=m.post_id WHERE m.ticker=? AND p.source='x' AND p.ts>? ORDER BY p.ts DESC LIMIT 100",(ticker,end-86400)).fetchall()
+        latest=next((p['ts'] for p in posts if research_text(p['text']) and stock_context(p['text'],ticker)),0)
+        if latest>end-3*3600:continue
+        # Empty/filtered samples are retried at most every four hours; all callers share this check.
+        attempted=c.execute("SELECT 1 FROM collection_jobs WHERE ticker=? AND kind IN ('leader_sample','hour_sample','request_sample') AND window_end>? AND status IN ('done','running','pending','error') LIMIT 1",(ticker,end-4*3600)).fetchone()
+        blocked_slot=c.execute("SELECT 1 FROM collection_jobs WHERE ticker=? AND kind='leader_sample' AND window_end=? LIMIT 1",(ticker,end)).fetchone()
+        if not attempted and not blocked_slot:candidates.append((bool(latest),rank,latest,ticker))
+    return [r[3] for r in sorted(candidates)]
+
+def plan_leader_samples():
+    end=int(time.time()//3600)*3600;slot=iso(end)[:13]
+    intraday=intraday_rows()
+    with core().db() as c:
+        c.execute('BEGIN IMMEDIATE');settings=data_settings(c)
+        if not settings['enabled'] or not settings['intraday_enabled']:return
+        snapshot=c.execute("SELECT value FROM meta WHERE key='completed_snapshot'").fetchone()
+        if not snapshot:return
+        used=c.execute("SELECT COUNT(*) FROM collection_jobs WHERE day=? AND kind='leader_sample'",(slot,)).fetchone()[0]
+        for ticker in leader_candidates(c,float(snapshot[0]),end,intraday)[:max(0,min(3,20-used))]:
+            enqueue(c,slot,'leader_sample',ticker,end,stock_query(ticker))
+
 def plan_hour():
     s=core(); end=int(time.time()//3600)*3600;slot=iso(end)[:13]
     with s.db() as c:
@@ -22,19 +70,15 @@ def plan_hour():
         if not snapshot:return  # Do not turn partial first-backfill counts into a top-ten list.
         cutoff=float(snapshot[0])
         top=[r[0] for r in c.execute('SELECT ticker FROM x_counts WHERE start>=? AND end<=? GROUP BY ticker ORDER BY SUM(n) DESC,ticker LIMIT ?',(cutoff-86400,cutoff,settings['hourly_top'])) if r[0] in s.CATALOG]
-        for ticker in top:enqueue(c,slot,'hour_counts',ticker,end,f'${ticker} lang:en -is:retweet')
+        for ticker in top:enqueue(c,slot,'hour_counts',ticker,end,stock_query(ticker))
         # A bounded discovery queue shares the existing daily on-demand count allowance.
         recent=[r[0] for r in c.execute("SELECT m.ticker FROM mentions m JOIN posts p ON p.source=m.source AND p.id=m.post_id JOIN admin_voices a ON a.handle=LOWER(p.author) WHERE p.source='x' AND p.ts>? GROUP BY m.ticker ORDER BY MAX(p.ts) DESC,m.ticker",(end-6*3600,)) if r[0] in s.CATALOG and r[0] not in top]
         used=c.execute("SELECT COUNT(*) FROM collection_jobs WHERE day LIKE ? AND kind='request_counts'",(slot[:10]+'%',)).fetchone()[0]
         for ticker in recent[:min(5,max(0,settings['on_demand_daily_limit']-used))]:
             if not c.execute("SELECT 1 FROM collection_jobs WHERE day=? AND ticker=? AND kind IN ('request_counts','hour_counts')",(slot,ticker)).fetchone():
-                enqueue(c,slot,'request_counts',ticker,end,f'${ticker} lang:en -is:retweet')
+                enqueue(c,slot,'request_counts',ticker,end,stock_query(ticker))
 
-        # One rotating popular-stock sample and shared account groups/hour.
-        # All readers, retries and demand requests share the same daily allowance.
-        if top:
-            ticker=top[int(end//3600)%len(top)]
-            enqueue(c,slot,'hour_sample',ticker,end,f'${ticker} lang:en -is:retweet')
+        # Leader evidence is planned separately across all four timeframes.
         voices=shared_handles(c)
         if voices:
             checkpoints={r['handle']:max(end-86400,int(r['window_end'])) for r in c.execute('SELECT handle,window_end FROM voice_checkpoints')}
@@ -47,7 +91,7 @@ def plan_hour():
         c.execute('INSERT INTO meta VALUES(?,?)',('hour_planned:'+slot,str(end)))
 
 def perform(job,client):
-    s=core();end=int(job['window_end']);ticker=job['ticker'];kind=job['kind'];query=job['query'];token=os.environ['X_BEARER_TOKEN']
+    s=core();end=int(job['window_end']);ticker=job['ticker'];kind=job['kind'];query=job['query'] if kind=='hour_voice' else stock_query(ticker);token=os.environ['X_BEARER_TOKEN']
     if kind in ('hour_counts','request_counts'):
         start=end-86400
         result=paid_request(client,'tweets/counts/recent',{'query':query,'start_time':iso(start),'end_time':iso(end),'granularity':'hour'},'counts_live',.005,token)
@@ -88,7 +132,7 @@ def perform(job,client):
         with s.db() as c:
             admin=kind=='hour_voice' and ',' not in ticker and bool(c.execute('SELECT 1 FROM admin_voices WHERE handle=?',(ticker,)).fetchone())
         size=20 if admin else 10
-        spend_kind='sample_admin:'+ticker if admin else 'sample_live'
+        spend_kind='sample_admin:'+ticker if admin else 'sample_leaders' if kind=='leader_sample' else 'sample_live'
         result=paid_request(client,'tweets/search/recent',{'query':query,'start_time':iso(start),'end_time':iso(end),'max_results':size,'tweet.fields':'created_at,author_id,public_metrics,note_tweet'},spend_kind,size*.005,token)
         items=[{'id':p['id'],'author':author_map.get(p['author_id'],'id'+p['author_id']),'author_id':p['author_id'],'text':(p.get('note_tweet') or {}).get('text') or p['text'],'created_at':p['created_at'],'likes':p.get('public_metrics',{}).get('like_count',0)} for p in result.get('data',[])]
         s.ingest(items,include_unmatched=kind=='hour_voice')
@@ -146,12 +190,13 @@ def tick(scheduled=False,client=None):
         from .budget_monitor import review
         review()
         plan_hour()
+        plan_leader_samples()
         deadline=time.monotonic()+65
         # Prioritize current hourly/demand jobs. Past hourly slots are not bought
         # retroactively after an outage; the next scan catches recent posts.
         with s.db() as c:
-            c.execute("UPDATE collection_jobs SET status='expired' WHERE kind IN ('hour_counts','hour_sample','hour_voice','request_counts','request_sample') AND status='pending' AND window_end<?",(now-7200,))
-            rows=[dict(r) for r in c.execute("SELECT * FROM collection_jobs WHERE kind IN ('hour_counts','hour_sample','hour_voice','request_counts','request_sample') AND (status='pending' OR (status='running' AND lease_until<?) OR (status='error' AND next_attempt>0 AND next_attempt<=?)) AND attempts<3 ORDER BY CASE WHEN kind='hour_voice' THEN 0 WHEN kind='hour_sample' THEN 1 ELSE 2 END,id LIMIT 15",(now,now))]
+            c.execute("UPDATE collection_jobs SET status='expired' WHERE kind IN ('leader_sample','hour_counts','hour_sample','hour_voice','request_counts','request_sample') AND status='pending' AND window_end<?",(now-7200,))
+            rows=[dict(r) for r in c.execute("SELECT * FROM collection_jobs WHERE kind IN ('leader_sample','hour_counts','hour_sample','hour_voice','request_counts','request_sample') AND (status='pending' OR (status='running' AND lease_until<?) OR (status='error' AND next_attempt>0 AND next_attempt<=?)) AND attempts<3 ORDER BY CASE WHEN kind='leader_sample' THEN 0 WHEN kind='hour_voice' THEN 1 ELSE 2 END,id LIMIT 15",(now,now))]
         for job in rows:
             if time.monotonic()>deadline:break
             with s.db() as c:c.execute("UPDATE collection_jobs SET status='running',attempts=attempts+1,lease_until=?,lease_token=? WHERE id=?",(time.time()+180,lease,job['id']))
@@ -221,8 +266,8 @@ def request_refresh(ticker:str,request:Request):
         daily=c.execute("SELECT COUNT(*) FROM collection_jobs WHERE day LIKE ? AND kind='request_counts'",(day+'%',)).fetchone()[0]
         key='demand:'+day+':'+u['id'];row=c.execute('SELECT value FROM meta WHERE key=?',(key,)).fetchone();used=int(row[0]) if row else 0
         if daily>=settings['on_demand_daily_limit'] or used>=5:raise HTTPException(429,'Refresh allowance reached. Scheduled updates continue.')
-        enqueue(c,slot,'request_counts',ticker,end,f'${ticker} lang:en -is:retweet')
-        enqueue(c,slot,'request_sample',ticker,end,f'${ticker} lang:en -is:retweet')
+        enqueue(c,slot,'request_counts',ticker,end,stock_query(ticker))
+        enqueue(c,slot,'request_sample',ticker,end,stock_query(ticker))
         c.execute('INSERT INTO meta VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(key,str(used+1)))
     return {'state':'queued','message':'Queued for the next scheduled run. All members share this refresh.'}
 
@@ -238,10 +283,9 @@ def live_ticker(ticker:str,request:Request):
     return {'ticker':ticker,'as_of':end,'mentions_24h':counts[0] or 0,'coverage_hours':counts[1],'latest_sample':latest,'queued':bool(queued),'stale':not end or time.time()-end>7200}
 
 
-@router.get('/api/intraday')
-def intraday(request:Request):
+def intraday_rows(now=None):
     import math
-    s=core();u=s.account(request,False);now=time.time();rows=[]
+    s=core();now=time.time() if now is None else now;rows=[]
     with s.db() as c:
         posts=[dict(r) for r in c.execute("SELECT p.id,p.author,p.text,p.ts,m.ticker FROM posts p JOIN mentions m ON m.source=p.source AND m.post_id=p.id JOIN admin_voices a ON a.handle=LOWER(p.author) WHERE p.source='x' AND p.ts>? AND p.ts<=? ORDER BY p.ts DESC,p.id DESC LIMIT 500",(now-6*3600,now))]
         context={}
@@ -256,7 +300,17 @@ def intraday(request:Request):
             complete=bool(end and [r['start'] for r in current]==[end-10800+i*3600 for i in range(3)] and [r['start'] for r in prior]==[end-21600+i*3600 for i in range(3)] and all(r['end']-r['start']==3600 for r in current+prior))
             n=sum(r['n'] for r in current) if complete else None;old=sum(r['n'] for r in prior) if complete else None
             heat=round(10*math.log1p(n)*(1+max(0,math.log2((n+5)/(old+5)))),1) if complete else None
-            rows.append({'ticker':ticker,'name':s.CATALOG[ticker][0],'mentions':n,'previous':old,'change':round((n/old-1)*100,1) if old else None,'heat':heat,'as_of':end if complete else None,'posts':context.get(ticker,[]),'state':'measured' if complete else 'awaiting_counts'})
+            rows.append({'ticker':ticker,'name':s.CATALOG[ticker][0],'mentions':n,'previous':old,'change':round((n/old-1)*100,1) if old else None,'heat':heat,'as_of':end if complete else None,'spark':[r['n'] for r in prior+current] if complete else [],'posts':context.get(ticker,[]),'state':'measured' if complete else 'awaiting_counts'})
     rows.sort(key=lambda r:(r['heat'] is None,-(r['heat'] or 0),r['ticker']))
+    # Lead tiles show the newest stored matching admin post, even outside the discovery window.
+    with s.db() as c:
+        for row in rows[:2]:
+            post=c.execute("SELECT p.id,p.author,p.text,p.ts,m.ticker FROM posts p JOIN mentions m ON m.source=p.source AND m.post_id=p.id JOIN admin_voices a ON a.handle=LOWER(p.author) WHERE p.source='x' AND m.ticker=? AND p.ts<=? ORDER BY p.ts DESC,p.id DESC LIMIT 1",(row['ticker'],now)).fetchone()
+            row['posts']=[dict(post)] if post else []
+    return rows
+
+@router.get('/api/intraday')
+def intraday(request:Request):
+    s=core();u=s.account(request,False);now=time.time();rows=intraday_rows()
     full=bool(u and (u['plan']=='premium' or u['role'] in ('owner','admin') or os.getenv('FREE_LAUNCH','false').lower()=='true') and not u['demo'])
     return {'rows':rows if full else rows[:5 if u else 2],'total':len(rows),'locked':not full,'as_of':now,'comparison_hours':3,'disclosure':'Latest three completed hours versus the preceding three. Selected hourly leaders and recent admin-voice discoveries; not a full-market scan. Fresh posts provide context, not proof of a catalyst.'}

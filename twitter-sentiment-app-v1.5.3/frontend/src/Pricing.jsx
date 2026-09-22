@@ -8,13 +8,13 @@ const features=[
  ['Saved stocks','5 stocks','50 stocks'],
  ['Shared tracked voices','Included','Included'],
  ['Personal tracked voices','Not included','Up to 5 accounts'],
- ['Daily web briefing','Top 3 stocks','Top 10 + your watchlist'],
+ ['AI Supply Chain','Sector preview only','Full heatmap & sector rankings'],
  ['Scheduled research emails','Not included','Four opt-in editions'],
  ['Trading room','Not included','Included'],
  ['Ticker refresh requests','Not included','Up to 5 per day'],
 ]
 export function Pricing({user,status,onSignup,onAccount}){
- const [annual,setAnnual]=useState(true),[busy,setBusy]=useState(''),[error,setError]=useState('')
+ const [annual,setAnnual]=useState(false),[busy,setBusy]=useState(''),[error,setError]=useState('')
  const premium=(user?.plan==='premium'&&!user?.trial_active)||['admin','owner'].includes(user?.role)
  async function choose(tier){
   if(!user||user.demo){onSignup();return}

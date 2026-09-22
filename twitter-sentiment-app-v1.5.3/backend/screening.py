@@ -2,6 +2,23 @@
 import re, hashlib
 from difflib import SequenceMatcher
 
+def stock_query(ticker):
+    # Confirmed token collisions require explicit company context in paid counts.
+    if ticker == 'AI':
+        return '$AI ("C3.ai" OR "C3 AI" OR "NYSE:AI") lang:en -is:retweet'
+    company={'DY':'Dycom','FN':'Fabrinet'}.get(ticker)
+    subject=f'${ticker} ({company} OR "NYSE:{ticker}")' if company else f'${ticker}'
+    return subject+' lang:en -is:retweet'
+
+def stock_context(text,ticker):
+    # AI is also a token and a general topic; positive company identity is required.
+    if ticker == 'AI':
+        return bool(re.search(r'\bC3(?:\s*\.\s*|\s+)AI\b|\bNYSE\s*:\s*AI\b', text, re.I))
+    company={'DY':'Dycom','FN':'Fabrinet'}.get(ticker)
+    if not company:return True
+    crypto=r'\b(solana|memecoin|memecoins|contract address|wallet|claim portal)\b|\bCA\s*(?::|>|&gt;)|0x[a-f0-9]{40}'
+    return not re.search(crypto,text,re.I) or bool(re.search(r'\b'+company+r'\b|NYSE\s*:\s*'+ticker,text,re.I))
+
 def fingerprint(text):
     text=re.sub(r'https?://\S+|\$[A-Z]{1,6}\b|@[\w]+|\d+',' ',text,flags=re.I)
     return ' '.join(re.findall(r'[a-z]+',text.lower()))

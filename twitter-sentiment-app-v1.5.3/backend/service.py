@@ -19,9 +19,17 @@ DEMO_CATALOG = {'NVDA':('NVIDIA','Semiconductors'), 'TSLA':('Tesla','Automotive'
 from .stocks import Catalog, router as stocks_router, migrate as migrate_stocks
 CATALOG=Catalog()
 app = FastAPI(title='Tradersecho', version='2.0.0')
+from .engagement import router as engagement_router, migrate as migrate_engagement
+app.include_router(engagement_router)
+from .research_feed import router as research_feed_router
+app.include_router(research_feed_router)
+from .research_drive import router as research_drive_router
+app.include_router(research_drive_router)
 from .context_sentiment import router as sentiment_router
 app.include_router(sentiment_router)
 app.include_router(community_router)
+from .echo_assistant import router as echo_router, migrate as migrate_echo
+app.include_router(echo_router)
 app.include_router(stocks_router)
 from .digest import router as digest_router, migrate as migrate_digest
 app.include_router(digest_router)
@@ -48,9 +56,13 @@ def init():
         CREATE TABLE IF NOT EXISTS webhook_events(id TEXT PRIMARY KEY);
         ''')
         migrate(c)
+        migrate_echo(c)
+        migrate_engagement(c)
         from .payments import migrate as migrate_payments
         migrate_payments(c)
         migrate_stocks(c)
+        from .sec_filings import migrate as migrate_sec
+        migrate_sec(c)
         migrate_digest(c)
         migrate_voices(c)
         from .account_security import migrate as migrate_security
@@ -59,7 +71,11 @@ def init():
         migrate_email_delivery(c)
         from .context_sentiment import migrate as migrate_sentiment
         migrate_sentiment(c)
+        from .research import migrate as migrate_research
+        migrate_research(c)
         c.execute('CREATE TABLE IF NOT EXISTS post_identity(source TEXT,post_id TEXT,author_id TEXT,PRIMARY KEY(source,post_id))')
+        from .social import migrate as migrate_social
+        migrate_social(c)
     if DEMO: seed_demo()
 
 def seed_demo():
@@ -174,9 +190,19 @@ def signup(payload:SignupCredentials,request:Request,response:Response):
         try: c.execute('INSERT INTO accounts(id,email,password,display_name,created_at,last_login) VALUES(?,?,?,?,?,?)',(uid,email,password_hash(payload.password),name,time.time(),time.time()))
         except IntegrityError: raise HTTPException(409,'That email or username is already in use.')
         if payload.owner_code: claim_owner(c,payload.owner_code,email,uid)
+        from .owner_reports import enqueue_signup
+        enqueue_signup(c,uid,time.time())
+        c.execute('INSERT INTO newsletter_preferences(user_id,editions,trial_reminder) VALUES(?,?,1)',(uid,json.dumps(['morning','final','weekly','monthly'])))
         u=c.execute('SELECT * FROM accounts WHERE id=?',(uid,)).fetchone()
     session(response,uid)
-    return public_account(u)
+    result=public_account(u)
+    from .account_security import configured,issue
+    result['verification_email']='unavailable'
+    if configured():
+        try:result['verification_email']=issue(email,'verify') or 'sent'
+        except HTTPException:result['verification_email']='failed'
+    result['verification_message']=('Your account is ready. Check your inbox and spam folder for the verification email to activate your seven-day Premium trial.' if result['verification_email']=='sent' else 'Your account is ready, but the verification email could not be sent. Use Send verification link in My account to try again.')
+    return result
 
 @app.post('/api/auth/login')
 def login(payload:Credentials,request:Request,response:Response):
@@ -281,14 +307,19 @@ def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('de
     return {'rows':visible,'total_tickers':total,'total_mentions':total_mentions,'ranking_locked':bool(u and not full and scope=='market'),'preview_limit':None if full else 5 if u else 3,'preview':not bool(u),'stale':source=='x' and time.time()-now>36*3600,'as_of':now,'sample_as_of':time.time() if source=='x' else now,'source':source,'window':window,'comparison_complete':comparison,'coverage_days':round((now-earliest)/86400,1) if earliest else 0}
 
 @app.get('/api/posts')
-def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),tracked:bool=False,order:str=Query('latest',pattern='^(latest|engagement)$'),feed:str=Query('research',pattern='^(research|all)$')):
+def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:str=Query('demo',pattern='^(demo|x)$'),tracked:bool=False,personal:bool=False,order:str=Query('latest',pattern='^(latest|engagement)$'),feed:str=Query('research',pattern='^(research|all)$')):
     account(request)
     args=[source]; clauses=['p.source=?']
     with db() as c:
         now=time.time() if source=='x' else reference(source,c)
         clauses+=['p.ts>?','p.ts<=?'];args += [now-window*86400,now]
         if ticker: clauses.append('EXISTS(SELECT 1 FROM mentions filter_m WHERE filter_m.source=p.source AND filter_m.post_id=p.id AND filter_m.ticker=?)');args.append(ticker.upper())
-        if tracked:
+        if personal:
+            u=account(request)
+            if u['plan']!='premium' and u['role'] not in ('owner','admin'):raise HTTPException(403,'Personal voices require Premium.')
+            if u['demo'] and source!='demo':raise HTTPException(403,'Sign in with a real account to view live voices.')
+            clauses.append('p.author IN (SELECT handle FROM handles WHERE user_id=?)');args.append(u['id'])
+        elif tracked:
             u=account(request)
             if u['demo'] and source!='demo':raise HTTPException(403,'Sign in with a real account to view live voices.')
             if u['plan']=='premium' or u['role'] in ('owner','admin'):
@@ -380,6 +411,8 @@ def ingest(items,include_unmatched=False):
         ts=ts.timestamp()
         if ts>time.time()+60: raise ValueError('Posts cannot be dated in the future.')
         tickers=set(re.findall(r'\$([A-Za-z]{1,5}(?:\.[A-Za-z])?)\b',text.upper())) & set(CATALOG)
+        from .screening import stock_context
+        tickers={t for t in tickers if stock_context(text,t)}
         sentiment=item.get('sentiment') or classify(text)
         if sentiment not in ['bullish','bearish','neutral']: raise ValueError('Invalid sentiment label.')
         likes=int(item.get('likes',0))
@@ -444,6 +477,22 @@ def health():
         import logging
         logging.exception('Database health check failed')
         return Response(json.dumps({'ok':False,'error':type(exc).__name__}),status_code=503,media_type='application/json')
+
+from .social import router as social_router
+app.include_router(social_router)
+
+from .sec_filings import router as sec_router
+app.include_router(sec_router)
+
+from .supply_chain import router as supply_router
+app.include_router(supply_router)
+from .owner_reports import router as owner_reports_router
+app.include_router(owner_reports_router)
+
+from .research import router as research_router
+app.include_router(research_router)
+from .search import router as search_router
+app.include_router(search_router)
 
 if not os.getenv('VERCEL'): init()
 DIST=ROOT/'frontend'/'dist'

@@ -37,7 +37,7 @@ def test_retry_dispatch_idempotency_and_reconciliation(monkeypatch):
     c,u=make_account('scheduled@example.invalid')
     with s.db() as db:
         db.execute("UPDATE accounts SET plan='premium',email_verified=1 WHERE id=?",(u['id'],))
-        db.execute('INSERT INTO newsletter_preferences VALUES(?,?,?)',(u['id'],'["morning"]',0))
+        db.execute('INSERT INTO newsletter_preferences VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET editions=excluded.editions,trial_reminder=excluded.trial_reminder',(u['id'],'["morning"]',0))
     report={'ready':True,'date':'2026-09-18','subject':'Traders Echo Morning Roundup [2026-09-18]','tracked_stocks':1,'rows':[{'ticker':'MU','name':'Micron','mentions':50,'change':None}],'posts':[]}
     monkeypatch.setattr(n,'report_for',lambda slot,user:report)
     attempts=[]
@@ -65,10 +65,40 @@ def test_period_reports_withhold_incomplete_comparisons(monkeypatch):
     result=n.report_for({'edition':'morning','at':now},u)
     assert result['rows'][0]['change']==0
     assert result['subject']=='Traders Echo Morning Roundup [2026-09-18]'
-    assert len(result['other_windows'])==2
-    for window in result['other_windows']:
-        assert 'Partial history' in window['coverage_label']
-        assert window['rows'][0]['change'] is None
+    assert result['other_windows']==[]
+    assert [w['label'] for w in result['focus_windows']]==['Intraday','24 hours']
+    assert result['focus_windows'][0]['rows']==[]  # Stale intraday counts are not recycled.
+    for edition,label in [('weekly','7 days'),('monthly','30 days')]:
+        period=n.report_for({'edition':edition,'at':now},u)
+        assert [w['label'] for w in period['focus_windows']]==[label]
+        assert 'Partial history' in period['coverage_label']
+        assert period['rows'][0]['change'] is None
+
+def test_daily_intraday_watchlist_and_post_selection(monkeypatch):
+    now=datetime(2026,9,22,12,0,tzinfo=timezone.utc).timestamp()
+    end=int(now//86400)*86400
+    monkeypatch.setattr(s,'CATALOG',{'MU':('Micron','Memory'),'AMD':('AMD','Semiconductors')})
+    _,u=make_account('focus@example.invalid');u={**u,'plan':'premium'}
+    with s.db() as db:
+        db.execute("INSERT INTO meta VALUES('completed_snapshot',?)",(str(end),))
+        for ticker in s.CATALOG:
+            db.executemany('INSERT INTO x_counts VALUES(?,?,?,?,?,?)',[(ticker,now-60*3600+i*3600,now-59*3600+i*3600,5,'test',now) for i in range(60)])
+        db.execute('INSERT INTO watchlist VALUES(?,?)',(u['id'],'MU'))
+        db.execute('INSERT INTO digest_preferences VALUES(?,?,?,?)',(u['id'],'all',1,now))
+        db.execute("INSERT INTO admin_voices(handle,note,created_at) VALUES('curated','',?)",(now,))
+        for pid,author,ts,likes in [('901','curated',now-3600,1),('902','other',now-1800,100),('903','curated',now-14400,1000)]:
+            db.execute('INSERT INTO posts VALUES(?,?,?,?,?,?,?)',('x',pid,author,'Micron HBM demand supports memory revenue and earnings growth.',ts,'bullish',likes))
+            db.execute('INSERT INTO mentions VALUES(?,?,?)',('x',pid,'MU'))
+    for edition in ['morning','final']:
+        report=n.report_for({'edition':edition,'at':now},u)
+        first=report['focus_windows'][0]['rows']
+        assert [r['ticker'] for r in first]==['MU']
+        assert first[0]['mentions']==15 and first[0]['change']==0
+        assert first[0]['featured_post']['id']=='901'  # Fresh curated voice beats higher likes.
+        assert 'featured_post' not in report['focus_windows'][1]['rows'][0]
+    with s.db() as db:
+        assert n.focus_post(db,'MU',now-10800,now,{'901'})['id']=='902'
+        assert n.focus_post(db,'MU',now-10800,now,{'901','902'}) is None
 
 def test_unauthenticated_cron_rejected(monkeypatch):
     from fastapi.testclient import TestClient

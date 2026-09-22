@@ -1,3 +1,4 @@
+from .screening import stock_query
 """Count-first daily collection. Disabled until the owner opts in and a token exists."""
 import argparse, json, os, time
 from datetime import datetime, timezone
@@ -38,11 +39,16 @@ def _paid_request(client,path,params,kind,reserve,token):
             if round(used+reserve,6)>round(limit,6): raise BudgetLimit(('Daily profile lookup allowance reached' if kind.startswith('profiles') else 'Daily sampling allowance reached')+'; no request sent.','profiles' if kind.startswith('profiles') else 'posts')
         # Confirmed reads release unused reservations; uncertain calls retain theirs.
         if kind.startswith('sample'):
+            leaders=c.execute("SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind='sample_leaders'",(today,)).fetchone()[0]
+            if kind=='sample_leaders':
+                if round(leaders+reserve,6)>round(limit*.3,6):raise BudgetLimit('Daily leader evidence allowance reached; no request sent.','leader_posts')
+            elif settings['intraday_enabled'] and round(used-leaders+reserve,6)>round(limit*.7,6):
+                raise BudgetLimit('Daily non-leader sampling allowance reached; leader evidence capacity reserved.','general_posts')
             if kind.startswith('sample_admin:'):
                 account_used=c.execute('SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind=?',(today,kind)).fetchone()[0]
                 if round(account_used+reserve,6)>120*.005:raise BudgetLimit('Daily account sampling allowance reached; no request sent.','account')
-            elif c.execute('SELECT 1 FROM admin_voices LIMIT 1').fetchone():
-                general=c.execute("SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind LIKE 'sample%' AND kind NOT LIKE 'sample_admin:%'",(today,)).fetchone()[0]
+            elif kind!='sample_leaders' and c.execute('SELECT 1 FROM admin_voices LIMIT 1').fetchone():
+                general=c.execute("SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind LIKE 'sample%' AND kind NOT LIKE 'sample_admin:%' AND kind!='sample_leaders'",(today,)).fetchone()[0]
                 if round(general+reserve,6)>round(limit*.2,6):raise BudgetLimit('Daily general sampling allowance reached; admin capacity reserved.','general_posts')
         if kind=='profiles':
             general=c.execute("SELECT COALESCE(SUM(COALESCE(actual_estimate,reserved)),0) FROM x_spend WHERE ts>=? AND kind='profiles'",(today,)).fetchone()[0]
@@ -102,7 +108,7 @@ def collect(client=None):
             key='economy-counts:'+day+':'+ticker
             with db() as c:
                 if c.execute('SELECT 1 FROM meta WHERE key=?',(key,)).fetchone(): continue
-            query=f'${ticker} lang:en -is:retweet'
+            query=stock_query(ticker)
             # Six days leaves a safe margin inside the rolling seven-day API limit.
             result=paid_request(client,'tweets/counts/recent',{'query':query,'start_time':iso(end-6*86400),'end_time':iso(end),'granularity':'hour'},'counts',.005,token)
             if result.get('meta',{}).get('next_token'): raise RuntimeError('Unexpected counts pagination; checkpoint not marked complete.')
@@ -121,7 +127,7 @@ def collect(client=None):
             key='economy-sample:'+day+':'+ticker
             with db() as c:
                 if c.execute('SELECT 1 FROM meta WHERE key=?',(key,)).fetchone(): continue
-            result=paid_request(client,'tweets/search/recent',{'query':f'${ticker} lang:en -is:retweet','start_time':iso(end-86400),'end_time':iso(end),'max_results':settings['sample_size'],'tweet.fields':'created_at,author_id,public_metrics,note_tweet','expansions':'author_id','user.fields':'username'},'sample',settings['sample_size']*.015,token)
+            result=paid_request(client,'tweets/search/recent',{'query':stock_query(ticker),'start_time':iso(end-86400),'end_time':iso(end),'max_results':settings['sample_size'],'tweet.fields':'created_at,author_id,public_metrics,note_tweet','expansions':'author_id','user.fields':'username'},'sample',settings['sample_size']*.015,token)
             authors={a['id']:a['username'] for a in result.get('includes',{}).get('users',[])}
             items=[]
             for p in result.get('data',[]):

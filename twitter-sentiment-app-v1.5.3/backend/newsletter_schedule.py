@@ -18,7 +18,7 @@ def choices(c,uid):
     row=c.execute('SELECT editions,trial_reminder FROM newsletter_preferences WHERE user_id=?',(uid,)).fetchone()
     if row:return {'editions':json.loads(row['editions']),'trial_reminder':bool(row['trial_reminder'])}
     old=c.execute('SELECT frequency FROM digest_preferences WHERE user_id=?',(uid,)).fetchone()
-    return {'editions':{'daily':['morning','final'],'weekly':['weekly'],'monthly':['monthly'],'all':list(EDITION_NAMES)}.get(old[0] if old else 'off',[]),'trial_reminder':True}
+    return {'editions':{'daily':['morning','final'],'weekly':['weekly'],'monthly':['monthly'],'all':list(EDITION_NAMES)}.get(old[0] if old else 'all',[]),'trial_reminder':True}
 
 def due_slots(now):
     local=datetime.fromtimestamp(now,NY);day=local.date();result=[]
@@ -56,8 +56,52 @@ def report_for(slot,user):
     report={'ready':True,'date':label,'subject':f'Traders Echo {title} [{label}]','edition_title':title,'period_label':primary['label'],'window_start':end-primary['days']*86400,'window_end':end,'created_at':now,'tracked_stocks':len(primary['rows']),'rows':primary['rows'],'coverage_label':primary['coverage_label']+' · snapshot '+datetime.fromtimestamp(end,timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),'disclosure':'Selected AI supply-chain universe. Mentions measure attention, not bullishness. Post samples are capped. Comparisons are withheld without complete current and prior periods.'}
     report=personalized(report,user,now=now,preserve_ranking=True)
     with s.db() as c:watched={r[0] for r in c.execute('SELECT ticker FROM watchlist WHERE user_id=?',(user['id'],))}
-    report['other_windows']=[{**w,'rows':[r for r in w['rows'] if not report.get('watchlist_only') or r['ticker'] in watched][:10]} for w in windows if w is not primary]
+    report['other_windows']=[]
+    report['edition']=slot['edition']
+    period={1:'24 hours',7:'7 days',30:'30 days'}[primary['days']]
+    focus={'label':period,'rows':report['rows'][:3],'period_label':period,'window_start':report['window_start'],'window_end':now,'coverage_label':report['coverage_label']}
+    report['focus_windows']=[focus]
+    if slot['edition'] in ('morning','final'):
+        from .live_collection import intraday_rows
+        measured=[dict(r) for r in intraday_rows(now) if r['state']=='measured' and (not report.get('watchlist_only') or r['ticker'] in watched)][:3]
+        report['focus_windows'].insert(0,{'label':'Intraday','period_label':'3 hours','rows':measured,'window_start':now-3*3600,'window_end':now,'coverage_label':'Latest three completed hours versus the preceding three. Selected hourly leaders; not the entire universe.'})
+    # One fresh, relevant saved post per lead card. Never fetch X to render an email.
+    seen_posts=set()
+    with s.db() as c:
+        for window in report['focus_windows']:
+            for row in window['rows']:
+                row.pop('featured_post',None)
+                if len(report['focus_windows'])>1 and window['label']!='Intraday':continue
+                start=(row['as_of']-3*3600) if window['label']=='Intraday' else window['window_start']
+                post=focus_post(c,row['ticker'],start,now,seen_posts)
+                if post:row['featured_post']=post;seen_posts.add(post['id'])
+    from .research_feed import published, public_item
+    today=local.date().isoformat()
+    with s.db() as c:
+        items=published(c)
+        available={r[0] for r in c.execute('SELECT document_id FROM research_publications WHERE published<=?',(now,))}
+    ranks={r['ticker']:i for i,r in enumerate(report['rows'])}
+    candidates=[i for i in items if i.get('report_date')==today and i['id'].rsplit(':',1)[0] in available and (not report.get('watchlist_only') or i['ticker'] in watched)]
+    candidates.sort(key=lambda i:(ranks.get(i['ticker'],999999),-i.get('received',0),i['id']))
+    selected=[];seen=set()
+    for item in candidates:
+        if item['ticker'] in seen:continue
+        selected.append(public_item(item));seen.add(item['ticker'])
+        if len(selected)==3:break
+    report['latest_research']=selected
     return report
+
+def focus_post(c,ticker,start,end,seen):
+    from .post_quality import research_text
+    from .screening import stock_context
+    candidates=c.execute("""SELECT p.id,p.author,p.text,p.ts FROM posts p
+        JOIN mentions m ON m.source=p.source AND m.post_id=p.id
+        WHERE p.source='x' AND m.ticker=? AND p.ts>=? AND p.ts<?
+        ORDER BY CASE WHEN LOWER(p.author) IN (SELECT LOWER(handle) FROM admin_voices) THEN 0 ELSE 1 END,
+        p.likes DESC,p.ts DESC,p.id DESC LIMIT 40""",(ticker,start,end)).fetchall()
+    for candidate in candidates:
+        p=dict(candidate)
+        if str(p['id']).isdigit() and p['id'] not in seen and not p['text'].lstrip().startswith('@') and research_text(p['text']) and stock_context(p['text'],ticker):return p
 
 def enqueue(user,kind,slot=None):
     from .email_delivery import valid_recipient,optout_token
@@ -156,4 +200,7 @@ def run(now=None,client=None):
 def cron(request:Request):
     secret=os.getenv('CRON_SECRET','')
     if not secret or not hmac.compare_digest(request.headers.get('authorization',''),'Bearer '+secret):raise HTTPException(401,'Unauthorized')
-    return run()
+    from .owner_reports import run as owner_run
+    try: owner_result=owner_run()
+    except Exception: owner_result={'state':'error'}
+    return {**run(),'owner_emails':owner_result}

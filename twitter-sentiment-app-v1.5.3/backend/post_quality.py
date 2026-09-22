@@ -1,6 +1,6 @@
 """Conservative research filtering. Labels describe language, never investment advice."""
 import re
-from .screening import fingerprint
+from .screening import fingerprint,stock_context
 
 PROMOTION=re.compile(r'join.{0,45}(group|chat|telegram|whatsapp)|(?:stock|learning|trading|whatsapp|telegram).{0,25}group|copy\s*trading|(?:t\.me|wa\.me)/|guaranteed.{0,20}(profit|return)',re.I|re.S)
 
@@ -37,6 +37,7 @@ def prepare_feed(rows,ticker,curated,feed,order):
     result=[];seen=set()
     for p in ordered:
         text=p['text'];fp=fingerprint(text)
+        if ticker and not stock_context(text,ticker):continue
         if feed=='research' and (not research_text(text) or fp in seen):continue
         seen.add(fp)
         result.append({**p,'sentiment':p.get('sentiment','pending') if p.get('source')=='x' else language_label(text,ticker),'curated':p['author'] in curated,'sample_note':'AI interpretation of collected text; images, linked pages and thread context may be missing.' if p.get('sentiment_status')=='done' else 'Collected excerpt; open X for full context.'})

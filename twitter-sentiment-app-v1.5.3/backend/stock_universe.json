@@ -2854,5 +2854,53 @@
     "theme": "Physical AI",
     "reason": "Robotics, automation, sensing, autonomy or edge-device exposure; includes speculative names.",
     "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "NUAI",
+    "name": "New Era Energy & Digital, Inc.",
+    "sector": "Power generation",
+    "theme": "AI power infrastructure",
+    "reason": "Integrated power generation and data-center infrastructure serving AI compute demand.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "QBTS",
+    "name": "D-Wave Quantum Inc.",
+    "sector": "Semiconductors",
+    "theme": "Quantum computing",
+    "reason": "Quantum computing systems, software and services; adjacent advanced-computing exposure.",
+    "exchange": "NYSE"
+  },
+  {
+    "ticker": "QUBT",
+    "name": "Quantum Computing Inc.",
+    "sector": "Semiconductors",
+    "theme": "Quantum photonics",
+    "reason": "Quantum optics, integrated photonics and quantum computing technology.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "RGTI",
+    "name": "Rigetti Computing, Inc.",
+    "sector": "Semiconductors",
+    "theme": "Quantum computing",
+    "reason": "Superconducting quantum processors and hybrid quantum-classical computing systems.",
+    "exchange": "NASDAQ"
+  },
+  {
+    "ticker": "IONQ",
+    "name": "IonQ, Inc.",
+    "sector": "Semiconductors",
+    "theme": "Quantum computing and networking",
+    "reason": "Quantum computing and quantum networking platforms.",
+    "exchange": "NYSE"
+  },
+  {
+    "ticker": "BTQ",
+    "name": "BTQ Technologies Corp.",
+    "sector": "Software and security",
+    "theme": "Quantum security",
+    "reason": "Post-quantum security, quantum-secure networks and trusted quantum infrastructure.",
+    "exchange": "NASDAQ"
   }
 ]

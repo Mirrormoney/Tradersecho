@@ -1,0 +1,58 @@
+import {StockActions} from './Engagement.jsx'
+import React,{useEffect,useState} from 'react'
+import {api} from './api.js'
+import {dualTime} from './time.js'
+import {Filings} from './Filings.jsx'
+import {LiveTicker} from './LiveTicker.jsx'
+import {TradingViewDetail} from './TradingView.jsx'
+import './stock-detail.css'
+
+const fmt=n=>Intl.NumberFormat('en-US').format(n)
+export function DetailSection({title,initialOpen=true,children}){
+ const [open,setOpen]=useState(initialOpen)
+ return <details className="stock-detail-section" open={open} onToggle={e=>setOpen(e.currentTarget.open)}><summary>{title}</summary><div className="stock-detail-content">{children}</div></details>
+}
+function MorePosts({rows,source,Posts}){
+ const [shown,setShown]=useState(5)
+ return <DetailSection title={`View more X posts · ${rows.length} more`} initialOpen={false}><Posts rows={rows.slice(0,shown)} source={source}/>{shown<rows.length&&<button className="button" onClick={()=>setShown(n=>n+5)}>Show {Math.min(5,rows.length-shown)} more posts</button>}</DetailSection>
+}
+export function StockDetail({ticker,name,row,intraday,windowDays,asOf,coverageDays,source,user,refresh,posts,postsLoading,postsError,postOrder,setPostOrder,postFeed,setPostFeed,Posts,Spark,Sentiment,watchlist,toggleWatch}){
+ const [research,setResearch]=useState([]),[researchError,setResearchError]=useState('')
+ const staff=['owner','admin'].includes(user?.role)
+ const canResearch=staff||user?.plan==='premium'
+ useEffect(()=>{let active=true;if(!canResearch)return;api('/member-research/'+encodeURIComponent(ticker)).then(d=>{if(active){setResearch(d.documents||[]);setResearchError('')}}).catch(()=>{if(active)setResearchError('Research is temporarily unavailable.')});return()=>{active=false}},[ticker,canResearch,refresh])
+ const findings=research.flatMap(d=>(d.findings||[]).filter(f=>f.ticker===ticker).map(f=>({report:d,finding:f})))
+ const latest=findings[0]
+ const period=intraday?'latest three completed hours':windowDays===1?'24-hour snapshot':`${windowDays}-day snapshot`
+ const measured=row&&Number.isFinite(row.mentions)&&(!intraday||row.state==='measured')
+ const curated=posts.filter(p=>p.curated)
+ const contextualPost=curated.find(p=>p.sentiment_status==='done'&&p.sentiment_reason)
+ const headline=measured?(row.change>0?`Mentions up ${fmt(row.change)}%`:`${fmt(row.mentions)} mentions in the ${period}`):latest?'Research context available':curated.length?'Tracked voices are discussing this stock':'Attention context'
+ return <div className="stock-detail"><StockActions key={`${ticker}-${intraday}-${windowDays}`} ticker={ticker} intraday={intraday} windowDays={windowDays} source={source}/>
+  <DetailSection title="Why it’s trending · Evidence check">
+   <h3>{headline}</h3>
+   {measured&&<><p>{fmt(row.mentions)} mentions in the {period}{row.change!=null?`, ${row.change>0?'up':row.change<0?'down':'unchanged'}${row.change===0?'':` ${fmt(Math.abs(row.change))}%`} versus the preceding comparable period`:'. A comparable growth figure is not available'}.</p><p className="muted">{Number.isFinite(row.heat)?`Attention heat score: ${row.heat}. `:''}Rankings combine mention volume and acceleration; they do not measure price performance.{!intraday&&coverageDays<windowDays?` History covers ${coverageDays} of ${windowDays} days.`:''}</p>{(row.as_of||asOf)&&<small className="muted">Snapshot · {dualTime(row.as_of||asOf)}</small>}</>}
+   {latest&&<div className="detail-evidence"><span className="tag">{latest.finding.link_type==='sector_readthrough'?'Sector read-through':'Research context'}</span><p>{latest.finding.summary}</p><small className="muted">{latest.report.firm||''}{latest.report.report_date?` · ${latest.report.report_date}`:''}</small></div>}
+   {contextualPost&&<div className="detail-evidence"><strong>Tracked voice context</strong><p>{contextualPost.sentiment_reason}</p><a href={'https://x.com/i/web/status/'+contextualPost.id} target="_blank" rel="noreferrer">@{contextualPost.author} · {dualTime(contextualPost.ts)} ↗</a></div>}
+   {!measured&&!latest&&!contextualPost&&<p className="muted">{postsLoading?'Loading collected context…':curated.length?`${curated.length} collected tracked-voice posts are available below.`:'No measured ranking activity or supporting research is available in this view yet.'}</p>}
+   {postsError&&<p className="error">X context could not be loaded.</p>}
+   <small className="muted block">Research and posts provide context; they do not prove what caused attention to change.</small>
+  </DetailSection>
+  <DetailSection title="Behind the mentions · X posts">
+   <div className="detail-post-controls"><label>Post order<select value={postOrder} onChange={e=>setPostOrder(e.target.value)}><option value="latest">Latest posts</option><option value="engagement">Most liked takes</option></select></label><label>Post selection<select value={postFeed} onChange={e=>setPostFeed(e.target.value)}><option value="research">Research · curated first</option><option value="all">All collected posts · unfiltered</option></select></label></div>
+   <Posts rows={posts.slice(0,2)} source={source} loading={postsLoading} error={postsError}/>
+   {!postsLoading&&!postsError&&posts.length>2&&<MorePosts key={postOrder+postFeed} rows={posts.slice(2)} source={source} Posts={Posts}/>}
+  </DetailSection>
+  {(findings.length>0||researchError)&&<DetailSection title={`Research${findings.length?' · '+findings.length:''}`}>
+   {researchError&&<p className="error">{researchError}</p>}
+   {findings.map(({report,finding},i)=><article className="detail-research" key={report.id+'-'+i}><div className="section-head">{report.firm&&<strong>{report.firm}</strong>}<span className="tag">{finding.link_type==='sector_readthrough'?'Sector read-through · no stock rating':`${finding.stance} · author’s stance`}</span></div>{report.report_date&&<small className="muted">Report date · {report.report_date}</small>}{finding.link_type==='sector_readthrough'&&<p className="muted">{finding.link_reason}</p>}<p>{finding.summary}</p>{finding.catalysts?.length>0&&<p><strong>What to watch: </strong>{finding.catalysts.join(' · ')}</p>}{finding.risks?.length>0&&<p><strong>Risks: </strong>{finding.risks.join(' · ')}</p>}</article>)}
+  </DetailSection>}
+  <DetailSection title="Attention metrics">
+   {measured?<><div className="detail-stats"><div><small>Mentions · {intraday?'3 hours':windowDays===1?'24 hours':windowDays+' days'}</small><strong>{fmt(row.mentions)}</strong></div><div><small>Heat score</small><strong>{row.heat??'—'}</strong></div><div><small>{intraday?'Previous 3 hours':'Sample authors'}</small><strong>{intraday?(row.previous??'—'):(row.quality?.independent_authors??row.authors??'—')}</strong></div></div>{row.spark?.length>0&&<Spark values={row.spark} large/>}<p className="muted">{intraday?'Latest three completed hours compared with the preceding three.':`Selected ${windowDays===1?'24-hour':windowDays+'-day'} ranking snapshot.`}{!intraday&&coverageDays<windowDays?` Only ${coverageDays} days of history available.`:''}</p>{!intraday&&<Sentiment row={row}/>}</>:<p className="muted">No measured ranking row is available in the selected period. The latest shared check below may cover a different window.</p>}
+   <button className="button" onClick={()=>toggleWatch(ticker)}>{watchlist.includes(ticker)?'Remove from watchlist':'Add to watchlist'}</button>
+   <TradingViewDetail ticker={ticker} name={name}/>
+  </DetailSection>
+  <DetailSection title="SEC EDGAR filings" initialOpen={false}><Filings ticker={ticker} compact refresh={refresh}/></DetailSection>
+  {source==='x'&&<DetailSection title="Latest attention check" initialOpen={false}><LiveTicker ticker={ticker} premium={user?.plan==='premium'||staff} refresh={refresh}/></DetailSection>}
+ </div>
+}

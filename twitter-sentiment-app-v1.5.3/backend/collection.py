@@ -1,3 +1,4 @@
+from .screening import stock_query
 """Bounded, resumable daily X jobs. Shared by owner controls and cron runner."""
 import hashlib, hmac, json, os, secrets, time
 from datetime import datetime, timezone
@@ -62,7 +63,7 @@ def run_batch(max_jobs=10,client=None):
             job=claim_job(day)
             if not job:break
             try:
-                ticker=job['ticker'];query=f'${ticker} lang:en -is:retweet' if job['kind']!='voice' else f'from:{ticker} has:cashtags lang:en -is:retweet'
+                ticker=job['ticker'];query=stock_query(ticker) if job['kind']!='voice' else f'from:{ticker} has:cashtags lang:en -is:retweet'
                 if job['kind']=='counts':
                     with s.db() as c:
                         # Intraday jobs may already contain today's hours. Daily jobs

@@ -42,3 +42,27 @@ work/
 !backend/newsletter_schedule.py
 
 !backend/budget_monitor.py
+
+!backend/social.py
+!backend/social_art.py
+!backend/social_promos.py
+
+!backend/sec_filings.py
+!backend/supply_chain.py
+!backend/owner_reports.py
+!backend/research.py
+!backend/search.py
+
+!backend/research_feed.py
+
+!backend/research_drive.py
+
+!backend/trending_research_promo.png
+
+!backend/engagement.py
+
+!backend/echo_assistant.py
+
+!backend/research_readthrough.py
+
+!backend/research_health.py

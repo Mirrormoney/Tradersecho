@@ -115,7 +115,7 @@ def delivery_status(request:Request):
         suppressed=c.execute('SELECT COUNT(*) FROM email_suppressions').fetchone()[0]
     from .newsletter_schedule import enabled
     with core().db() as c:worker=c.execute("SELECT value FROM meta WHERE key='email_worker_result'").fetchone()
-    return {'sending_enabled':enabled(),'verified_accounts':verified,'suppressed_addresses':suppressed,'deliveries':counts,'webhook_configured':bool(os.getenv('RESEND_WEBHOOK_SECRET')),'last_worker':json.loads(worker[0]) if worker else None,'note':'Opt-in editions in New York time. Launch allowance: 80 research/reminder emails daily, 2400 monthly; security emails are separate.'}
+    return {'sending_enabled':enabled(),'verified_accounts':verified,'suppressed_addresses':suppressed,'deliveries':counts,'webhook_configured':bool(os.getenv('RESEND_WEBHOOK_SECRET')),'last_worker':json.loads(worker[0]) if worker else None,'note':'Selected editions in New York time. Launch allowance: 80 research/reminder emails daily, 2400 monthly; security emails are separate.'}
 
 
 def prepare_delivery(u):

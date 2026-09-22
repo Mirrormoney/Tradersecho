@@ -226,7 +226,7 @@ def test_premium_room_privacy_rate_limits_reports_and_moderation():
     mid=message.json()['id']
     assert free.post('/api/community/messages',json={'body':'Spam'}).status_code==429
     feed=owner.get('/api/community/messages?ticker=NVDA').json()
-    assert len(feed)==1 and feed[0]['display_name']=='Test Trader' and 'email' not in feed[0]
+    assert len(feed)==1 and feed[0]['display_name']==f['display_name'] and 'email' not in feed[0]
     assert owner.get('/api/community/messages?ticker=AMD').json()==[]
     assert free.post(f'/api/community/messages/{mid}/report',json={'reason':'Test report'}).status_code==200
     assert len(owner.get('/api/admin/reports').json())==1
@@ -369,10 +369,10 @@ def test_hourly_planning_budget_and_shared_demand(monkeypatch):
     with s.db() as c:
         c.execute("INSERT INTO meta VALUES('completed_snapshot',?)",(str(end-86400),))
         c.executemany('INSERT INTO x_counts VALUES(?,?,?,?,?,?)',[('NVDA',end-172800+i*3600,end-172800+(i+1)*3600,3,'mock',time.time()) for i in range(24)])
-    live.plan_hour();live.plan_hour()
+    live.plan_hour();live.plan_hour();live.plan_leader_samples();live.plan_leader_samples()
     with s.db() as c:
         assert c.execute("SELECT COUNT(*) FROM collection_jobs WHERE kind='hour_counts'").fetchone()[0]==1
-        assert c.execute("SELECT COUNT(*) FROM collection_jobs WHERE kind='hour_sample'").fetchone()[0]==1
+        assert c.execute("SELECT COUNT(*) FROM collection_jobs WHERE kind='leader_sample'").fetchone()[0]==1
     a=owner.post('/api/refresh/AMD');b=owner.post('/api/refresh/AMD')
     assert a.status_code==b.status_code==200
     with s.db() as c:assert c.execute("SELECT COUNT(*) FROM collection_jobs WHERE kind='request_counts'").fetchone()[0]==1
@@ -427,7 +427,7 @@ def test_shared_voices_limits_privacy_and_collection(monkeypatch):
     owner.put('/api/admin/data-budget',json={'enabled':True,'intraday_enabled':True,'monthly_budget':5})
     end=int(time.time()//3600)*3600
     with s.db() as c:c.execute("INSERT INTO meta VALUES('completed_snapshot',?)",(str(end-86400),))
-    live.plan_hour();live.plan_hour()
+    live.plan_hour();live.plan_hour();live.plan_leader_samples();live.plan_leader_samples()
     with s.db() as c:
         jobs=[dict(r) for r in c.execute("SELECT * FROM collection_jobs WHERE kind='hour_voice'")]
     assert len(jobs)==1 and jobs[0]['query'].count('from:sharedvoice')==1
@@ -469,7 +469,7 @@ def test_blocked_new_voice_does_not_starve_cached_voices(monkeypatch):
             c.execute('INSERT INTO admin_voices VALUES(?,?,?)',(handle,'',time.time()))
         c.execute('INSERT INTO voice_checkpoints VALUES(?,?,?,0)',('cached',end-3600,time.time()))
         c.execute('INSERT INTO post_authors(id,handle,fetched_at) VALUES(?,?,?)',('42','cached',time.time()))
-    live.plan_hour();live.plan_hour()
+    live.plan_hour();live.plan_hour();live.plan_leader_samples();live.plan_leader_samples()
     with s.db() as c:jobs=[dict(r) for r in c.execute("SELECT * FROM collection_jobs WHERE kind='hour_voice' ORDER BY id")]
     assert len(jobs)==2
     calls=[]
@@ -600,29 +600,30 @@ def test_daily_plan_picks_up_new_stocks(monkeypatch):
         assert [r[0] for r in c.execute("SELECT ticker FROM collection_jobs WHERE day=? AND kind='counts' ORDER BY ticker",(day,))]==['CAT','INTC']
 
 
-def test_display_names_unique_and_chat_identity_updates():
-    from .community import create_owner_invite,available_default_name
-    from .database import IntegrityError
+def test_username_fixed_and_admin_chat_deletion():
+    from .community import create_owner_invite
     owner,_=make_account('identity-owner@example.com',create_owner_invite('identity-owner@example.com'))
-    a,u=make_account('identity-a@example.com');b,v=make_account('identity-b@example.com')
-    assert a.put('/api/profile',json={'display_name':'  Sven   Mai  '}).json()['display_name']=='Sven Mai'
-    response=b.put('/api/profile',json={'display_name':'sVEN  mAI'})
-    assert response.status_code==409 and 'already taken' in response.json()['detail']
-    assert b.get('/api/me').json()['display_name']==v['display_name']
-    assert a.put('/api/profile',json={'display_name':'SVEN MAI'}).status_code==200
-    assert a.put('/api/profile',json={'display_name':'---'}).status_code==422
-    with pytest.raises(IntegrityError):
-        with s.db() as c:c.execute('UPDATE accounts SET display_name=? WHERE id=?',('sven mai',v['id']))
+    member,u=make_account('identity-a@example.com')
+    assert member.put('/api/profile',json={'display_name':'New Name'}).status_code==403
+    assert member.get('/api/me').json()['display_name']==u['display_name']
     owner.patch('/api/admin/users/'+u['id'],json={'plan':'premium'})
-    assert a.post('/api/community/messages',json={'body':'A research idea'}).status_code==200
-    assert a.put('/api/profile',json={'display_name':'New Researcher'}).status_code==200
-    post=owner.get('/api/community/messages').json()[0]
-    assert post['display_name']=='New Researcher' and post['plan']=='premium' and 'email' not in post
-    owner.patch('/api/admin/users/'+u['id'],json={'plan':'free'})
-    assert owner.get('/api/community/messages').json()[0]['plan']=='free'
-    assert b.put('/api/profile',json={'display_name':'Sven Mai'}).status_code==200
-    assert a.put('/api/profile',json={'display_name':'Trader-abcdef'}).status_code==200
-    with s.db() as c:assert available_default_name(c,'abcdef0000')!='Trader-abcdef'
+    mid=member.post('/api/community/messages',json={'body':'An idea to remove'}).json()['id']
+    assert member.delete('/api/admin/messages/'+str(mid)).status_code==403
+    member.post(f'/api/community/messages/{mid}/report',json={'reason':'Test report'})
+    assert owner.delete('/api/admin/messages/'+str(mid)).status_code==200
+    assert member.get('/api/community/messages').json()==[]
+    assert owner.get('/api/admin/reports').json()==[]
+    with s.db() as c:
+        assert c.execute('SELECT COUNT(*) FROM chat_messages WHERE id=?',(mid,)).fetchone()[0]==0
+        assert c.execute('SELECT COUNT(*) FROM chat_reports WHERE message_id=?',(mid,)).fetchone()[0]==0
+
+
+def test_briefing_defaults_preserve_optouts():
+    from .newsletter_schedule import choices
+    member,u=make_account('default-mail@example.com')
+    assert set(member.get('/api/digest/preferences').json()['editions'])=={'morning','final','weekly','monthly'}
+    assert member.put('/api/digest/preferences',json={'frequency':'off','editions':[]}).status_code==200
+    with s.db() as c:assert choices(c,u['id'])['editions']==[]
 
 
 def test_free_rankings_are_server_limited_and_watchlist_survives():
@@ -1053,7 +1054,7 @@ def test_intraday_freshness_growth_and_discovery(monkeypatch):
     assert rows['NVDA']['mentions']==60 and rows['NVDA']['previous']==30 and rows['NVDA']['change']==100
     assert rows['AMD']['state']=='awaiting_counts' and rows['AMD']['posts'][0]['id']=='987654321'
     assert 'AAPL' not in rows
-    live.plan_hour();live.plan_hour()
+    live.plan_hour();live.plan_hour();live.plan_leader_samples();live.plan_leader_samples()
     with s.db() as c:
         assert c.execute("SELECT COUNT(*) FROM collection_jobs WHERE kind='request_counts' AND ticker='AMD'").fetchone()[0]==1
     assert len(TestClient(s.app).get('/api/intraday').json()['rows'])<=2
@@ -1087,3 +1088,113 @@ def test_budget_adaptation_refuses_unaffordable_increase():
     with s.db() as c:
         assert data_settings(c)['daily_post_limit']==480
         assert snapshot(c)['decision']['state']=='increase_needs_budget_headroom'
+
+
+def test_signup_automatically_sends_verification_and_preserves_account_on_failure(monkeypatch):
+    from . import account_security as security
+    from fastapi import HTTPException
+    monkeypatch.setenv('ACCOUNT_EMAIL_ENABLED','true');monkeypatch.setenv('RESEND_API_KEY','mock-only')
+    sent=[]
+    monkeypatch.setattr(security,'send_email',lambda email,purpose,token:sent.append((email,purpose,token)))
+    c=TestClient(s.app);body={'email':'autoverify@example.com','display_name':'Auto Verify','password':'long-test-password'}
+    r=c.post('/api/auth/signup',json=body)
+    assert r.status_code==200 and r.json()['verification_email']=='sent'
+    assert len(sent)==1 and sent[0][:2]==('autoverify@example.com','verify')
+    assert not c.get('/api/me').json()['email_verified']
+    assert 'recently' in c.post('/api/auth/send-verification').json()['message']
+    assert len(sent)==1
+    assert c.post('/api/auth/verify-email',json={'token':sent[0][2]}).status_code==200
+    assert c.get('/api/me').json()['trial_active']
+    def fail(*args):raise HTTPException(503,'Provider unavailable')
+    monkeypatch.setattr(security,'send_email',fail)
+    d=TestClient(s.app);body.update(email='autofail@example.com',display_name='Auto Failed')
+    r=d.post('/api/auth/signup',json=body)
+    assert r.status_code==200 and r.json()['verification_email']=='failed'
+    assert d.get('/api/me').json()['id']==r.json()['id']
+    with s.db() as conn:
+        assert conn.execute('SELECT COUNT(*) FROM account_tokens WHERE user_id=?',(r.json()['id'],)).fetchone()[0]==0
+
+
+def test_heat_leader_sample_priority_and_cooldown(monkeypatch):
+    from . import live_collection as live
+    monkeypatch.setattr(s,'CATALOG',{'DY':('Dycom','Infrastructure'),'NVDA':('NVIDIA','Chips')})
+    end=int(time.time()//3600)*3600
+    with s.db() as c:
+        for ticker,previous,current in [('DY',1,100),('NVDA',900,1000)]:
+            for i in range(48):
+                start=end-(48-i)*3600
+                c.execute('INSERT INTO x_counts VALUES(?,?,?,?,?,?)',(ticker,start,start+3600,previous if i<24 else current,'test',end))
+        assert live.sample_candidate(c,end,end,['NVDA'])=='DY'
+        live.enqueue(c,'test-slot','hour_sample','DY',end,'$DY')
+        assert live.sample_candidate(c,end,end,['NVDA'])=='NVDA'
+        c.execute("UPDATE collection_jobs SET status='done' WHERE ticker='DY'")
+        assert live.sample_candidate(c,end,end,['NVDA'])=='NVDA'
+        c.execute("UPDATE collection_jobs SET window_end=? WHERE ticker='DY'",(end-7*3600,))
+        assert live.sample_candidate(c,end,end,['NVDA'])=='DY'
+
+
+def test_dy_crypto_collision_is_not_dycom():
+    from .screening import stock_query,stock_context
+    assert 'Dycom' in stock_query('DY')
+    assert 'Fabrinet' in stock_query('FN')
+    assert not stock_context('$DY 100x #Solana #Memecoin CA: fakepump','DY')
+    assert stock_context('Dycom $DY fiber expansion earnings','DY')
+    assert stock_context('$DY Dycom has no exposure to Solana','DY')
+
+def test_leader_union_quality_and_shared_cooldown(monkeypatch):
+    from . import live_collection as live, count_metrics
+    end=int(time.time()//3600)*3600
+    monkeypatch.setattr(s,'CATALOG',{t:(t,'AI') for t in ['NVDA','AMD','MU','FN']})
+    def ranked(c,rows,cutoff,w):
+        return [{'ticker':t,'heat':10,'mentions':5} for t in {1:['FN','NVDA'],7:['MU','NVDA'],30:['AMD','FN']}[w]]
+    monkeypatch.setattr(count_metrics,'enrich',ranked)
+    with s.db() as c:
+        candidates=live.leader_candidates(c,end,end,[{'ticker':'NVDA','mentions':10}])
+        assert set(candidates)=={'FN','MU','AMD','NVDA'} and len(candidates)==4
+        live.enqueue(c,'shared','request_sample','FN',end,'$FN')
+        assert 'FN' not in live.leader_candidates(c,end,end,[])
+        c.execute("UPDATE collection_jobs SET status='skipped' WHERE ticker='FN'")
+        assert 'FN' in live.leader_candidates(c,end,end,[])
+    s.ingest([{'id':'90000123456789','author':'analyst','text':'$MU memory demand is accelerating this quarter','created_at':live.iso(end-60)}])
+    with s.db() as c:
+        assert 'MU' not in live.leader_candidates(c,end,end,[])
+
+
+def test_leader_budget_uses_reserved_share_not_general_pool(monkeypatch):
+    from .collect_economy import paid_request, BudgetLimit
+    from .community import create_owner_invite
+    owner,_=make_account('leaders-budget@example.com',create_owner_invite('leaders-budget@example.com'))
+    owner.put('/api/admin/data-budget',json={'enabled':True,'intraday_enabled':True,'daily_post_limit':480})
+    owner.post('/api/admin/voices',json={'handle':'curated'})
+    month=datetime.now(timezone.utc).strftime('%Y-%m');now=time.time()
+    with s.db() as c:
+        c.execute('INSERT INTO x_spend(month,kind,reserved,ts,status) VALUES(?,?,?,?,?)',(month,'sample_live',.48,now,'reserved'))
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200,json={'data':[]})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(BudgetLimit):paid_request(client,'tweets/search/recent',{},'sample_live',.05,'mock')
+        paid_request(client,'tweets/search/recent',{},'sample_leaders',.05,'mock')
+        with s.db() as c:
+            c.execute('INSERT INTO x_spend(month,kind,reserved,ts,status) VALUES(?,?,?,?,?)',(month,'sample_leaders',.7,now,'reserved'))
+        with pytest.raises(BudgetLimit,match='leader evidence'):paid_request(client,'tweets/search/recent',{},'sample_leaders',.05,'mock')
+    assert len(calls)==1
+
+
+
+def test_fn_token_collision_preserves_real_optics_commentary():
+    from .screening import stock_context
+    assert not stock_context('$FN 21X CA&gt; 0x181f9463B85c8D40CE9eD4eB64B42fdDe7824Ff5','FN')
+    assert not stock_context('Wallet events point to $FN $MU $WETH','FN')
+    assert stock_context('Ciena growth is a read through for AI optics. Watch $LITE $COHR $FN.','FN')
+
+
+def test_ai_requires_company_identity():
+    from backend.screening import stock_query, stock_context
+    assert '"C3.ai"' in stock_query('AI')
+    for text in ['$AI CoinMarketCap vote for listing', '$AI wallet claim CA: 0x123', '$AI whale adding at 200M MC', '$AI looks hot today']:
+        assert not stock_context(text, 'AI')
+    for text in ['C3.ai $AI earnings growth', '$AI C3 AI enterprise contracts', 'NYSE:AI quarterly results']:
+        assert stock_context(text, 'AI')
+    assert stock_context('$NVDA enterprise AI demand', 'NVDA')

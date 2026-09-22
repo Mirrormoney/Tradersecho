@@ -64,16 +64,17 @@ def issue(email,purpose):
         c.execute('BEGIN IMMEDIATE')
         gate='account-email:'+hashlib.sha256(email.encode()).hexdigest()
         recent=c.execute('SELECT reset FROM attempts WHERE key=?',(gate,)).fetchone()
-        if recent and recent['reset']>now:return
+        if recent and recent['reset']>now:return 'cooldown'
         c.execute('INSERT INTO attempts VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET reset=excluded.reset',(gate,now+60))
         u=c.execute("SELECT id,email,email_verified FROM accounts WHERE email=? AND demo=0 AND status='active'",(email,)).fetchone()
-        if not u or purpose=='verify' and u['email_verified']:return
+        if not u or purpose=='verify' and u['email_verified']:return 'not_needed'
         c.execute('DELETE FROM account_tokens WHERE expires<?',(now,))
         c.execute('INSERT INTO account_tokens VALUES(?,?,?,?,?,0)',(digest,u['id'],purpose,email,now+(3600 if purpose=='reset' else 86400)))
     try:send_email(email,purpose,token)
     except HTTPException:
         with s.db() as c:c.execute('DELETE FROM account_tokens WHERE hash=?',(digest,))
         raise
+    return 'sent'
 
 class Email(BaseModel):
     email:str=Field(min_length=3,max_length=254)
@@ -96,8 +97,8 @@ def send_verification(request:Request):
     s=core();u=s.account(request);s.throttle(request)
     if u['demo']:raise HTTPException(403,'Sample accounts cannot verify email.')
     if not configured():raise HTTPException(503,'Account email is temporarily unavailable. Contact info@tradersecho.com.')
-    issue(u['email'],'verify')
-    return {'message':'Check your inbox for a verification link. You can request another in one minute.'}
+    state=issue(u['email'],'verify')
+    return {'message':('A link was requested recently. Please wait one minute before requesting another; check your inbox and spam folder.' if state=='cooldown' else 'Your email is already verified.' if state=='not_needed' else 'Verification email sent. Check your inbox and spam folder; delivery can take a few minutes.')}
 
 def consume(c,token,purpose):
     hashed=hashlib.sha256(token.encode()).hexdigest()

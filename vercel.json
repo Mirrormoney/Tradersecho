@@ -39,6 +39,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/home",
+      "destination": "/index.html"
+    },
+    {
       "source": "/marketpulse",
       "destination": "/index.html"
     },

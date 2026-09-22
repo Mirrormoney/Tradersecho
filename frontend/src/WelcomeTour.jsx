@@ -41,14 +41,14 @@ export function WelcomeTour({user,ready,modal,replay,navigate}){
    const boxes=elements.map(el=>el.getBoundingClientRect()),w=window.innerWidth,h=window.innerHeight
    const r=boxes.length?{left:Math.max(4,Math.min(...boxes.map(b=>b.left))-5),top:Math.max(4,Math.min(...boxes.map(b=>b.top))-5),right:Math.min(w-4,Math.max(...boxes.map(b=>b.right))+5),bottom:Math.min(h-4,Math.max(...boxes.map(b=>b.bottom))+5)}:null
    setRect(r);setMissing(!r&&!s.menu)
-   const dw=Math.min(380,w-24),dh=dialog.current?.offsetHeight||260
+   const dw=Math.min(380,w-24,r?Math.max(280,w-r.right-28):380),dh=dialog.current?.offsetHeight||260
    let left=r&&r.right+dw+24<w?r.right+16:Math.max(12,Math.min(r?.left||24,w-dw-12))
    let top=r&&r.right+dw+24<w?r.top: r?r.bottom+18:80
    if(top+dh>h-12)top=r&&!s.menu&&r.top>dh+24?r.top-dh-18:Math.max(12,h-dh-12)
-   setPosition({left,top})
+   setPosition({left,top,width:dw})
   })}
-  measure();const observer=new MutationObserver(measure);const app=document.querySelector('.app');if(app)observer.observe(app,{childList:true,subtree:true});window.addEventListener('resize',measure);window.addEventListener('scroll',measure,true)
-  return()=>{cancelAnimationFrame(raf);observer.disconnect();window.removeEventListener('resize',measure);window.removeEventListener('scroll',measure,true);document.body.classList.remove('welcome-menu-open')}
+  measure();const sizeObserver=new ResizeObserver(measure);if(dialog.current)sizeObserver.observe(dialog.current);const observer=new MutationObserver(measure);const app=document.querySelector('.app');if(app)observer.observe(app,{childList:true,subtree:true});window.addEventListener('resize',measure);window.addEventListener('scroll',measure,true)
+  return()=>{cancelAnimationFrame(raf);sizeObserver.disconnect();observer.disconnect();window.removeEventListener('resize',measure);window.removeEventListener('scroll',measure,true);document.body.classList.remove('welcome-menu-open')}
  },[step])
  if(step==null||!user)return null
  const s=steps[step],w=window.innerWidth,h=window.innerHeight

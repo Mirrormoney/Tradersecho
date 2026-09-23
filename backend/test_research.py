@@ -43,10 +43,20 @@ class ResearchTests(unittest.TestCase):
   imap.uid.side_effect=uid
   try:
    with db() as c:
-    r.migrate(c);c.execute('CREATE TABLE stocks(ticker TEXT,name TEXT,active INTEGER)')
+    r.migrate(c);c.execute('CREATE TABLE stocks(ticker TEXT,name TEXT,active INTEGER)');c.execute('CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT)')
    with patch.object(r,'core',return_value=SimpleNamespace(db=db)),patch.dict(os.environ,{'RESEARCH_IMAP_PASSWORD':'test'}),patch.object(r.imaplib,'IMAP4_SSL',return_value=imap),patch.object(r,'extract_pdf',return_value=(TEXT,2)):
     self.assertEqual(r.import_mail()['imported'],1)
     self.assertEqual(r.import_mail()['imported'],0)
+    with db() as c:
+     did=c.execute('SELECT id FROM research_documents').fetchone()[0]
+     c.execute("UPDATE research_documents SET status='needs_review'")
+     r.put(c,'four_page_retry_enabled',True)
+     r.put(c,'four_page_retry:'+did,{'state':'pending'})
+    self.assertEqual(r.import_mail()['imported'],1)
+    self.assertEqual(r.import_mail()['imported'],0)
+    with db() as c:
+     self.assertEqual(r.meta(c,'four_page_retry:'+did)['state'],'attempted')
+     self.assertEqual(c.execute('SELECT count(*) FROM research_documents').fetchone()[0],1)
     imap.select.assert_called_with('INBOX',readonly=True)
     imap.store.assert_not_called()
   finally:os.unlink(path)

@@ -202,18 +202,23 @@ def import_files(client,deadline):
    did=hashlib.sha256(raw).hexdigest()
    with core().db() as c:
     exists=c.execute('SELECT id FROM research_documents WHERE id=?',(did,)).fetchone()
-   if not exists:
+    recovering=research.claim_recovery(c,did) if exists else False
+   if not exists or recovering:
     try:text,pages=research.extract_pdf(bytes(raw))
     except Exception as exc:
      # Malformed PDF internals must not poison every later batch. No source text in diagnostics.
-     with core().db() as c:c.execute("UPDATE research_drive_files SET status='needs_review',error='PDF parsing failed; manual extraction review required' WHERE id=?",(f['id'],))
+     with core().db() as c:
+      c.execute("UPDATE research_drive_files SET status='needs_review',error='PDF parsing failed; manual extraction review required' WHERE id=?",(f['id'],))
+      if recovering:research.save_recovered(c,did,'',0,'needs_review',str(exc) if isinstance(exc,ValueError) else 'PDF parsing failed; manual review required')
      continue
     with core().db() as c:catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}
     screening=research.prescreen(f['name'],text,catalog)
     # Every note passes the existing universe screen; AI/date validation is separate.
     state='screened_out' if screening['skip'] else ('queued' if date_screen(text,f['name']) else 'needs_review')
     reason='No recent date candidate in filename or first page; review before spending AI tokens' if state=='needs_review' else None
-    with core().db() as c:c.execute('INSERT OR IGNORE INTO research_documents(id,filename,sender,received,text,pages,status,error,updated) VALUES(?,?,?,?,?,?,?,?,?)',(did,f['name'],'Google Drive research',time.time(),text,pages,state,reason,time.time()))
+    with core().db() as c:
+     c.execute('INSERT OR IGNORE INTO research_documents(id,filename,sender,received,text,pages,status,error,updated) VALUES(?,?,?,?,?,?,?,?,?)',(did,f['name'],'Google Drive research',time.time(),text,pages,state,reason,time.time()))
+     if recovering:research.save_recovered(c,did,text,pages,state,reason)
    with core().db() as c:c.execute("UPDATE research_drive_files SET status=?,document_id=? WHERE id=?",('duplicate' if exists else 'imported',did,f['id']))
   except httpx.HTTPStatusError as e:
    if e.response.status_code in (429,500,502,503,504):raise

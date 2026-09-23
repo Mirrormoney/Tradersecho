@@ -112,6 +112,21 @@ except Exception as exc:
     if payload.get('error'):raise ValueError(payload['error'])
     return payload['text'],payload['pages']
 
+def claim_recovery(c,document_id):
+    # Explicit owner-requested, one-time recovery; never retry every cron tick.
+    key='four_page_retry:'+document_id
+    retry=meta(c,key,{})
+    if retry.get('state')!='pending':return False
+    row=c.execute('SELECT status FROM research_documents WHERE id=?',(document_id,)).fetchone()
+    if not row or row['status']!='needs_review':return False
+    changed=c.execute('UPDATE meta SET value=? WHERE key=? AND value=?',(json.dumps({**retry,'state':'attempted','at':time.time()}),'research_'+key,json.dumps(retry))).rowcount
+    return bool(changed)
+
+
+def save_recovered(c,document_id,text,pages,state,error):
+    c.execute("UPDATE research_documents SET text=?,pages=?,status=?,error=?,updated=? WHERE id=? AND status='needs_review'",(text,pages,state,error,time.time(),document_id))
+
+
 def import_mail():
     password=os.getenv('RESEARCH_IMAP_PASSWORD')
     if not password:return {'state':'mailbox_password_required','imported':0}
@@ -129,9 +144,13 @@ def import_mail():
         for uid in data[0].split():
             mid=validity+':'+uid.decode()
             with core().db() as c:
-                if c.execute('SELECT 1 FROM research_messages WHERE id=?',(mid,)).fetchone():continue
+                seen=c.execute('SELECT 1 FROM research_messages WHERE id=?',(mid,)).fetchone()
+                recheck=meta(c,'four_page_retry_enabled',False) and not meta(c,'four_page_mail:'+mid,False)
+                if seen and not recheck:continue
             if checked>=3:break
             checked+=1
+            if recheck:
+                with core().db() as c:put(c,'four_page_mail:'+mid,True)
             status,size=mailbox.uid('fetch',uid,'(RFC822.SIZE)')
             match=re.search(rb'RFC822.SIZE (\d+)',b' '.join(x for x in size if isinstance(x,bytes)))
             if not match or int(match[1])>40*1024*1024:
@@ -162,7 +181,9 @@ def import_mail():
                     with core().db() as c:c.execute('INSERT OR IGNORE INTO research_documents(id,filename,sender,received,text,pages,status,error,updated) VALUES(?,?,?,?,?,?,?,?,?)',(did,'Unreadable email attachment',sender,time.time(),'',0,'needs_review','Attachment decoding failed; other attachments continue',time.time()))
                     continue
                 with core().db() as c:
-                    if c.execute('SELECT 1 FROM research_documents WHERE id=?',(did,)).fetchone():continue
+                    exists=c.execute('SELECT 1 FROM research_documents WHERE id=?',(did,)).fetchone()
+                    recovering=claim_recovery(c,did) if exists else False
+                    if exists and not recovering:continue
                 try:
                     text,pages=extract_pdf(content);state='awaiting_analysis';error=None
                 except Exception as exc:
@@ -177,6 +198,7 @@ def import_mail():
                         if state=='needs_review':error='Report date may be outside the recent publication window'
                 with core().db() as c:
                     c.execute('INSERT OR IGNORE INTO research_documents(id,filename,sender,received,text,pages,status,error,updated) VALUES(?,?,?,?,?,?,?,?,?)',(did,name[:200] or 'Research.pdf',sender,time.time(),text,pages,state,error,time.time()))
+                    if recovering:save_recovered(c,did,text,pages,state,error)
                 imported+=1
             with core().db() as c:c.execute('INSERT OR IGNORE INTO research_messages VALUES(?,?,?)',(mid,'imported',time.time()))
         return {'state':'ok','imported':imported}

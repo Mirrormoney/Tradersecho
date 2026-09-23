@@ -91,26 +91,35 @@ class ResearchTests(unittest.TestCase):
   from pypdf import PdfWriter
   w=PdfWriter();w.add_blank_page(width=300,height=300);b=io.BytesIO();w.write(b)
   with self.assertRaisesRegex(ValueError,'OCR'):r.extract_pdf(b.getvalue())
- def test_complete_page_one_never_reads_page_two(self):
-  first='The broker expects demand growth to continue. '*5
-  second=MagicMock(side_effect=AssertionError('Page two must not be read'))
-  text,pages=r.front_page_excerpt(first,second)
-  self.assertEqual(pages,1);second.assert_not_called()
-  self.assertNotIn('[Page 2]',text)
- def test_only_continuing_paragraph_is_included(self):
-  first='The broker expects demand growth to continue. '*5+'The next catalyst is'
-  second='the upcoming earnings report.\n\nA completely unrelated stock discussion.'
-  text,pages=r.front_page_excerpt(first,second)
+ def test_four_page_limit_and_context(self):
+  read=MagicMock(side_effect=lambda i:('NVIDIA expects growth on page '+str(i+1)+'. ')*8)
+  text,pages=r.research_excerpt(read,10)
+  self.assertEqual(pages,4);self.assertEqual(read.call_count,4)
+  self.assertIn('[Page 4]',text);self.assertNotIn('[Page 5]',text)
+ def test_disclaimer_stops_before_later_pages(self):
+  content=['Demand is improving. '*12,'More useful context. '*12+'\nIMPORTANT DISCLOSURES\nDo not send this legal section.','Must not read.']
+  read=MagicMock(side_effect=lambda i:content[i])
+  text,pages=r.research_excerpt(read,3)
+  self.assertEqual(pages,2);self.assertEqual(read.call_count,2)
+  self.assertIn('More useful context',text);self.assertNotIn('legal section',text)
+ def test_inline_disclaimer_reference_does_not_stop(self):
+  text,pages=r.research_excerpt(lambda i:('Please see disclaimer on page 8. Demand is growing. '*5),2)
   self.assertEqual(pages,2)
-  self.assertIn('the upcoming earnings report.',text)
-  self.assertNotIn('unrelated',text)
- def test_unclear_continuation_stays_private(self):
-  first='The broker expects demand growth to continue. '*5+'The next catalyst is'
-  with self.assertRaises(ValueError):r.front_page_excerpt(first,'still running without an ending')
- def test_queued_full_report_is_trimmed(self):
-  first='The broker expects demand growth to continue. '*5
-  text=r.limit_stored_excerpt('[Page 1]\n'+first+'\n[Page 2]\nSECRET LATER PAGE\n[Page 3]\nMORE')
-  self.assertNotIn('SECRET',text);self.assertNotIn('MORE',text)
+ def test_incomplete_page_does_not_poison_remaining_context(self):
+  text,pages=r.research_excerpt(lambda i:('Growth continues. '*12+'the next catalyst is') if i==0 else ('a new product. '*12),2)
+  self.assertEqual(pages,2);self.assertIn('a new product',text)
+ def test_stored_report_stops_at_four(self):
+  text=r.limit_stored_excerpt(''.join('\n[Page '+str(i)+']\n'+('Demand is improving. '*12) for i in range(1,7)))
+  self.assertIn('[Page 4]',text);self.assertNotIn('[Page 5]',text)
+ def test_excerpt_byte_cap(self):
+  text,pages=r.research_excerpt(lambda i:('Demand is improving.\n'*2000),4)
+  self.assertLessEqual(len(text.encode()),r.MAX_EXCERPT_BYTES)
+ def test_page_four_evidence_validates_but_page_five_rejected(self):
+  value=copy.deepcopy(REPORT);value['findings'][0]['page']=4
+  text=TEXT+'\n[Page 4]\nNVIDIA expects improving demand.'
+  self.assertEqual(r.validate_report(value,text,{'NVDA'})['findings'][0]['page'],4)
+  value['findings'][0]['page']=5
+  with self.assertRaises(ValueError):r.validate_report(value,text,{'NVDA'})
  def test_oversize(self):
   with self.assertRaisesRegex(ValueError,'12 MB'):r.extract_pdf(b'0'*(12*1024*1024+1))
  def test_no_password_no_connect(self):

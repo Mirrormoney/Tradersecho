@@ -328,7 +328,8 @@ def analyze_one(token=None):
             for finding in result['findings']:c.execute('INSERT OR IGNORE INTO research_links VALUES(?,?)',(row['id'],finding['ticker']))
         return {'state':'draft_ready','matches':len(result['findings'])}
     except Exception as exc:
-        error=str(exc) if isinstance(exc,RuntimeError) else 'Analysis needs manual review; response failed validation'
+        known={'Evidence not present in source','Event attribution lacks source evidence','Incomplete analysis','Ambiguous filename date','Future report date','Missing report date evidence','Invalid or duplicate ticker'}
+        error=str(exc) if isinstance(exc,RuntimeError) or str(exc) in known else 'Analysis needs manual review; response failed validation'
         with s.db() as c:c.execute("UPDATE research_documents SET status='needs_review',error=?,updated=? WHERE id=?",(error,time.time(),row['id']))
         return {'state':'needs_review'}
 

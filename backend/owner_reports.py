@@ -106,9 +106,9 @@ def run(now=None, client=None):
         from .research_health import snapshot as research_health
         health=research_health(c,now) if os.getenv('RESEARCH_DRIVE_ENABLED')=='true' or os.getenv('RESEARCH_IMAP_PASSWORD') else {'issues':[],'checked_at':now}
         save(c,'research_health',health)
-        alert_key=PREFIX+'research:'+datetime.fromtimestamp(now,BERLIN).date().isoformat()
+        alert_key=PREFIX+'research:'+datetime.fromtimestamp(now,BERLIN).date().isoformat()+(':failure' if health.get('operational_issues') else ':review')
         if health['issues'] and not get(c,alert_key):
-            save(c,alert_key,{'kind':'research','issues':health['issues'],'created':now,'status':'pending','next':0})
+            save(c,alert_key,{'kind':'research','issues':health['issues'],'health':health,'created':now,'status':'pending','next':0})
         queue = [(r['key'],json.loads(r['value'])) for r in c.execute('SELECT key,value FROM meta WHERE key LIKE ?',(PREFIX+'%',))]
     owner = client is None; client = client or httpx.Client(timeout=10)
     try:
@@ -129,7 +129,13 @@ def run(now=None, client=None):
                         # Render outside this transaction below; lease protects concurrent workers.
                         content = None
                     elif event['kind']=='research':
-                        content=message('Traders Echo · Research import needs attention','Research import health check:\n\n'+'\n'.join(event['issues'])+'\n\nExisting published research remains available. No budget was raised.\nReview: https://tradersecho.com/admin')
+                        health=event.get('health',{})
+                        review_only='operational_issues' in health and not health['operational_issues']
+                        title='Research import - Notes held for review' if review_only else 'Research import needs attention'
+                        intro='Import workers are healthy. Individual notes were held for review; other documents continue processing.' if review_only else 'An import worker or queue needs attention. See the recorded checks below.'
+                        progress=health.get('recent',{})
+                        detail='\n'.join(str(r['count'])+' - '+r['reason'] for r in health.get('review_reasons',[]))
+                        content=message('Traders Echo - '+title,intro+'\n\n'+'\n'.join(event['issues'])+'\n\nPast 24 hours: '+str(progress.get('draft',0))+' validated summaries; '+str(progress.get('no_match',0))+' notes with no covered findings.\n\n'+detail+'\n\nHeld notes remain unpublished. Existing published research remains available.\nReview: https://tradersecho.com/admin')
                     else:
                         user = c.execute('SELECT email,display_name FROM accounts WHERE id=? AND demo=0',(event['uid'],)).fetchone()
                         if not user:

@@ -14,8 +14,11 @@ def snapshot(c,now):
  for r in rows:
   if r['status'] in ('queued','awaiting_analysis') and now-r['oldest']>2*3600:issues.append(f"{r['n']} notes are {r['status'].replace('_',' ')}; the oldest has waited over two hours.")
   if r['status']=='analyzing' and now-r['oldest']>15*60:issues.append('An analysis has not finished after 15 minutes.')
+ operational_issues=list(issues)
  review=c.execute("SELECT COUNT(*) FROM research_documents WHERE status='needs_review' AND updated>?",(now-86400,)).fetchone()[0]
  if review:issues.append(f'{review} notes entered manual review in the past 24 hours. They have not been automatically published.')
  mail_review=c.execute("SELECT COUNT(*) FROM research_messages WHERE status!='imported' AND updated>?",(now-86400,)).fetchone()[0]
  if mail_review:issues.append(f'{mail_review} email messages were skipped for size, fetching or parsing problems; later messages continue.')
- return {'issues':issues,'counts':counts,'checked_at':now}
+ recent={r['status']:r['n'] for r in c.execute('SELECT status,COUNT(*) n FROM research_documents WHERE updated>? GROUP BY status',(now-86400,))}
+ reasons=[{'reason':r['error'] or 'Unspecified review reason','count':r['n']} for r in c.execute("SELECT error,COUNT(*) n FROM research_documents WHERE status='needs_review' AND updated>? GROUP BY error",(now-86400,))]
+ return {'issues':issues,'operational_issues':operational_issues,'review_reasons':reasons,'recent':recent,'counts':counts,'checked_at':now}

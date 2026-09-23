@@ -1,5 +1,5 @@
 """Published, redacted research. No paid requests on page views."""
-import json,re,time,hashlib
+import json,re,time,hashlib,threading
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter,Request,HTTPException
@@ -38,7 +38,12 @@ def deduplicate(items):
 
 def published(c,ticker=None):
     migrate(c)
-    rows=c.execute("SELECT d.id,d.result,d.received FROM research_documents d JOIN research_publications p ON p.document_id=d.id WHERE d.status='draft'").fetchall()
+    sql="SELECT d.id,d.result,d.received FROM research_documents d JOIN research_publications p ON p.document_id=d.id WHERE d.status='draft'"
+    args=()
+    if ticker:
+        sql+=" AND EXISTS (SELECT 1 FROM research_links l WHERE l.document_id=d.id AND l.ticker=?)"
+        args=(ticker,)
+    rows=c.execute(sql,args).fetchall()
     items=[]
     for row in rows:
         doc=json.loads(row['result']);doc['id']=row['id']
@@ -74,16 +79,30 @@ def restrict_feed(ranked,other,full):
     preview_other=other[:max(0,2-len(preview_rows))]
     return {'rows':ranked if full else preview_rows,'other':other if full else preview_other,'locked':not full,'total':len(ranked)+len(other),'featured_total':len(ranked)}
 
+_feed_cache=None
+_feed_lock=threading.Lock()
+
+def shared_overview():
+    # Shared research only. Membership is checked separately on every request.
+    global _feed_cache
+    today=datetime.now(ZoneInfo('America/New_York')).date().isoformat()
+    with _feed_lock:
+        if _feed_cache and _feed_cache['today']==today and time.monotonic()-_feed_cache['at']<60:
+            return _feed_cache['value']
+        from .count_metrics import enrich
+        with core().db() as c:
+            items=published(c)
+            rankings=sorted(enrich(c,[],core().reference('x',c),1),key=lambda r:-r['heat'])
+        ranked,other=order_research(items,rankings,core().CATALOG,today)
+        value=(ranked,other,time.time(),today)
+        _feed_cache={'today':today,'at':time.monotonic(),'value':value}
+        return value
+
 @router.get('/api/trending-research')
 def feed(request:Request):
-    from .count_metrics import enrich
     user=core().account(request)
-    with core().db() as c:
-        items=published(c)
-        rankings=sorted(enrich(c,[],core().reference('x',c),1),key=lambda r:-r['heat'])
-    today=datetime.now(ZoneInfo('America/New_York')).date().isoformat()
-    ranked,other=order_research(items,rankings,core().CATALOG,today)
-    return {**restrict_feed(ranked,other,premium(user)),'as_of':time.time(),'research_today':today}
+    ranked,other,as_of,today=shared_overview()
+    return {**restrict_feed(ranked,other,premium(user)),'as_of':as_of,'research_today':today}
 
 @router.get('/api/member-research/{ticker}')
 def detail(ticker:str,request:Request):

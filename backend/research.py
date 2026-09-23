@@ -449,15 +449,10 @@ def listing(request:Request):
     staff(request)
     with core().db() as c:
         migrate(c)
-        rows=[dict(r) for r in c.execute('SELECT id,filename,received,pages,status,error,result,model,text FROM research_documents ORDER BY received DESC LIMIT 100')]
         worker=meta(c,'worker')
-        catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}
-        for r in rows:
-            source=r.pop('text')
-            r['prescreen']=prescreen(r['filename'],source,catalog)
-    for r in rows:r['result']=json.loads(r['result']) if r['result'] else None
-    from .research_health import snapshot
-    with core().db() as c:health=snapshot(c,time.time())
+        from .research_health import snapshot
+        health=snapshot(c,time.time())
+    rows=[] # Compact admin status only; source text and findings stay in the backend.
     return {'documents':rows,'worker':worker,'health':health,'configured':bool(os.getenv('RESEARCH_IMAP_PASSWORD'))}
 
 @router.post('/api/admin/research/{document_id}/analyze')

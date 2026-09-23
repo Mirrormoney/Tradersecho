@@ -61,3 +61,26 @@ def test_partial_today_fills_tiles_with_newest_and_keeps_latest_note_first():
  assert [r['ticker'] for r in top]==['A','B','C']
  assert top[0]['research'][0]['report_date']=='2026-09-21'
  assert [r['ticker'] for r in rest]==['D']
+
+def test_published_ticker_filter_happens_in_database(monkeypatch):
+ from backend import research_feed as f
+ from types import SimpleNamespace
+ class DB:
+  def execute(self,sql,args=()):
+   if sql.startswith('SELECT'):
+    assert 'research_links' in sql and 'l.ticker=?' in sql
+    assert args==('PANW',)
+   return self
+  def fetchall(self):return []
+ monkeypatch.setattr(f,'core',lambda:SimpleNamespace(CATALOG={}))
+ assert f.published(DB(),'PANW')==[]
+
+def test_cached_feed_still_restricts_each_user(monkeypatch):
+ from backend import research_feed as f
+ from types import SimpleNamespace
+ rows=[{'ticker':x} for x in ['PANW','MU','AES']]
+ monkeypatch.setattr(f,'shared_overview',lambda:(rows,[],123,'2026-09-23'))
+ monkeypatch.setattr(f,'core',lambda:SimpleNamespace(account=lambda req:{'plan':req}))
+ assert len(f.feed('premium')['rows'])==3
+ assert len(f.feed('free')['rows'])==2
+ assert f.feed('free')['locked']

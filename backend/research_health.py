@@ -9,6 +9,7 @@ def snapshot(c,now):
   if not worker.get('at') or now-worker['at']>max_age:issues.append(label+' heartbeat is overdue.')
   elif worker.get('state') not in ('ok','batch_yielded'):issues.append(label+' reports '+str(worker.get('state','unknown'))+'.')
   if worker.get('analysis',{}).get('state') in ('budget_paused','ai_credentials_required','worker_error'):issues.append('Research analysis reports '+worker['analysis']['state']+'.')
+  if worker.get('image_state'):issues.append(worker['image_state']+'.')
  rows=c.execute('SELECT status,COUNT(*) n,MIN(updated) oldest FROM research_documents GROUP BY status').fetchall()
  counts={r['status']:r['n'] for r in rows}
  last_completed=c.execute("SELECT MAX(updated) FROM research_documents WHERE status IN ('draft','no_match','needs_review','screened_out')").fetchone()[0]
@@ -18,7 +19,7 @@ def snapshot(c,now):
  operational_issues=list(issues)
  review=c.execute("SELECT COUNT(*) FROM research_documents WHERE status='needs_review' AND updated>?",(now-86400,)).fetchone()[0]
  if review:issues.append(f'{review} notes entered manual review in the past 24 hours. They have not been automatically published.')
- mail_review=c.execute("SELECT COUNT(*) FROM research_messages WHERE status!='imported' AND updated>?",(now-86400,)).fetchone()[0]
+ mail_review=c.execute("SELECT COUNT(*) FROM research_messages WHERE status IN ('oversize_or_unavailable','fetch_needs_review','parse_needs_review') AND updated>?",(now-86400,)).fetchone()[0]
  if mail_review:issues.append(f'{mail_review} email messages were skipped for size, fetching or parsing problems; later messages continue.')
  recent={r['status']:r['n'] for r in c.execute('SELECT status,COUNT(*) n FROM research_documents WHERE updated>? GROUP BY status',(now-86400,))}
  reasons=[{'reason':r['error'] or 'Unspecified review reason','count':r['n']} for r in c.execute("SELECT error,COUNT(*) n FROM research_documents WHERE status='needs_review' AND updated>? GROUP BY error",(now-86400,))]

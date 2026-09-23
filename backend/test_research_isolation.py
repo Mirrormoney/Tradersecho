@@ -15,7 +15,7 @@ def test_failed_email_or_attachment_does_not_block_next(tmp_path,monkeypatch,fai
   finally:c.close()
  monkeypatch.setattr(r,'core',lambda:SimpleNamespace(db=db))
  with db() as c:
-  r.migrate(c);c.execute('CREATE TABLE stocks(ticker TEXT,name TEXT,active INTEGER)')
+  r.migrate(c);c.execute('CREATE TABLE stocks(ticker TEXT,name TEXT,active INTEGER)');c.execute('CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT)')
  monkeypatch.setenv('RESEARCH_IMAP_PASSWORD','test');monkeypatch.delenv('RESEARCH_DRIVE_PUBLISH_ENABLED',raising=False)
  def message(raw):
   if raw==b'bad' and failure=='parse':raise ValueError('malformed MIME')

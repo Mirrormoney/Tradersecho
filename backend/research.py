@@ -23,6 +23,7 @@ def migrate(c):
       text TEXT NOT NULL,pages INTEGER NOT NULL,status TEXT NOT NULL,error TEXT,
       result TEXT,model TEXT,updated REAL NOT NULL);
     CREATE TABLE IF NOT EXISTS research_messages(id TEXT PRIMARY KEY,status TEXT NOT NULL,updated REAL NOT NULL);
+    CREATE TABLE IF NOT EXISTS research_image_messages(id TEXT PRIMARY KEY,updated REAL NOT NULL);
     CREATE TABLE IF NOT EXISTS research_links(document_id TEXT NOT NULL REFERENCES research_documents(id),ticker TEXT NOT NULL,PRIMARY KEY(document_id,ticker));
     CREATE INDEX IF NOT EXISTS research_status ON research_documents(status,updated);''')
 
@@ -127,11 +128,12 @@ def save_recovered(c,document_id,text,pages,state,error):
     c.execute("UPDATE research_documents SET text=?,pages=?,status=?,error=?,updated=? WHERE id=? AND status='needs_review'",(text,pages,state,error,time.time(),document_id))
 
 
-def import_mail():
+def import_mail(token=None):
+    from . import research_images
     password=os.getenv('RESEARCH_IMAP_PASSWORD')
     if not password:return {'state':'mailbox_password_required','imported':0}
     mailbox=imaplib.IMAP4_SSL('imaps.udag.de',993,ssl_context=ssl.create_default_context(),timeout=25)
-    imported=0
+    imported=0;image_calls=0;deferred=0;image_state=None
     try:
         mailbox.login('tradersecho-com-0003',password)
         status,_=mailbox.select('INBOX',readonly=True)
@@ -140,13 +142,16 @@ def import_mail():
         since=(datetime.now(timezone.utc)-timedelta(days=30)).strftime('%d-%b-%Y')
         status,data=mailbox.uid('search',None,'SINCE',since)
         if status!='OK':raise RuntimeError('Mailbox search failed')
+        _,recent=mailbox.uid('search',None,'SINCE',(datetime.now(timezone.utc)-timedelta(days=7)).strftime('%d-%b-%Y'))
+        recent=set(recent[0].split()) if recent and isinstance(recent[0],bytes) else set()
         checked=0
-        for uid in data[0].split():
+        for uid in reversed(data[0].split()):
             mid=validity+':'+uid.decode()
             with core().db() as c:
-                seen=c.execute('SELECT 1 FROM research_messages WHERE id=?',(mid,)).fetchone()
+                seen=c.execute('SELECT status FROM research_messages WHERE id=?',(mid,)).fetchone()
                 recheck=meta(c,'four_page_retry_enabled',False) and not meta(c,'four_page_mail:'+mid,False)
-                if seen and not recheck:continue
+                image_recheck=(uid in recent or (seen and seen['status']=='images_pending')) and not c.execute('SELECT 1 FROM research_image_messages WHERE id=?',(mid,)).fetchone()
+                if seen and not recheck and not image_recheck:continue
             if checked>=3:break
             checked+=1
             if recheck:
@@ -168,10 +173,15 @@ def import_mail():
             except Exception:
                 with core().db() as c:c.execute('INSERT OR IGNORE INTO research_messages VALUES(?,?,?)',(mid,'parse_needs_review',time.time()))
                 continue
+            pending_images=False;supported=0;unsupported=0
             for index,part in enumerate(attachments):
                 try:
                     name=str(part.get_filename() or '')
-                    if part.get_content_type()!='application/pdf' and not name.lower().endswith('.pdf'):continue
+                    image_part=research_images.is_image(part,name)
+                    if part.get_content_type()!='application/pdf' and not name.lower().endswith('.pdf') and not image_part:
+                        if name:unsupported+=1
+                        continue
+                    supported+=1
                     content=part.get_payload(decode=True) or b''
                     if not isinstance(content,bytes):raise ValueError('Invalid attachment encoding')
                     did=hashlib.sha256(content).hexdigest()
@@ -185,7 +195,15 @@ def import_mail():
                     recovering=claim_recovery(c,did) if exists else False
                     if exists and not recovering:continue
                 try:
-                    text,pages=extract_pdf(content);state='awaiting_analysis';error=None
+                    if image_part:
+                        if image_calls>=2:
+                            pending_images=True;deferred+=1;continue
+                        image_calls+=1
+                        text,pages=research_images.extract(content,did,token)
+                    else:text,pages=extract_pdf(content)
+                    state='awaiting_analysis';error=None
+                except research_images.DeferredImage as exc:
+                    pending_images=True;deferred+=1;image_state=str(exc);continue
                 except Exception as exc:
                     text='';pages=0;state='needs_review';error=str(exc) if isinstance(exc,ValueError) else 'PDF extraction failed; manual review required'
                 if state!='needs_review':
@@ -197,11 +215,16 @@ def import_mail():
                         state='queued' if date_screen(text,name) else 'needs_review'
                         if state=='needs_review':error='Report date may be outside the recent publication window'
                 with core().db() as c:
-                    c.execute('INSERT OR IGNORE INTO research_documents(id,filename,sender,received,text,pages,status,error,updated) VALUES(?,?,?,?,?,?,?,?,?)',(did,name[:200] or 'Research.pdf',sender,time.time(),text,pages,state,error,time.time()))
+                    c.execute('INSERT OR IGNORE INTO research_documents(id,filename,sender,received,text,pages,status,error,updated) VALUES(?,?,?,?,?,?,?,?,?)',(did,name[:200] or ('Research-image.jpg' if image_part else 'Research.pdf'),sender,time.time(),text,pages,state,error,time.time()))
                     if recovering:save_recovered(c,did,text,pages,state,error)
                 imported+=1
-            with core().db() as c:c.execute('INSERT OR IGNORE INTO research_messages VALUES(?,?,?)',(mid,'imported',time.time()))
-        return {'state':'ok','imported':imported}
+            with core().db() as c:
+                if not pending_images:
+                    c.execute('INSERT OR IGNORE INTO research_image_messages VALUES(?,?)',(mid,time.time()))
+                state='images_pending' if pending_images else ('imported' if supported else 'no_supported_attachments')
+                if unsupported and supported and not pending_images:state='imported_with_unsupported_attachments'
+                c.execute('INSERT INTO research_messages VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,updated=excluded.updated',(mid,state,time.time()))
+        return {'state':'ok','imported':imported,'image_attempts':image_calls,'images_deferred':deferred,'image_state':image_state}
     finally:
         try:mailbox.logout()
         except Exception:pass
@@ -408,7 +431,7 @@ def run(token=None):
         c.execute("UPDATE research_documents SET status='needs_review',error='Interrupted analysis; review before retrying' WHERE status='analyzing' AND updated<?",(time.time()-600,))
     try:
         try:
-            result=import_mail()
+            result=import_mail(token)
         except Exception:
             result={'state':'mailbox_connection_failed','detail':'Check mailbox password and provider availability'}
         if os.getenv('RESEARCH_DRIVE_PUBLISH_ENABLED')=='true':

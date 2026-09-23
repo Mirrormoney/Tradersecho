@@ -53,6 +53,7 @@ work/
 !backend/supply_chain.py
 !backend/owner_reports.py
 !backend/research.py
+!backend/research_images.py
 !backend/search.py
 
 !backend/research_feed.py

@@ -41,6 +41,22 @@ def test_at_most_once_and_budget(monkeypatch):
         assert c.execute('SELECT status FROM social_editions').fetchone()[0]=='published'
         assert c.execute("SELECT reserved FROM x_spend WHERE kind='social_publish'").fetchone()[0]==.5
 
+def test_manual_research_publishes_only_once(monkeypatch):
+    setup(monkeypatch)
+    now=datetime(2026,9,23,15,0,tzinfo=timezone.utc).timestamp()
+    writes=[]
+    def transport(req):
+        if req.url.path=='/2/users/me':return httpx.Response(200,json={'data':{'id':'brand','username':'Tradersecho'}})
+        if req.url.path=='/2/media/upload':return httpx.Response(200,json={'data':{'id':'media'}})
+        writes.append(json.loads(req.content));return httpx.Response(201,json={'data':{'id':'research-post'}})
+    monkeypatch.setattr(social,'client',lambda *a:httpx.Client(transport=httpx.MockTransport(transport)))
+    assert social.run(now,manual_research=True)['sent']==1
+    assert social.run(now+300,manual_research=True)['sent']==0
+    assert len(writes)==1 and '$LITE' in writes[0]['text']
+    with s.db() as c:
+        rows=c.execute('SELECT id,status FROM social_editions').fetchall()
+        assert len(rows)==1 and rows[0][0]=='research:2026-09-23' and rows[0][1]=='published'
+
 def test_ambiguous_publish_blocks_retries(monkeypatch):
     now=setup(monkeypatch);writes=[]
     def transport(req):

@@ -46,6 +46,8 @@ work/
 !backend/social.py
 !backend/social_art.py
 !backend/social_promos.py
+!backend/social_research.py
+!backend/research_before_bell_approved.png
 
 !backend/sec_filings.py
 !backend/supply_chain.py

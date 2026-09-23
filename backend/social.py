@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from .community import core
 from .newsletter_schedule import due_slots,NY
 from .social_art import card
-from . import social_promos
+from . import social_promos,social_research
 router=APIRouter()
 HANDLE='tradersecho'
 CALLBACK='https://tradersecho.com/api/social/callback'
@@ -176,12 +176,16 @@ def preview(request:Request,edition:str):
     if edition in tuple('promo'+str(i+1) for i in range(len(social_promos.COPY))):
         p=social_promos.prepare(int(edition[-1])-1)
         return {**p,'image':'data:image/png;base64,'+base64.b64encode(social_promos.artwork(p)).decode()}
+    if edition=='research':
+        try:p=social_research.prepare(time.time())
+        except ValueError as e:raise HTTPException(409,str(e))
+        return {**p,'image':'data:image/png;base64,'+base64.b64encode(social_research.artwork(p)).decode()}
     if edition not in ('morning','final','weekly','monthly'):raise HTTPException(400,'Unknown edition')
     try:p=prepare(edition,time.time())
     except ValueError as e:raise HTTPException(409,str(e))
     return {**p,'image':'data:image/png;base64,'+base64.b64encode(card(p)).decode()}
 
-def run(now=None,manual_promo=False):
+def run(now=None,manual_promo=False,manual_research=False):
     now=time.time() if now is None else now;s=core()
     if os.getenv('VERCEL_ENV')!='production':return {'state':'preview_disabled'}
     with s.db() as c:
@@ -193,7 +197,9 @@ def run(now=None,manual_promo=False):
         if value(c,'social_paused',True) or not value(c,'social_label_confirmed',False):return {'state':'paused'}
         if c.execute("SELECT 1 FROM social_editions WHERE status IN ('uncertain','failed') LIMIT 1").fetchone():return {'state':'review_required'}
     result={'state':'ok','sent':0}
-    slots=due_slots(now)+social_promos.slots(now)
+    slots=due_slots(now)+social_promos.slots(now)+social_research.slots(now)
+    if manual_research:
+        slots=[{'edition':'research','at':now,'key':'research:'+datetime.fromtimestamp(now,NY).date().isoformat()}]
     if manual_promo:
         # Same durable key as today's scheduled promotion: an early publish never duplicates it.
         slots=[{'edition':'promo','at':now,'key':'promo:'+datetime.fromtimestamp(now,NY).date().isoformat()}]
@@ -206,6 +212,8 @@ def run(now=None,manual_promo=False):
                 with s.db() as c:
                     n=c.execute("SELECT COUNT(*) FROM social_editions WHERE id LIKE 'promo:%' AND status='published'").fetchone()[0]
                 p=social_promos.prepare(n%len(social_promos.COPY));image=social_promos.artwork(p)
+            elif slot['edition']=='research':
+                p=social_research.prepare(now,approved=manual_research);image=social_research.artwork(p)
             else:p=prepare(slot['edition'],now);image=card(p)
         except ValueError as e:result={'state':'waiting_for_data','reason':str(e)};continue
         with s.db() as c:
@@ -213,7 +221,7 @@ def run(now=None,manual_promo=False):
             if value(c,'social_paused',True) or c.execute('SELECT 1 FROM social_editions WHERE id=?',(key,)).fetchone():continue
             if c.execute("SELECT 1 FROM social_editions WHERE status IN ('sending','uncertain','failed') LIMIT 1").fetchone():continue
             # Suppress an identical data payload, even when the edition label changes.
-            fingerprint=hashlib.sha256((p['text'] if slot['edition']=='promo' else json.dumps([(r['ticker'],r['mentions'],r['as_of']) for r in p['rows']])).encode()).hexdigest()
+            fingerprint=hashlib.sha256((p['text'] if slot['edition'] in ('promo','research') else json.dumps([(r['ticker'],r['mentions'],r['as_of']) for r in p['rows']])).encode()).hexdigest()
             if value(c,'social_last_fingerprint')==fingerprint:continue
             month=datetime.fromtimestamp(now,timezone.utc).strftime('%Y-%m')
             from .community import data_settings
@@ -261,6 +269,11 @@ def run(now=None,manual_promo=False):
             result={**result,'state':'edition_rejected' if skip_edition else 'review_required'}
     with s.db() as c:save(c,'social_last_run',{**result,'at':now})
     return result
+
+@router.post('/api/admin/social/publish-research')
+def publish_research(request:Request):
+    owner(request)
+    return run(manual_research=True)
 
 @router.post('/api/admin/social/publish-promotion')
 def publish_promotion(request:Request):

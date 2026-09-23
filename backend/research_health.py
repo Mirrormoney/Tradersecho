@@ -11,8 +11,9 @@ def snapshot(c,now):
   if worker.get('analysis',{}).get('state') in ('budget_paused','ai_credentials_required','worker_error'):issues.append('Research analysis reports '+worker['analysis']['state']+'.')
  rows=c.execute('SELECT status,COUNT(*) n,MIN(updated) oldest FROM research_documents GROUP BY status').fetchall()
  counts={r['status']:r['n'] for r in rows}
+ last_completed=c.execute("SELECT MAX(updated) FROM research_documents WHERE status IN ('draft','no_match','needs_review','screened_out')").fetchone()[0]
  for r in rows:
-  if r['status'] in ('queued','awaiting_analysis') and now-r['oldest']>2*3600:issues.append(f"{r['n']} notes are {r['status'].replace('_',' ')}; the oldest has waited over two hours.")
+  if r['status'] in ('queued','awaiting_analysis') and now-r['oldest']>2*3600 and (not last_completed or now-last_completed>30*60 or now-r['oldest']>86400):issues.append(f"{r['n']} notes are {r['status'].replace('_',' ')}; the oldest has waited over two hours.")
   if r['status']=='analyzing' and now-r['oldest']>15*60:issues.append('An analysis has not finished after 15 minutes.')
  operational_issues=list(issues)
  review=c.execute("SELECT COUNT(*) FROM research_documents WHERE status='needs_review' AND updated>?",(now-86400,)).fetchone()[0]

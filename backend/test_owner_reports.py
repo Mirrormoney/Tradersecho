@@ -86,9 +86,6 @@ def test_research_review_notice_does_not_claim_outage(monkeypatch):
     monkeypatch.setattr('backend.research_health.snapshot',lambda c,now:{'issues':['2 notes held for review.'],'operational_issues':[],'recent':{'draft':3,'no_match':4},'review_reasons':[{'count':2,'reason':'Evidence not present in source'}],'checked_at':now})
     captured=[]
     with httpx.Client(transport=httpx.MockTransport(lambda req:(captured.append(json.loads(req.content)) or httpx.Response(200,json={'id':'review'})))) as mail:
-        assert o.run(client=mail)['sent']==1
         assert o.run(client=mail)['sent']==0
-    assert 'Notes held for review' in captured[0]['subject']
-    assert 'Import workers are healthy' in captured[0]['text']
-    assert '3 validated summaries' in captured[0]['text']
-    assert 'Evidence not present in source' in captured[0]['text']
+        assert o.run(client=mail)['sent']==0
+    assert captured==[]

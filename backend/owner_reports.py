@@ -107,8 +107,8 @@ def run(now=None, client=None):
         health=research_health(c,now) if os.getenv('RESEARCH_DRIVE_ENABLED')=='true' or os.getenv('RESEARCH_IMAP_PASSWORD') else {'issues':[],'checked_at':now}
         save(c,'research_health',health)
         alert_key=PREFIX+'research:'+datetime.fromtimestamp(now,BERLIN).date().isoformat()+(':failure' if health.get('operational_issues') else ':review')
-        if health['issues'] and not get(c,alert_key):
-            save(c,alert_key,{'kind':'research','issues':health['issues'],'health':health,'created':now,'status':'pending','next':0})
+        if health.get('operational_issues') and not get(c,alert_key):
+            save(c,alert_key,{'kind':'research','issues':health['operational_issues'],'health':health,'created':now,'status':'pending','next':0})
         queue = [(r['key'],json.loads(r['value'])) for r in c.execute('SELECT key,value FROM meta WHERE key LIKE ?',(PREFIX+'%',))]
     owner = client is None; client = client or httpx.Client(timeout=10)
     try:
@@ -120,6 +120,8 @@ def run(now=None, client=None):
                 c.execute('BEGIN IMMEDIATE')
                 event = get(c,key)
                 if event['status'] not in ('pending','sending') or event.get('next',0)>now: continue
+                if event['kind']=='research' and not health.get('operational_issues'):
+                    event['status']='cancelled';save(c,key,event);continue
                 if event.get('first') and now-event['first']>=23*3600:
                     event['status']='needs_review';save(c,key,event);continue
                 count = get(c,'owner_mail_allowance:'+today,0)
@@ -135,7 +137,7 @@ def run(now=None, client=None):
                         intro='Import workers are healthy. Individual notes were held for review; other documents continue processing.' if review_only else 'An import worker or queue needs attention. See the recorded checks below.'
                         progress=health.get('recent',{})
                         detail='\n'.join(str(r['count'])+' - '+r['reason'] for r in health.get('review_reasons',[]))
-                        content=message('Traders Echo - '+title,intro+'\n\n'+'\n'.join(event['issues'])+'\n\nPast 24 hours: '+str(progress.get('draft',0))+' validated summaries; '+str(progress.get('no_match',0))+' notes with no covered findings.\n\n'+detail+'\n\nHeld notes remain unpublished. Existing published research remains available.\nReview: https://tradersecho.com/admin')
+                        content=message('Traders Echo - '+title,intro+'\n\n'+'\n'.join(event['issues'])+'\n\nPast 24 hours: '+str(progress.get('draft',0))+' validated summaries; '+str(progress.get('no_match',0))+' notes with no covered findings.\n\n'+detail+'\n\nIndividual held notes are skipped automatically; you do not need to approve them to keep imports running. Check the worker status above; reconnect credentials or replenish credits only if the status requests it.\nStatus: https://tradersecho.com/admin')
                     else:
                         user = c.execute('SELECT email,display_name FROM accounts WHERE id=? AND demo=0',(event['uid'],)).fetchone()
                         if not user:

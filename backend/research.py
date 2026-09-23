@@ -337,6 +337,7 @@ def analyze_one(token=None):
         if not row:return {'state':'idle'}
         row=dict(row)
         empty_retry=meta(c,'empty_retry:'+row['id'],False)
+        analysis_retry=meta(c,'analysis_retry:'+row['id'],{})
         catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}
         try:row['text']=limit_stored_excerpt(row['text'])
         except ValueError as exc:
@@ -353,7 +354,7 @@ def analyze_one(token=None):
         catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}
         put(c,'excerpt_'+row['id'],{'policy':'first_four_before_disclaimer_v1','pages':len(re.findall(r'\[Page \d+\]',row['text'])),'bytes':len(row['text'].encode()),'at':now})
     try:
-        response=httpx.post('https://ai-gateway.vercel.sh/v1/chat/completions',headers={'Authorization':'Bearer '+token},json={'model':MODEL,'max_tokens':6000,'reasoning_effort':'low','response_format':response_format(catalog),'messages':[{'role':'system','content':PROMPT+' First assess each primary_candidates company named in the filename against the source. Include its substantive product launches, business developments and broker analysis, not just rating changes. Do not substitute a peer comparison for the main covered company. Then check each mentioned_candidates entry against the source. Omit a candidate only when it lacks substantive supported discussion. Include explicit company rating changes even if they are brief, including upgrades/downgrades listed in Street Actions. These count as substantive news. A price move alone, an event calendar listing, or sector commentary without substantive company discussion is not a stock finding. Never imply that the report author issued a rating when they are reporting a rating from another firm. Empty findings is valid when no covered company has meaningful news.'},{'role':'user','content':json.dumps({'universe':catalog,'primary_candidates':mentioned_candidates(row['filename'],catalog),'mentioned_candidates':mentioned_candidates(row['text'],catalog),'review_instruction':('A prior pass returned no findings despite repeated covered ticker references. Recheck company product announcements, broker analysis, ratings and targets carefully. Return supported findings if present; an empty result is still valid if none are substantive.' if empty_retry else ''),'filename':row['filename'],'report':row['text']})}]},timeout=55)
+        response=httpx.post('https://ai-gateway.vercel.sh/v1/chat/completions',headers={'Authorization':'Bearer '+token},json={'model':MODEL,'max_tokens':6000,'reasoning_effort':'low','response_format':response_format(catalog),'messages':[{'role':'system','content':PROMPT+' First assess each primary_candidates company named in the filename against the source. Include its substantive product launches, business developments and broker analysis, not just rating changes. Do not substitute a peer comparison for the main covered company. Then check each mentioned_candidates entry against the source. Omit a candidate only when it lacks substantive supported discussion. Include explicit company rating changes even if they are brief, including upgrades/downgrades listed in Street Actions. These count as substantive news. A price move alone, an event calendar listing, or sector commentary without substantive company discussion is not a stock finding. Never imply that the report author issued a rating when they are reporting a rating from another firm. Empty findings is valid when no covered company has meaningful news.'},{'role':'user','content':json.dumps({'universe':catalog,'primary_candidates':mentioned_candidates(row['filename'],catalog),'mentioned_candidates':mentioned_candidates(row['text'],catalog),'review_instruction':('A prior pass returned no findings despite repeated covered ticker references. Recheck company product announcements, broker analysis, ratings and targets carefully. Return supported findings if present; an empty result is still valid if none are substantive.' if empty_retry else ''),'validation_recheck':('Previous analysis failed: '+analysis_retry['reason']+'. Copy supporting evidence verbatim including intervening words; do not paraphrase or combine separate passages. Set event to null when an explicit dated rating action is not evidenced.' if analysis_retry else ''),'filename':row['filename'],'report':row['text']})}]},timeout=55)
         if response.status_code!=200:raise RuntimeError('AI provider HTTP '+str(response.status_code))
         payload=response.json();usage=payload.get('usage',{});cost=usage.get('cost')
         if not isinstance(cost,(int,float)) or not 0<=cost<=RESERVE:cost=None
@@ -378,6 +379,17 @@ def analyze_one(token=None):
         with s.db() as c:c.execute("UPDATE research_documents SET status='needs_review',error=?,updated=? WHERE id=?",(error,time.time(),row['id']))
         return {'state':'needs_review'}
 
+def retry_failed_analyses(c,now):
+    """One bounded retry for recoverable AI failures; bad source files stay isolated."""
+    reasons={'Evidence not present in source','Event attribution lacks source evidence','Incomplete analysis','Interrupted analysis; review before retrying'}
+    rows=c.execute("SELECT id,error FROM research_documents WHERE status='needs_review' AND updated>? AND LENGTH(text)>=120",(now-86400,)).fetchall()
+    for row in rows:
+        if row['error'] not in reasons and not str(row['error']).startswith('AI provider HTTP 5'):continue
+        key='analysis_retry:'+row['id']
+        if meta(c,key):continue
+        put(c,key,{'at':now,'reason':row['error']})
+        c.execute("UPDATE research_documents SET status='queued',updated=? WHERE id=? AND status='needs_review'",(now,row['id']))
+
 def queue_email_backlog():
     from .research_drive import date_screen
     with core().db() as c:
@@ -387,7 +399,7 @@ def queue_email_backlog():
                 c.execute("UPDATE research_documents SET status='queued',updated=? WHERE id=? AND status='awaiting_analysis'",(time.time(),row['id']))
 
 def run(token=None):
-    s=core();lease=secrets.token_hex(16)
+    s=core();lease=secrets.token_hex(16);lock_started=time.time()
     with s.db() as c:
         migrate(c);c.execute('BEGIN IMMEDIATE')
         lock=meta(c,'lease',{})
@@ -401,9 +413,20 @@ def run(token=None):
             result={'state':'mailbox_connection_failed','detail':'Check mailbox password and provider availability'}
         if os.getenv('RESEARCH_DRIVE_PUBLISH_ENABLED')=='true':
             queue_email_backlog()
+        with s.db() as c:
+            c.execute('BEGIN IMMEDIATE');retry_failed_analyses(c,time.time())
         # Drive and email share this queue; an inbox outage must not block it.
         try:
-            result['analysis']=analyze_one(token)
+            batch=[]
+            for index in range(3):
+                if index:
+                    if time.time()-lock_started>120:break
+                    with s.db() as c:
+                        if not c.execute("SELECT 1 FROM research_documents WHERE status='queued' LIMIT 1").fetchone():break
+                outcome=analyze_one(token);batch.append(outcome)
+                if outcome['state'] not in ('draft_ready','needs_review','screened_out','empty_result_recheck_queued'):break
+            result['analysis']=batch[-1]
+            result['analysis_batch']=batch
             if os.getenv('RESEARCH_DRIVE_PUBLISH_ENABLED')=='true':
                 from .research_drive import publish_validated
                 publish_validated()

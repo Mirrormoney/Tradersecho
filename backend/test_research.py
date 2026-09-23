@@ -130,6 +130,11 @@ class ResearchTests(unittest.TestCase):
   self.assertEqual(r.validate_report(value,text,{'NVDA'})['findings'][0]['page'],4)
   value['findings'][0]['page']=5
   with self.assertRaises(ValueError):r.validate_report(value,text,{'NVDA'})
+ def test_empty_result_recheck_requires_repeated_explicit_ticker(self):
+  text='PALO ALTO NETWORKS (PANW). PANW launches a service. PANW maintains growth. PANW rating Outperform.'
+  self.assertEqual(r.empty_result_candidates(text,{'PANW':'Palo Alto Networks'}),['PANW'])
+  self.assertEqual(r.empty_result_candidates('Event calendar: PANW.',{'PANW':'Palo Alto Networks'}),[])
+  self.assertEqual(r.empty_result_candidates(text,{'MU':'Micron'}),[])
  def test_oversize(self):
   with self.assertRaisesRegex(ValueError,'12 MB'):r.extract_pdf(b'0'*(12*1024*1024+1))
  def test_no_password_no_connect(self):

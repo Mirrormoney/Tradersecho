@@ -321,15 +321,22 @@ def prescreen(filename,text,catalog):
     if hits:return {'skip':False,'reason':'Potential covered names found; keep for analysis.','candidates':sorted(hits)}
     return {'skip':True,'reason':'Sector-specific filename; no covered ticker or company name found in selectable text. Images and aliases may require manual review.'}
 
+def empty_result_candidates(text,catalog):
+    # Repeated explicit ticker references warrant one second look, not forced findings.
+    candidates=mentioned_candidates(text,catalog)
+    return [t for t in candidates if len(t)>=3 and len(re.findall(r'\b'+re.escape(t)+r'\b',text))>=4]
+
+
 def analyze_one(token=None):
     token=token or os.getenv('AI_GATEWAY_API_KEY') or os.getenv('VERCEL_OIDC_TOKEN')
     if not token:return {'state':'ai_credentials_required'}
     s=core();now=time.time();month=datetime.now(timezone.utc).strftime('%Y-%m');rid=secrets.token_hex(16)
     with s.db() as c:
         c.execute('BEGIN IMMEDIATE')
-        row=c.execute("SELECT * FROM research_documents WHERE status='queued' ORDER BY received DESC LIMIT 1").fetchone()
+        row=c.execute("SELECT * FROM research_documents WHERE status='queued' ORDER BY CASE WHEN EXISTS (SELECT 1 FROM meta WHERE key='research_empty_retry:' || research_documents.id AND value='true') THEN 0 ELSE 1 END, received DESC LIMIT 1").fetchone()
         if not row:return {'state':'idle'}
         row=dict(row)
+        empty_retry=meta(c,'empty_retry:'+row['id'],False)
         catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}
         try:row['text']=limit_stored_excerpt(row['text'])
         except ValueError as exc:
@@ -346,7 +353,7 @@ def analyze_one(token=None):
         catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}
         put(c,'excerpt_'+row['id'],{'policy':'first_four_before_disclaimer_v1','pages':len(re.findall(r'\[Page \d+\]',row['text'])),'bytes':len(row['text'].encode()),'at':now})
     try:
-        response=httpx.post('https://ai-gateway.vercel.sh/v1/chat/completions',headers={'Authorization':'Bearer '+token},json={'model':MODEL,'max_tokens':6000,'reasoning_effort':'low','response_format':response_format(catalog),'messages':[{'role':'system','content':PROMPT+' Check each mentioned_candidates entry against the report before deciding there are no findings. Include explicit company rating changes even if they are brief, including upgrades/downgrades listed in Street Actions. These count as substantive news. A price move alone, an event calendar listing, or sector commentary without substantive company discussion is not a stock finding. Never imply that the report author issued a rating when they are reporting a rating from another firm. Empty findings is valid when no covered company has meaningful news.'},{'role':'user','content':json.dumps({'universe':catalog,'mentioned_candidates':mentioned_candidates(row['text'],catalog),'filename':row['filename'],'report':row['text']})}]},timeout=55)
+        response=httpx.post('https://ai-gateway.vercel.sh/v1/chat/completions',headers={'Authorization':'Bearer '+token},json={'model':MODEL,'max_tokens':6000,'reasoning_effort':'low','response_format':response_format(catalog),'messages':[{'role':'system','content':PROMPT+' First assess each primary_candidates company named in the filename against the source. Include its substantive product launches, business developments and broker analysis, not just rating changes. Do not substitute a peer comparison for the main covered company. Then check each mentioned_candidates entry against the source. Omit a candidate only when it lacks substantive supported discussion. Include explicit company rating changes even if they are brief, including upgrades/downgrades listed in Street Actions. These count as substantive news. A price move alone, an event calendar listing, or sector commentary without substantive company discussion is not a stock finding. Never imply that the report author issued a rating when they are reporting a rating from another firm. Empty findings is valid when no covered company has meaningful news.'},{'role':'user','content':json.dumps({'universe':catalog,'primary_candidates':mentioned_candidates(row['filename'],catalog),'mentioned_candidates':mentioned_candidates(row['text'],catalog),'review_instruction':('A prior pass returned no findings despite repeated covered ticker references. Recheck company product announcements, broker analysis, ratings and targets carefully. Return supported findings if present; an empty result is still valid if none are substantive.' if empty_retry else ''),'filename':row['filename'],'report':row['text']})}]},timeout=55)
         if response.status_code!=200:raise RuntimeError('AI provider HTTP '+str(response.status_code))
         payload=response.json();usage=payload.get('usage',{});cost=usage.get('cost')
         if not isinstance(cost,(int,float)) or not 0<=cost<=RESERVE:cost=None
@@ -356,6 +363,11 @@ def analyze_one(token=None):
         raw=choice['message']['content'].strip()
         if raw.startswith('```'):raw=raw.split('\n',1)[1].rsplit('```',1)[0].strip()
         result=validate_report(json.loads(raw),row['text'],catalog,row['filename'])
+        if not result['findings'] and not empty_retry and empty_result_candidates(row['text'],catalog):
+            with s.db() as c:
+                put(c,'empty_retry:'+row['id'],True)
+                c.execute("UPDATE research_documents SET status='queued',error=NULL,updated=? WHERE id=?",(time.time(),row['id']))
+            return {'state':'empty_result_recheck_queued'}
         with s.db() as c:
             c.execute('UPDATE research_documents SET status=?,result=?,error=NULL,updated=? WHERE id=?',('draft' if result['findings'] else 'no_match',json.dumps(result),time.time(),row['id']))
             for finding in result['findings']:c.execute('INSERT OR IGNORE INTO research_links VALUES(?,?)',(row['id'],finding['ticker']))

@@ -661,6 +661,7 @@ def test_checkout_tiers_reuse_and_account_binding(monkeypatch):
             tier=path.split('_')[-1];_,amount,interval=p.TIERS[tier]
             return {'id':'price_'+tier,'currency':'usd','unit_amount':amount,'recurring':{'interval':interval,'interval_count':1} if interval else None}
         if path=='customers':return {'id':'cus_own'}
+        if path.endswith('/line_items'):return {'data':[{'price':{'id':'price_yearly'}}]}
         if path=='checkout/sessions':
             counter[0]+=1;sid='cs_'+str(counter[0]);sessions[sid]={'id':sid,'status':'open','url':'https://checkout.stripe.com/test/'+sid};return sessions[sid]
         if path.endswith('/expire'):
@@ -673,6 +674,9 @@ def test_checkout_tiers_reuse_and_account_binding(monkeypatch):
     data=[x[2] for x in calls if x[1]=='checkout/sessions'][-1]
     assert data['customer']=='cus_own' and data['client_reference_id']==uid and data['line_items[0][price]']=='price_yearly'
     assert c.post('/api/billing/checkout',json={'tier':'yearly'}).json()==first.json() and counter[0]==1
+    monkeypatch.setenv('STRIPE_PRICE_YEARLY','price_revised_yearly')
+    assert c.post('/api/billing/checkout',json={'tier':'yearly'}).status_code==200
+    assert counter[0]==2 and sessions['cs_1']['status']=='expired'
     assert c.post('/api/billing/checkout',json={'tier':'founder'}).status_code==200
     assert sessions['cs_1']['status']=='expired'
     assert [x[2] for x in calls if x[1]=='checkout/sessions'][-1]['mode']=='payment'
@@ -689,7 +693,7 @@ def test_billing_webhooks_canonical_state_replay_and_founder(monkeypatch):
     with s.db() as db:
         db.execute('UPDATE accounts SET stripe_customer=? WHERE id=?',('cus_own',uid))
         db.execute('INSERT INTO billing_checkouts VALUES(?,?,?,?)',('cs_founder',uid,'founder',time.time()))
-    sub={'id':'sub_1','customer':'cus_own','metadata':{'account_id':uid,'tier':'monthly'},'status':'active','items':{'data':[{'price':{'id':'price_monthly','currency':'usd','unit_amount':1900,'recurring':{'interval':'month','interval_count':1}}}]}}
+    sub={'id':'sub_1','customer':'cus_own','metadata':{'account_id':uid,'tier':'monthly'},'status':'active','items':{'data':[{'price':{'id':'price_monthly','currency':'usd','unit_amount':900,'recurring':{'interval':'month','interval_count':1}}}]}}
     pi={'id':'pi_1','customer':'cus_own','metadata':{'account_id':uid,'tier':'founder'},'currency':'usd','amount':99900,'status':'succeeded','latest_charge':{'refunded':False,'disputed':False}}
     calls=[]
     def stripe(method,path,data=None,idempotency=None):
@@ -704,6 +708,10 @@ def test_billing_webhooks_canonical_state_replay_and_founder(monkeypatch):
         sig=hmac.new(b'test',stamp.encode()+b'.'+body,hashlib.sha256).hexdigest()
         return c.post('/api/billing/webhook',content=body,headers={'stripe-signature':'t='+stamp+',v1='+sig})
     assert event('evt_1','customer.subscription.created',{'id':'sub_1'}).status_code==200
+    assert c.get('/api/me').json()['plan']=='premium'
+    monkeypatch.setenv('STRIPE_LEGACY_PRICE_MONTHLY','price_old_monthly')
+    sub['items']['data'][0]['price'].update(id='price_old_monthly',unit_amount=1900)
+    assert event('evt_legacy','customer.subscription.updated',{'id':'sub_1'}).status_code==200
     assert c.get('/api/me').json()['plan']=='premium'
     n=len(calls);assert event('evt_1','customer.subscription.created',{'id':'sub_1'}).status_code==200;assert len(calls)==n
     sub['status']='canceled'
@@ -766,7 +774,7 @@ def test_founder_dispute_resolution_and_payment_confirmation(monkeypatch):
     uid=c.post('/api/auth/signup',json={'display_name':'Signup Trader 714','email':'founder-dispute@example.com','password':'long-test-password'}).json()['id']
     monkeypatch.setenv('STRIPE_SECRET_KEY','sk_test_test')
     with s.db() as db:db.execute('UPDATE accounts SET stripe_customer=? WHERE id=?',('cus_dispute',uid))
-    pi={'id':'pi_dispute','customer':'cus_dispute','metadata':{'account_id':uid,'tier':'founder'},'currency':'usd','amount':99900,'status':'succeeded','latest_charge':{'id':'ch_dispute','refunded':False,'disputed':True}}
+    pi={'id':'pi_dispute','customer':'cus_dispute','metadata':{'account_id':uid,'tier':'founder'},'currency':'usd','amount':49900,'status':'succeeded','latest_charge':{'id':'ch_dispute','refunded':False,'disputed':True}}
     disputes={'data':[{'status':'under_review'}],'has_more':False}
     def stripe(method,path,data=None,idempotency=None):
         if path=='payment_intents/pi_dispute':return pi
@@ -1211,3 +1219,14 @@ def test_welcome_tour_completion_is_private_and_persistent():
     assert first.put('/api/welcome-tour',json={}).status_code==200
     assert first.get('/api/welcome-tour').json()=={'completed':True}
     assert second.get('/api/welcome-tour').json()=={'completed':False}
+
+
+@pytest.mark.parametrize('tier,amount,interval',[('monthly',900,'month'),('yearly',9900,'year'),('founder',49900,None)])
+def test_new_billing_prices_and_legacy_validation(tier,amount,interval):
+    from . import payments as p
+    from fastapi import HTTPException
+    price={'currency':'usd','unit_amount':amount,'recurring':{'interval':interval,'interval_count':1} if interval else None}
+    p.validate_price(price,tier)
+    price['unit_amount']=p.LEGACY_AMOUNTS[tier]
+    with pytest.raises(HTTPException):p.validate_price(price,tier)
+    p.validate_price(price,tier,legacy=True)

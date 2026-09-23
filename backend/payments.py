@@ -6,7 +6,8 @@ from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
 router=APIRouter()
-TIERS={'monthly':('STRIPE_PRICE_MONTHLY',1900,'month'), 'yearly':('STRIPE_PRICE_YEARLY',19000,'year'), 'founder':('STRIPE_PRICE_FOUNDER',99900,None)}
+TIERS={'monthly':('STRIPE_PRICE_MONTHLY',900,'month'), 'yearly':('STRIPE_PRICE_YEARLY',9900,'year'), 'founder':('STRIPE_PRICE_FOUNDER',49900,None)}
+LEGACY_AMOUNTS={'monthly':1900,'yearly':19000,'founder':99900}
 
 def core():
     from . import service
@@ -57,8 +58,9 @@ def account_details(u):
         previous=c.execute('SELECT 1 FROM billing_entitlements WHERE user_id=?',(u['id'],)).fetchone()
     return {'billing_tier':'founder' if founder else 'trial' if u.get('trial_active') else u['plan'],'billing_customer':bool(u.get('stripe_customer')),'trial_eligible':bool(not u['demo'] and u['role']=='member' and u['plan']=='free' and not u.get('trial_started_at') and not previous)}
 
-def validate_price(price,tier):
+def validate_price(price,tier,legacy=False):
     _,amount,interval=TIERS[tier]
+    if legacy:amount=LEGACY_AMOUNTS[tier]
     recurring=price.get('recurring') or {}
     if price.get('currency')!='usd' or price.get('unit_amount')!=amount or recurring.get('interval')!=interval or (interval and recurring.get('interval_count')!=1):
         raise HTTPException(503,'The configured price needs review. No payment has been taken.')
@@ -90,11 +92,13 @@ def create_checkout(u,tier):
             if session['status']=='complete' and not c.execute('SELECT 1 FROM billing_entitlements WHERE user_id=?',(u['id'],)).fetchone():
                 raise HTTPException(409,'Your payment is being confirmed. Please refresh your account shortly.')
             if session['status']=='open':
-                if existing['tier']==tier:return {'url':session['url']}
+                if existing['tier']==tier:
+                    lines=stripe('GET','checkout/sessions/'+quote(existing['id'],safe='')+'/line_items').get('data',[])
+                    if len(lines)==1 and lines[0]['price']['id']==os.environ[TIERS[tier][0]]:return {'url':session['url']}
                 stripe('POST','checkout/sessions/'+quote(existing['id'],safe='')+'/expire')
         price_id=os.environ[TIERS[tier][0]]
         validate_price(stripe('GET','prices/'+quote(price_id,safe='')),tier)
-        nonce=f"{u['id']}-{tier}-{existing['id'] if existing else 'initial'}-{int(time.time()//1800)}"
+        nonce=f"{u['id']}-{tier}-{price_id}-{existing['id'] if existing else 'initial'}-{int(time.time()//1800)}"
         if not u['stripe_customer']:
             customer=stripe('POST','customers',{'email':u['email'],'metadata[account_id]':u['id']},'customer-'+u['id'])
             u['stripe_customer']=customer['id']
@@ -130,12 +134,15 @@ def sync_entitlement(c,kind,object_id):
     if not u:return
     if kind=='subscription':
         items=obj.get('items',{}).get('data',[])
-        if len(items)!=1 or items[0]['price']['id']!=os.getenv(TIERS[tier][0]):return
-        validate_price(items[0]['price'],tier)
+        if len(items)!=1:return
+        price=items[0]['price'];current=price['id']==os.getenv(TIERS[tier][0])
+        legacy=price['id'] in os.getenv('STRIPE_LEGACY_PRICE_'+tier.upper(),'').split(',')
+        if not current and not legacy:return
+        validate_price(price,tier,legacy=not current)
         active=obj['status'] in ['active','trialing']
     else:
         charge=obj.get('latest_charge') or {}
-        if obj.get('currency')!='usd' or obj.get('amount')!=99900:return
+        if obj.get('currency')!='usd' or obj.get('amount') not in (TIERS['founder'][1],LEGACY_AMOUNTS['founder']):return
         disputed=charge.get('disputed',False)
         if disputed:
             disputes=stripe('GET','disputes',{'charge':charge['id'],'limit':100})

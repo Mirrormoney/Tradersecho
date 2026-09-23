@@ -25,7 +25,7 @@ def test_trial_reminder_once_and_cancel_after_purchase(monkeypatch):
     with s.db() as db:
         rows=db.execute('SELECT id,payload FROM email_deliveries').fetchall();assert len(rows)==1
         payload=json.loads(rows[0]['payload'])
-        assert '$19/month or $190/year' in payload['html'] and '$999 once' in payload['html']
+        assert '$9/month or $99/year' in payload['html'] and '$499 once' in payload['html']
         assert 'ATTENTION · PERSPECTIVE · COMMUNITY' in payload['html']
         db.execute("UPDATE accounts SET plan='premium' WHERE id=?",(u['id'],))
     assert delivery.claim_delivery(rows[0]['id']) is None

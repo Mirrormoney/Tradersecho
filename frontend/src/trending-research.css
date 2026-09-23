@@ -26,11 +26,14 @@
 .research-featured-card .research-ranking-summary>span:nth-child(3)>strong{font-size:15px;line-height:1.7}
 .research-featured-card .research-ranking-summary>span:nth-child(3)>small{margin-top:16px;font-size:12px;line-height:1.5}
 .research-featured-card .research-ranking-summary>span:last-child{margin-top:auto;font-weight:600}
-.research-featured-card .research-ranking-expanded{padding:0 28px 28px}
+.research-featured-card{transition:background-color .18s ease}
+.research-featured-card:hover,.research-featured-card:focus-within{background:#1d2d27}
+.research-featured-card .research-ranking-summary:hover{background:transparent}
+.research-featured-card .research-ranking-expanded{margin:8px 16px 16px;padding:24px;background:#101e1c;border:1px solid #38543d;border-radius:14px}
 .research-featured-card .research-actions{align-items:stretch;flex-direction:column}
 .research-featured-locked{padding:28px;min-height:370px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;background:linear-gradient(180deg,#142523,#0b1718)}
 @media(max-width:1100px){.research-featured-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:700px){.research-featured-grid{grid-template-columns:1fr}.research-featured-card .research-ranking-summary{min-height:0;padding:24px}.research-featured-card .research-ranking-expanded{padding:0 24px 24px}}
+@media(max-width:700px){.research-featured-grid{grid-template-columns:1fr}.research-featured-card .research-ranking-summary{min-height:0;padding:24px}.research-featured-card .research-ranking-expanded{margin:8px 12px 12px;padding:20px}}
 .research-featured-card .research-ranking-summary{height:420px}.research-featured-card .research-ranking-summary>span:nth-child(3)>strong{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden}.research-featured-card .research-ranking-summary>span:nth-child(3)>small{min-height:36px}@media(max-width:700px){.research-featured-card .research-ranking-summary{height:auto;min-height:340px}}
 
 .research-featured-card .research-position{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 8px;border:1px solid #71984e;border-radius:7px;background:#203529;color:var(--lime);font-weight:600;letter-spacing:.04em}

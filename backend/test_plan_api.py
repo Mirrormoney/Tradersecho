@@ -67,3 +67,29 @@ def test_api_billing_is_separate_and_price_checked(database,monkeypatch):
     assert not api.subscribed(database,'u')
     obj['items']['data'][0]['price']['unit_amount']=50
     assert not api.valid_price(obj['items']['data'][0]['price'])
+
+
+def test_sentiment_only_aggregate_never_leaks_source_fields():
+    rows=[]
+    for i,label in enumerate(['bullish','bullish','bearish','neutral','unclear']):
+        rows.append({'source':'x','id':str(i),'text':'PRIVATE source text','author':'PRIVATE author','url':'PRIVATE link','sentiment_status':'done','sentiment_analyzed_at':100+i,'ticker_sentiments':[{'ticker':'MU','label':label,'evidence':'PRIVATE quote','reason':'PRIVATE explanation'},{'ticker':'OUTSIDE','label':'bullish'}]})
+    rows += [rows[0],{**rows[0],'id':'pending','sentiment_status':'pending'}]
+    result=api.sentiment_rows(rows,{'MU':('Micron','Semiconductors')})
+    assert len(result)==1
+    r=result[0]
+    assert r['score']==25 and r['bullish_pct']==40 and r['bearish_pct']==20
+    assert r['sentiment']=='bullish' and r['analyzed_at']==104
+    assert set(r)=={'ticker','sentiment','score','bullish_pct','bearish_pct','neutral_pct','mixed_pct','unclear_pct','analyzed_at'}
+    assert 'PRIVATE' not in str(result) and 'OUTSIDE' not in str(result)
+    assert api.sentiment_rows(rows[:4],{'MU':()})==[]
+    unclear=[{**p,'ticker_sentiments':[{'ticker':'MU','label':'unclear'}]} for p in rows[:5]]
+    assert api.sentiment_rows(unclear,{'MU':()})[0]['score'] is None
+    crypto=[{**p,'text':'$AI token on solana','ticker_sentiments':[{'ticker':'AI','label':'bullish'}]} for p in rows[:5]]
+    assert api.sentiment_rows(crypto,{'AI':()})==[]
+
+
+def test_api_runtime_modules_are_deployment_allowlisted():
+    from pathlib import Path
+    config=(Path(__file__).parents[1]/'.vercelignore').read_text()
+    for name in ('customer_api','plan_limits'):
+        assert '!backend/'+name+'.py' in config

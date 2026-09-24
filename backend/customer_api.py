@@ -85,18 +85,45 @@ def authenticate(request):
         if not paid_member(c,uid) or not subscribed(c,uid):raise HTTPException(403,'Active membership and API subscription required.')
         return consume(c,uid,time.time())
 
+def sentiment_rows(rows,catalog):
+    """Allowlisted aggregate output only; no per-post records leave this module."""
+    from .screening import stock_context
+    groups={};seen=set()
+    for post in rows:
+        if post.get('source')!='x' or post.get('sentiment_status')!='done':continue
+        for stance in post.get('ticker_sentiments',[]):
+            ticker=stance.get('ticker');label=stance.get('label')
+            identity=(post['id'],ticker)
+            if ticker not in catalog or identity in seen or label not in ('bullish','bearish','neutral','mixed','unclear'):continue
+            if not stock_context(post['text'],ticker):continue
+            seen.add(identity)
+            group=groups.setdefault(ticker,{'labels':[],'updated_at':0})
+            group['labels'].append(label)
+            group['updated_at']=max(group['updated_at'],post.get('sentiment_analyzed_at',0))
+    result=[]
+    for ticker,g in sorted(groups.items()):
+        labels=g['labels'];n=len(labels)
+        # Suppress small samples rather than expose individual post classifications.
+        if n<5:continue
+        bullish=labels.count('bullish');bearish=labels.count('bearish')
+        known=n-labels.count('unclear')
+        score=round(100*(bullish-bearish)/known,1) if known else None
+        label='unclear' if not known else 'bullish' if score>0 else 'bearish' if score<0 else 'mixed' if bullish or bearish or 'mixed' in labels else 'neutral'
+        result.append({'ticker':ticker,'sentiment':label,'score':score,'bullish_pct':round(100*bullish/n,1),'bearish_pct':round(100*bearish/n,1),'neutral_pct':round(100*labels.count('neutral')/n,1),'mixed_pct':round(100*labels.count('mixed')/n,1),'unclear_pct':round(100*labels.count('unclear')/n,1),'analyzed_at':g['updated_at']})
+    return result
+
+
 def snapshot(days):
     with _lock:
         old=_cache.get(days)
-        if old and time.monotonic()-old[0]<60:return old[1]
-        from .count_metrics import enrich
-        from .supply_chain import group_rows
-        s=core()
+        if old and time.monotonic()-old[0]<300:return old[1]
+        from .context_sentiment import annotate
+        s=core();now=time.time()
         with s.db() as c:
-            stamp=s.reference('x',c);rows=enrich(c,[],stamp,days)
-        ranked=sorted(rows,key=lambda r:(-r['heat'],r['ticker']))[:20]
-        fields=('ticker','name','sector','mentions','change','heat')
-        result={'window_days':days,'as_of':stamp,'stale':time.time()-stamp>36*3600,'rankings':[{**{k:r.get(k) for k in fields},'rank':i+1} for i,r in enumerate(ranked)],'sectors':[{k:g[k] for k in ('sector','stocks','mentions','share')} for g in group_rows(s.CATALOG,rows,days*24)]}
+            rows=c.execute("SELECT p.*,GROUP_CONCAT(DISTINCT m.ticker) tickers FROM posts p JOIN mentions m ON p.source=m.source AND p.id=m.post_id WHERE p.source='x' AND p.ts>? AND p.ts<=? GROUP BY p.source,p.id ORDER BY p.ts DESC LIMIT 5001",(now-days*86400,now)).fetchall()
+            limited=len(rows)>5000
+            posts=annotate(c,[dict(r) for r in rows[:5000]])
+        result={'window_days':days,'as_of':now,'sample_limited':limited,'method':'contextual_ai_aggregate_v1','sentiments':sentiment_rows(posts,s.CATALOG)}
         _cache[days]=(time.monotonic(),result);return result
 
 @router.get('/api/v1/snapshot')

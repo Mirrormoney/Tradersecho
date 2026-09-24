@@ -1,10 +1,10 @@
 # UW Basic private pilot
 
-September 24, 2026. Prepared, disabled. No subscription purchased, API key saved, or UW data requested.
+September 24, 2026. Owner obtained API access, saved UW_API_KEY privately in Vercel Production, and explicitly confirmed UW permission for private Tradersecho evaluation. Production pilot enabled. Preview remains disabled. First live requests return current candles and net premium; provider quota header confirms 40,000/day. No public redistribution or finished scores enabled.
 
 Owner-only status: Administration -> signal lab. Members cannot access /api/admin/uw-pilot; the endpoint requires the non-demo owner role. Existing member features and customer API do not read the new tables.
 
-## Activation handoff
+## Activation configuration and remaining validation
 1. Owner obtains UW confirmation that Basic permits private Tradersecho product evaluation. API conventions allow personal/internal use, while pricing says personal only; do not assume public display or redistribution rights.
 2. Owner creates account/accepts subscription terms privately. Basic advertised $150/month after seven-day trial; billing begins automatically. Verify checkout price/conditions; no paid action authorized here.
 3. Save UW_API_KEY as sensitive, Production only, in existing Tradersecho Vercel project. Never send the key in chat or add it to frontend variables.

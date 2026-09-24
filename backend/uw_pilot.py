@@ -83,7 +83,7 @@ def run(client=None,now=None):
         if get(c,'lease',{}).get('until',0)>now:return {'state':'already_running'}
         put(c,'lease',{'token':token,'until':now+180})
         latest={(r['ticker'],r['kind']):r['fetched_at'] for r in c.execute('SELECT ticker,kind,fetched_at FROM uw_pilot_latest')}
-    due=sorted([(t,k) for t in tickers for k in KINDS if latest.get((t,k),0)<=now-600],key=lambda x:latest.get(x,0))[:40]
+    due=sorted([(t,k) for t in tickers for k in KINDS if latest.get((t,k),0)<int(now//600)*600],key=lambda x:latest.get(x,0))[:40]
     own=client is None
     started=time.monotonic();done=0;failures=0;state='complete'
     try:
@@ -144,17 +144,42 @@ def cron(request:Request):
     if not secret or not hmac.compare_digest(request.headers.get('authorization',''),'Bearer '+secret):raise HTTPException(401,'Unauthorized')
     return run()
 
+def stock_measurements(ticker,datasets,now):
+    """Raw observations only. Require contiguous regular-session windows."""
+    def rows(kind):
+        values=datasets.get(kind,[])
+        return sorted([v for v in values if v['at']<=now and
+            datetime.fromtimestamp(v['at'],NY).date()==datetime.fromtimestamp(now,NY).date() and
+            570 < datetime.fromtimestamp(v['at'],NY).hour*60+datetime.fromtimestamp(v['at'],NY).minute <=960],key=lambda v:v['at'])
+    candles=rows('candles');flow=rows('net_premium')
+    def continuous(values,count,seconds):
+        tail=values[-count:]
+        return len(tail)==count and all(abs(b['at']-a['at']-seconds)<2 for a,b in zip(tail,tail[1:]))
+    price_ready=continuous(candles,7,600)
+    volume_ready=continuous(candles,3,600)
+    flow_ready=continuous(flow,60,60)
+    return {'ticker':ticker,'candles':candles,'flow':flow[-60:],
+        'price_at':candles[-1]['at'] if candles else None,'flow_at':flow[-1]['at'] if flow else None,
+        'return_60m':round((candles[-1]['close']/candles[-7]['close']-1)*100,3) if price_ready else None,
+        'volume_30m':sum(v['volume'] for v in candles[-3:]) if volume_ready else None,
+        'net_calls_60m':sum(v['net_call_premium'] for v in flow[-60:]) if flow_ready else None,
+        'net_puts_60m':sum(v['net_put_premium'] for v in flow[-60:]) if flow_ready else None,
+        'price_window_complete':price_ready,'volume_window_complete':volume_ready,'flow_window_complete':flow_ready,
+        'price_fresh':bool(candles and now-candles[-1]['at']<=1200),
+        'flow_fresh':bool(flow and now-flow[-1]['at']<=1200)}
+
 @router.get('/api/admin/uw-pilot')
 def overview(request:Request):
     staff(request,owner=True);s=core();now=time.time()
     with s.db() as c:
         migrate(c)
-        rows=[]
+        rows=[];samples={}
         for record in c.execute('SELECT * FROM uw_pilot_latest ORDER BY ticker,kind'):
             item=dict(record);data=json.loads(item.pop('payload') or '[]')
+            if item['ticker'] in ('NVDA','AMD','MU'):samples.setdefault(item['ticker'],{})[item['kind']]=data
             item['observations']=len(data);item['latest']=data[-1] if data else None
             if item['state']=='ready' and now-(item['data_at'] or 0)>1200:item['state']='stale'
             rows.append(item)
         usage=c.execute('SELECT * FROM uw_pilot_usage WHERE day=?',(quota_day(now),)).fetchone()
-        return {**configured(),'rows':rows,'usage':dict(usage) if usage else None,'last_run':get(c,'last_run'),
+        return {**configured(),'server_at':now,'session_open':session_open(now),'stocks':[stock_measurements(t,samples.get(t,{}),now) for t in ('NVDA','AMD','MU') if t in s.CATALOG],'rows':rows,'usage':dict(usage) if usage else None,'last_run':get(c,'last_run'),
                 'tickers':[t for t in PILOT if t in s.CATALOG],'local_daily_cap':32000,'scores_ready':False}

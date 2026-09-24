@@ -73,3 +73,26 @@ def test_owner_endpoint_checks_permission_first(monkeypatch):
     monkeypatch.setattr(u,'staff',deny)
     with pytest.raises(HTTPException) as e:u.overview(None)
     assert e.value.status_code==403
+
+def test_measurements_require_contiguous_windows():
+    candles=[{'at':NOW-i*600,'close':106-i,'volume':100} for i in range(7)]
+    flow=[{'at':NOW-i*60,'net_call_premium':10,'net_put_premium':-2} for i in range(60)]
+    result=u.stock_measurements('NVDA',{'candles':candles,'net_premium':flow},NOW)
+    assert result['return_60m']==6
+    assert result['volume_30m']==300
+    assert result['net_calls_60m']==600 and result['net_puts_60m']==-120
+    assert result['price_fresh'] and result['flow_fresh']
+    result=u.stock_measurements('NVDA',{'candles':candles[:3]+candles[4:],'net_premium':flow[:15]+flow[16:]},NOW)
+    assert result['return_60m'] is None and result['net_calls_60m'] is None
+    assert result['volume_30m']==300
+
+def test_measurements_do_not_mix_previous_day_or_future():
+    sample={'at':NOW-86400,'close':10,'volume':100}
+    future={'at':NOW+600,'close':11,'volume':100}
+    result=u.stock_measurements('MU',{'candles':[sample,future]},NOW)
+    assert result['candles']==[] and result['return_60m'] is None
+    assert not result['price_fresh']
+
+def test_measurements_label_stale_separately():
+    result=u.stock_measurements('AMD',{'candles':[{'at':NOW-1800,'close':100,'volume':50}]},NOW)
+    assert result['price_at']==NOW-1800 and not result['price_fresh']

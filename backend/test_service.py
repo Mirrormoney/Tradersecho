@@ -132,6 +132,34 @@ def make_account(email,code=''):
     assert response.status_code==200,response.text
     return client,response.json()
 
+def test_premium_founder_limits_enforced_without_deleting_existing(monkeypatch):
+    from .community import data_settings
+    catalog={f'T{i}':(f'Test {i}','Software') for i in range(60)}
+    monkeypatch.setattr(s,'CATALOG',catalog)
+    client,u=make_account('limits@example.com')
+    with s.db() as c:
+        c.execute("UPDATE accounts SET plan='premium' WHERE id=?",(u['id'],))
+        settings=data_settings(c);settings.update(enabled=True,intraday_enabled=True,on_demand_daily_limit=30)
+        c.execute("INSERT INTO settings VALUES('x_collection',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(settings),))
+    assert client.get('/api/me').json()['limits']['saved_stocks']==25
+    for i in range(25):assert client.put('/api/watchlist/T'+str(i)).status_code==200
+    assert client.put('/api/watchlist/T25').status_code==403
+    for i in range(3):assert client.post('/api/handles',json={'handle':'limit'+str(i)}).status_code==200
+    assert client.post('/api/handles',json={'handle':'limit3'}).status_code==403
+    for i in range(3):assert client.post('/api/refresh/T'+str(i)).status_code==200
+    assert client.post('/api/refresh/T3').status_code==429
+    with s.db() as c:c.execute('INSERT INTO billing_entitlements VALUES(?,?,?,?,?)',('founder-limits',u['id'],'founder',1,time.time()))
+    assert client.get('/api/me').json()['limits']['saved_stocks']==50
+    assert client.put('/api/watchlist/T25').status_code==200
+    assert client.post('/api/handles',json={'handle':'limit3'}).status_code==200
+    assert client.post('/api/refresh/T3').status_code==200
+    assert client.post('/api/refresh/T4').status_code==200
+    assert client.post('/api/refresh/T5').status_code==429
+    with s.db() as c:c.execute('UPDATE billing_entitlements SET active=0 WHERE id=?',('founder-limits',))
+    assert len(client.get('/api/watchlist').json())==26
+    assert client.put('/api/watchlist/T26').status_code==403
+    assert client.delete('/api/watchlist/T25').status_code==200
+
 def test_signup_requires_unique_normalized_username():
     c=TestClient(s.app)
     body={'email':'username@example.com','password':'long-test-password'}
@@ -405,10 +433,10 @@ def test_shared_voices_limits_privacy_and_collection(monkeypatch):
         assert member.post('/api/handles',json={'handle':'@SharedVoice','note':f'private{i}'}).status_code==200
         members.append((member,u))
     a,u=members[0]
-    for i in range(4):assert a.post('/api/handles',json={'handle':f'extra{i}'}).status_code==200
+    for i in range(2):assert a.post('/api/handles',json={'handle':f'extra{i}'}).status_code==200
     assert a.post('/api/handles',json={'handle':'sixth'}).status_code==403
     assert a.post('/api/handles',json={'handle':'SHAREDVOICE','note':'updated private'}).status_code==200
-    assert len(a.get('/api/handles').json())==5
+    assert len(a.get('/api/handles').json())==3
     assert members[1][0].get('/api/handles').json()[0]['note']=='private1'
     assert a.post('/api/admin/voices',json={'handle':'forbidden'}).status_code==403
     free,_=make_account('voice-free@example.com')
@@ -416,11 +444,11 @@ def test_shared_voices_limits_privacy_and_collection(monkeypatch):
     assert owner.post('/api/admin/voices',json={'handle':'@SHAREDVOICE','note':'public note'}).status_code==200
     duplicate=a.post('/api/handles',json={'handle':'@SHAREDVOICE','note':'must not overwrite'})
     assert duplicate.status_code==200 and duplicate.json()['already_curated']
-    assert len(a.get('/api/handles').json())==5
+    assert len(a.get('/api/handles').json())==3
     assert next(r for r in a.get('/api/handles').json() if r['handle']=='sharedvoice')['note']=='updated private'
     fresh=members[1][0].post('/api/handles',json={'handle':'sharedvoice'})
     assert fresh.json()['already_curated']
-    for i in range(4):a.delete('/api/handles/'+f'extra{i}')
+    for i in range(2):a.delete('/api/handles/'+f'extra{i}')
     registry=owner.get('/api/admin/voices').json()
     assert registry['unique_accounts']==1 and registry['rows'][0]['followers']==5
     assert 'private' not in json.dumps(registry)

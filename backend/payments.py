@@ -56,7 +56,9 @@ def account_details(u):
     with core().db() as c:
         founder=c.execute("SELECT 1 FROM billing_entitlements WHERE user_id=? AND tier='founder' AND active=1",(u['id'],)).fetchone()
         previous=c.execute('SELECT 1 FROM billing_entitlements WHERE user_id=?',(u['id'],)).fetchone()
-    return {'billing_tier':'founder' if founder else 'trial' if u.get('trial_active') else u['plan'],'billing_customer':bool(u.get('stripe_customer')),'trial_eligible':bool(not u['demo'] and u['role']=='member' and u['plan']=='free' and not u.get('trial_started_at') and not previous)}
+        from .plan_limits import limits
+        allowances=limits(c,u)
+    return {'limits':allowances,'billing_tier':'founder' if founder else 'trial' if u.get('trial_active') else u['plan'],'billing_customer':bool(u.get('stripe_customer')),'trial_eligible':bool(not u['demo'] and u['role']=='member' and u['plan']=='free' and not u.get('trial_started_at') and not previous)}
 
 def validate_price(price,tier,legacy=False):
     _,amount,interval=TIERS[tier]
@@ -86,7 +88,7 @@ def create_checkout(u,tier):
         u=dict(c.execute('SELECT * FROM accounts WHERE id=?',(u['id'],)).fetchone())
         if u['plan']=='premium' or u['role'] in ['owner','admin']:
             raise HTTPException(409,'You already have Premium access. Use Manage billing for an existing subscription.')
-        existing=c.execute('SELECT * FROM billing_checkouts WHERE user_id=? ORDER BY created_at DESC LIMIT 1',(u['id'],)).fetchone()
+        existing=c.execute("SELECT * FROM billing_checkouts WHERE user_id=? AND tier!='api' ORDER BY created_at DESC LIMIT 1",(u['id'],)).fetchone()
         if existing:
             session=stripe('GET','checkout/sessions/'+quote(existing['id'],safe=''))
             if session['status']=='complete' and not c.execute('SELECT 1 FROM billing_entitlements WHERE user_id=?',(u['id'],)).fetchone():
@@ -128,6 +130,9 @@ def portal(request:Request):
 def sync_entitlement(c,kind,object_id):
     if not environment_valid():raise HTTPException(503,'Payment environment is not configured safely.')
     obj=stripe('GET',('subscriptions/' if kind=='subscription' else 'payment_intents/')+quote(object_id,safe=''),None if kind=='subscription' else {'expand[0]':'latest_charge'})
+    if kind=='subscription':
+        from .customer_api import sync
+        if sync(c,obj):return
     uid=obj.get('metadata',{}).get('account_id');tier=obj.get('metadata',{}).get('tier')
     if tier not in TIERS or (kind=='subscription')==(tier=='founder'): return
     u=c.execute('SELECT * FROM accounts WHERE id=? AND stripe_customer=? AND demo=0',(uid,obj.get('customer'))).fetchone()

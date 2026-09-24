@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from .community import router as community_router, migrate, claim_owner, available_default_name
 from .database import connect, IntegrityError
+from .plan_limits import limits as plan_limits
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = os.getenv('TRADERSECHO_DB', str(ROOT / 'data' / 'tradersecho.sqlite'))
@@ -35,6 +36,8 @@ from .digest import router as digest_router, migrate as migrate_digest
 app.include_router(digest_router)
 from .voices import router as voices_router, migrate as migrate_voices, normalize as normalize_handle
 app.include_router(voices_router)
+from .customer_api import router as customer_api_router
+app.include_router(customer_api_router)
 
 def db():
     return connect(DB_PATH)
@@ -346,7 +349,8 @@ def watch(request:Request,ticker:str):
         c.execute('BEGIN IMMEDIATE')
         count=c.execute('SELECT COUNT(*) FROM watchlist WHERE user_id=?',(u['id'],)).fetchone()[0]
         exists=c.execute('SELECT 1 FROM watchlist WHERE user_id=? AND ticker=?',(u['id'],ticker)).fetchone()
-        if count>=(50 if u['plan']=='premium' else 5) and not exists: raise HTTPException(403,'Free accounts can save 5 tickers. Upgrade for more.')
+        limit=plan_limits(c,u)['saved_stocks']
+        if count>=limit and not exists: raise HTTPException(403,f'Your plan allows {limit} saved stocks. Remove a stock before adding another.')
         c.execute('INSERT OR IGNORE INTO watchlist VALUES(?,?)',(u['id'],ticker))
     return {'ok':True}
 
@@ -374,7 +378,8 @@ def add_handle(payload:Handle,request:Request):
         if c.execute('SELECT 1 FROM admin_voices WHERE handle=?',(handle,)).fetchone():
             return {'ok':True,'already_curated':True,'message':'Already included in Tradersecho voices. Its posts are in your feed; no personal slot was used and no private note was saved.'}
         existing=c.execute('SELECT 1 FROM handles WHERE user_id=? AND handle=?',(u['id'],handle)).fetchone()
-        if not existing and c.execute('SELECT COUNT(*) FROM handles WHERE user_id=?',(u['id'],)).fetchone()[0]>=5: raise HTTPException(403,'You can add up to 5 personal accounts. Remove one before adding another.')
+        limit=plan_limits(c,u)['personal_voices']
+        if not existing and c.execute('SELECT COUNT(*) FROM handles WHERE user_id=?',(u['id'],)).fetchone()[0]>=limit: raise HTTPException(403,f'Your plan allows {limit} personal accounts. Remove one before adding another.')
         c.execute('INSERT INTO handles VALUES(?,?,?) ON CONFLICT(user_id,handle) DO UPDATE SET note=excluded.note',(u['id'],handle,payload.note))
     return {'ok':True}
 

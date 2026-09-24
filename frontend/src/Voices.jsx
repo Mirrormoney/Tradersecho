@@ -2,7 +2,7 @@ import {dualTime} from './time.js'
 import React,{useEffect,useState} from 'react'
 import {api} from './api.js'
 
-export function Voices({admin=false,premium=true,onChange,onPlans}){
+export function Voices({admin=false,premium=true,personalLimit=3,onChange,onPlans}){
  const [data,setData]=useState(null),[personal,setPersonal]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[notice,setNotice]=useState('')
  async function load(){
   if(admin)setData(await api('/admin/voices'))
@@ -13,7 +13,7 @@ export function Voices({admin=false,premium=true,onChange,onPlans}){
  const curated=admin?data?.rows.filter(r=>r.curated):data?.rows
  return <section className="panel">
   <div className="section-head"><h2>{admin?'Shared voice registry':'Your personal voices'}</h2><button className="button" disabled={busy} onClick={()=>change(async()=>{},'List refreshed.')}>Refresh voices</button></div>
-  <p className="muted">{admin?'Manage the curated accounts shared with all signed-in members. There is no account-count limit on this admin list. The registry combines these with eligible members’ personal follows.':'Keep up to five personal research accounts here. The shared account overview is in Data Sources.'} Each X account is collected once for everyone. Opening this page never buys more posts.</p>
+  <p className="muted">{admin?'Manage the curated accounts shared with all signed-in members. There is no account-count limit on this admin list. The registry combines these with eligible members’ personal follows.':`Keep up to ${personalLimit} personal research accounts here. The shared account overview is in Data Sources.`} Each X account is collected once for everyone. Opening this page never buys more posts.</p>
   {error&&<p className="error" role="alert">{error}</p>}{notice&&<p className="positive" role="status">{notice}</p>}
   {!data&&<p>Loading voices…</p>}
   {admin&&curated?.map(h=><div className="handle" key={h.handle}><div><strong>@{h.handle}</strong><p>{h.note||'Admin-selected · shared with all members'}</p><small>{h.checked_at?'Last checked '+dualTime(h.checked_at)+' · ':''}{h.collection_message}{h.retry_at?' · Resets '+dualTime(h.retry_at):''}{h.truncated?' · Capped sample':''}</small></div>{admin&&<button className="button" disabled={busy} onClick={()=>change(()=>api('/admin/voices/'+h.handle,'DELETE'),'Removed from curated voices. Personal follows and collected posts are retained.')}>Remove curated @{h.handle}</button>}</div>)}
@@ -25,7 +25,7 @@ export function Voices({admin=false,premium=true,onChange,onPlans}){
   </form>
   {!admin&&personal.map(h=><div className="handle" key={h.handle}><div><strong>@{h.handle}</strong><p>{h.note||'Private research note'}</p></div><button className="button" disabled={busy} onClick={()=>change(()=>api('/handles/'+h.handle,'DELETE'),'Personal follow removed.')}>Remove @{h.handle}</button></div>)}
 </>}
-  {!admin&&!premium&&<><p>Premium lets you add up to five personal voices.</p><button className="button primary" onClick={onPlans}>Explore Premium</button></>}
+  {!admin&&!premium&&<><p>Premium lets you add up to three personal voices.</p><button className="button primary" onClick={onPlans}>Explore Premium</button></>}
   {!admin&&premium&&<p className="muted">Five personal accounts maximum. Saving an existing handle updates its note without using another slot. Curated accounts already appear in your feed.</p>}
   {admin&&data&&<><div className="divider"/><h3>{data.unique_accounts} unique accounts in shared collection</h3><div className="table-scroll"><table><thead><tr><th>Account</th><th>Source</th><th>Personal followers</th><th>Last checked</th></tr></thead><tbody>{data.rows.map(h=><tr key={h.handle}><td>@{h.handle}</td><td>{h.curated?'Curated':'Member-added'}</td><td>{h.followers}</td><td>{h.checked_at?dualTime(h.checked_at):'Pending'}</td></tr>)}</tbody></table></div><p className="muted">Follower counts include active eligible accounts only. Personal notes remain private.</p></>}
   <p className="muted">Accounts have individual hourly checks, with admin voices prioritised. Admin checks collect up to 20 posts at a time and 120 posts per account per day, subject to the shared budget. Replies and reposts are excluded. Results are samples, not complete account histories.</p>

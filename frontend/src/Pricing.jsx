@@ -1,18 +1,19 @@
 import React,{useState} from 'react'
 import {api} from './api.js'
 import './pricing.css'
+import {ApiAddon} from './ApiAddon.jsx'
 
 const features=[
- ['Stock rankings','Top 5','Full rankings'],
+ ['Stock rankings','Top 5','Top 20 per timeframe'],
  ['Day, week & month views','Included','Included'],
- ['Saved stocks','5 stocks','50 stocks'],
+ ['Saved stocks','5 stocks','25 stocks','50 stocks'],
  ['Shared tracked voices','Included','Included'],
- ['Personal tracked voices','Not included','Up to 5 accounts'],
+ ['Personal tracked voices','Not included','Up to 3 accounts','Up to 5 accounts'],
  ['AI Supply Chain','Sector preview only','Full heatmap & sector rankings'],
  ['Trending Research','Preview only','Full broker research summaries'],
  ['Scheduled research emails','Not included','Four opt-in editions'],
  ['Trading room','Not included','Included'],
- ['Ticker refresh requests','Not included','Up to 5 per day'],
+ ['Ticker refresh requests','Not included','Up to 3 per day','Up to 5 per day'],
 ]
 export function Pricing({user,status,onSignup,onAccount}){
  const [annual,setAnnual]=useState(false),[busy,setBusy]=useState(''),[error,setError]=useState('')
@@ -42,11 +43,12 @@ export function Pricing({user,status,onSignup,onAccount}){
      <button className={'button full '+(paid?'primary':'')} disabled={Boolean(busy)||(paid&&(premium||!available))} onClick={()=>paid?choose(choice):user?onAccount():onSignup()}>
       {busy===choice?'Opening secure checkout…':selected&&user?'Your current plan':paid?premium?'Premium access included':available?founder?'Become a Founder':'Get Premium':'Payments opening soon':user?'Manage account':'Create free account'}
      </button>
-     <ul className="pricing-features">{features.map(([label,free,full])=><li key={label} className={!paid&&free==='Not included'?'excluded':''}><span aria-hidden="true">{!paid&&free==='Not included'?'−':'✓'}</span><div>{label}<strong>{paid?full:free}</strong></div></li>)}</ul>
-     <p className="pricing-card-note">{founder?'One payment. No renewal. Same usage limits as Premium; not unlimited X API usage.':paid?'Renews automatically until cancelled. Collected data is shared; requests remain subject to the platform budget.':'Upgrade whenever you want a closer look.'}</p>
+     <ul className="pricing-features">{features.map(([label,free,full,founderValue])=><li key={label} className={!paid&&free==='Not included'?'excluded':''}><span aria-hidden="true">{!paid&&free==='Not included'?'−':'✓'}</span><div>{label}<strong>{founder?(founderValue||full):paid?full:free}</strong></div></li>)}</ul>
+     <p className="pricing-card-note">{founder?'One payment. No renewal. Higher personal allowances than Premium; shared collection budgets still apply.':paid?'Renews automatically until cancelled. Collected data is shared; requests remain subject to the platform budget.':'Upgrade whenever you want a closer look.'}</p>
     </section>
    })}
   </div>
+  <ApiAddon user={user}/>
   {error&&<p className="error" role="alert">{error}</p>}
   <div className="pricing-footnotes"><p>All prices in USD. Applicable taxes will be shown before payment. Founder access lasts while Tradersecho is operated as an active service; it is not a guarantee of perpetual operation.</p><p>Coverage depends on available X data. Paid membership does not guarantee complete coverage, investment returns or instant collection. Choose morning, closing, weekly and monthly research emails in My account.</p>{!status?.billing_configured&&<p>Plans are available to compare during our private preview. Checkout opens after payment setup and testing.</p>}</div>
  </div>

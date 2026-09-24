@@ -265,7 +265,8 @@ def request_refresh(ticker:str,request:Request):
         if c.execute("SELECT 1 FROM collection_jobs WHERE day=? AND ticker=? AND kind IN ('hour_counts','request_counts') AND status IN ('pending','running','done')",(slot,ticker)).fetchone():return {'state':'queued','message':'A shared refresh already exists for this hour.'}
         daily=c.execute("SELECT COUNT(*) FROM collection_jobs WHERE day LIKE ? AND kind='request_counts'",(day+'%',)).fetchone()[0]
         key='demand:'+day+':'+u['id'];row=c.execute('SELECT value FROM meta WHERE key=?',(key,)).fetchone();used=int(row[0]) if row else 0
-        if daily>=settings['on_demand_daily_limit'] or used>=5:raise HTTPException(429,'Refresh allowance reached. Scheduled updates continue.')
+        from .plan_limits import limits
+        if daily>=settings['on_demand_daily_limit'] or used>=limits(c,u)['ticker_refreshes']:raise HTTPException(429,'Refresh allowance reached. Scheduled updates continue.')
         enqueue(c,slot,'request_counts',ticker,end,stock_query(ticker))
         enqueue(c,slot,'request_sample',ticker,end,stock_query(ticker))
         c.execute('INSERT INTO meta VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(key,str(used+1)))

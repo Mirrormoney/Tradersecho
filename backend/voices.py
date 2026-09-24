@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from .community import core, staff, audit
 
 router=APIRouter()
-PERSONAL_LIMIT=5
+PERSONAL_LIMIT=3
 
 def migrate(c):
     c.executescript('''

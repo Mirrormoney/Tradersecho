@@ -36,3 +36,24 @@ UW Basic currently advertised $150/month after seven-day trial, 40,000 requests/
 4. Connect authorized credentials privately; measure request use and feed coverage.
 5. Backtest where point-in-time data is available, then forward-test frozen rules.
 6. Choose retained indicators, commercial licence and pricing based on measured evidence.
+
+
+## Private implementation v0.2 — September 24
+
+Owner-only hosted engine and five-axis inspector are implemented. This is an experimental evaluation product, not a validated customer trading signal. No additional AI calls are made by scoring. Existing collected per-ticker AI labels and published research are reused. An unavailable axis remains null; incomplete polygons are never filled with fabricated neutral scores.
+
+Pilot basket is frozen in `uw_pilot.PILOT`, 20 covered names. Rebalanced to give NVDA/AMD five semiconductor peers and MU five memory/storage peers, without raising the 20-name allowance. It is a selected covered basket, NOT a whole-market benchmark. Constituents used in each computation are saved in the snapshot. At least five sector and ten basket peers with identical candle endpoints are required.
+
+Price: retains 40/40/20 weights, but v0.2 explicitly substitutes the covered basket for a market index and a typical-price-times-volume candle proxy for exact trade VWAP. Each component is scaled by the median absolute same-time 60-minute move over 20 prior observed sessions (floor 0.1 percentage points), clipped to +/-2. Score = clip(50 + 25 * weighted components, 0, 100). Full regular-session candle coverage is required for the proxy. Corporate-action/venue consistency is not independently certified; no public release claim.
+
+Volume: 70% min(100, 50 * relative volume) + 30% (above-median candles / 3 * 100). Twenty complete same-clock historical sessions required. It measures participation, not direction.
+
+Options: complete single-leg 7–60 DTE sample, at least 20 classified trades, fresh within 20 minutes, after the first full regular-session hour. Collect 20 prior comparable NY-clock sessions under this rule version before enabling the axis. Score = 50 + 50 * (0.6 * (bull-bear)/(bull+bear) + 0.4 * min(1,max(0,total/median-1)) * sign(balance)). Partial / rate-limited / ambiguous data is not scored. Forward baselines cannot be manufactured on launch day.
+
+X: one latest classified opinion per author in each nonoverlapping 3h window; exact template duplicates and promotional/irrelevant text removed, unknown authors excluded. Both windows need 10 distinct authors and 5 directional authors. Score = 50 + 50 * (0.6 * current balance + 0.4 * (current-prior balance)/2). Coverage counts retain neutral/mixed/unclear and pending labels. This is the collected sample, not all of X.
+
+Catalysts: published, deduplicated research only, original report date within 7 calendar days. Materiality rubric: direct attributed rating event 70; direct commentary 50; readthrough 25. Source quality: direct original 80, direct relay 60, readthrough 35. Freshness: today 100, yesterday 70, age 2–3 days 40, age 4–7 days 10. Weighted 40/35/25. Direction displayed separately from source's saved stance. These are explicit heuristic evidence scores, not measured earnings impact. SEC metadata alone is NOT an AI-validated catalyst and does not produce a direction score.
+
+Setup: price strength at least 30 (distance from midpoint scaled to 0–100), volume score at least 60, and either options or X strength at least 30 in the same direction. Must persist across two consecutive checks at most 15 minutes apart. Price/volume-only baseline saved separately. Every check is immutable and versioned, including incomplete observations, with original collection times. Same-session one-hour outcomes plus high/low excursion and illustrative 10bp round-trip costs are recorded. These overlapping observations are not independent trades or a backtest. Longer-horizon validation, corporate-action checks, calibration and out-of-sample performance remain release gates.
+
+Operational boundaries: owner-only endpoint, production-only authorized collector, unchanged quota controls. Saved observations retained 90 days; comparable baseline queries bounded to same-time slots from 45 days. UI reads only the latest 30 entries; visitors do not trigger provider or AI requests. Worker evaluation errors are isolated from collection and exposed in diagnostics. The weekday clock guard is not yet an exchange holiday/early-close calendar; source freshness gates block stale scores, but that calendar remains required before customer release. Public distribution still requires appropriate UW rights.

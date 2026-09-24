@@ -1,0 +1,221 @@
+"""Private, deterministic forward evaluation. Never fetches paid data or calls AI.
+
+Versioned pilot rules, not calibrated forecasts. Snapshots preserve what was known
+at observation time; missing evidence does not become a neutral score.
+"""
+import json, math, statistics, time
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+NY = ZoneInfo('America/New_York')
+VERSION = 'lab-0.2'
+TITLES = ['Price strength', 'Volume confirmation', 'Options pressure', 'X conviction', 'Catalyst strength']
+
+
+def migrate(c):
+    c.executescript('''
+    CREATE TABLE IF NOT EXISTS signal_lab_snapshots(
+      ticker TEXT,slot INTEGER,version TEXT,observed REAL,price_at REAL,price REAL,
+      payload TEXT,outcome TEXT,PRIMARY KEY(ticker,slot,version));
+    CREATE INDEX IF NOT EXISTS signal_lab_observed ON signal_lab_snapshots(observed);
+    ''')
+
+
+def clamp(v): return round(max(0, min(100, v)), 1)
+
+
+def axis(name, score=None, reason='', directional=False, **details):
+    return dict(name=name, score=score, strength=(round(abs(score-50)*2,1) if directional else score) if score is not None else None,
+                direction=('bullish' if score>55 else 'bearish' if score<45 else 'balanced') if directional and score is not None else None,
+                state='ready' if score is not None else 'unavailable', reason=reason, details=details)
+
+
+def price_axis(stock, peers, catalog, history):
+    """v0.2 uses the fixed covered pilot basket and a labelled candle VWAP proxy."""
+    end=stock['price_at']; ticker=stock['ticker']
+    if not stock['price_fresh'] or stock['return_60m'] is None:
+        return axis(TITLES[0],reason='A fresh, complete 60-minute price window is required.')
+    available=[s for s in peers if s['ticker']!=ticker and s['price_at']==end and s['price_fresh'] and s['return_60m'] is not None]
+    sector=[s for s in available if catalog[s['ticker']][1]==catalog[ticker][1]]
+    if len(sector)<5 or len(available)<10:
+        return axis(TITLES[0],reason='Need five aligned sector peers and ten aligned covered-basket peers.',sector_peers=len(sector),basket_peers=len(available))
+    byday={}; dt=datetime.fromtimestamp(end,NY); minute=dt.hour*60+dt.minute
+    for r in history:
+        d=datetime.fromtimestamp(r['at'],NY)
+        if d.date()<dt.date() and r.get('close',0)>0:byday.setdefault(d.date(),{})[d.hour*60+d.minute]=r['close']
+    days=sorted(byday,reverse=True)[:20]
+    returns=[abs((byday[d][minute]/byday[d][minute-60]-1)*100) for d in days if minute in byday[d] and minute-60 in byday[d]]
+    candles=stock['candles']
+    expected=list(range(580,minute+1,10))
+    clock=[datetime.fromtimestamp(r['at'],NY).hour*60+datetime.fromtimestamp(r['at'],NY).minute for r in candles]
+    if len(returns)<20 or clock!=expected or any(not all(k in r for k in ('high','low','close','volume')) for r in candles):
+        return axis(TITLES[0],reason='Building 20 same-time price sessions and a complete session VWAP proxy.',sessions=len(returns))
+    volume=sum(r['volume'] for r in candles)
+    if volume<=0:return axis(TITLES[0],reason='No usable session volume.')
+    proxy=sum((r['high']+r['low']+r['close'])/3*r['volume'] for r in candles)/volume
+    scale=max(.1,statistics.median(returns))
+    sector_return=statistics.mean(s['return_60m'] for s in sector)
+    basket_return=statistics.mean(s['return_60m'] for s in available)
+    components=[(stock['return_60m']-sector_return)/scale,(stock['return_60m']-basket_return)/scale,(candles[-1]['close']/proxy-1)*100/scale]
+    score=clamp(50+25*sum(w*max(-2,min(2,v)) for w,v in zip((.4,.4,.2),components)))
+    return axis(TITLES[0],score,'40% sector-relative, 40% covered-pilot-basket-relative, 20% candle VWAP proxy; volatility scaled.',True,
+                sector_peers=[s['ticker'] for s in sector],basket_peers=[s['ticker'] for s in available],sector_return=round(sector_return,3),basket_return=round(basket_return,3),volatility_scale=round(scale,3),vwap_proxy=round(proxy,3))
+
+
+def volume_axis(stock):
+    v=stock.get('volume_baseline') or {}; ratio=v.get('relative_volume')
+    if not stock['price_fresh'] or ratio is None:return axis(TITLES[1],reason='Needs fresh volume and 20 complete same-time sessions.',sessions=v.get('sessions',0))
+    # 1x volume = 50, 2x = 100; persistence is independent of direction.
+    score=clamp(.7*min(100,50*ratio)+.3*(v['persistence']/3*100))
+    return axis(TITLES[1],score,'70% relative volume (2x reaches 100), 30% three-candle persistence.',relative_volume=ratio,persistence=v['persistence'],sessions=v['sessions'])
+
+
+def options_axis(stock, past, now):
+    f=stock.get('filtered_options') or {}; at=f.get('at',0)
+    if not at or not 0<=now-at<=1200 or f.get('partial'):
+        return axis(TITLES[2],reason='Requires a fresh, fully collected options window. Partial samples are excluded.')
+    dt=datetime.fromtimestamp(at,NY)
+    if dt.hour*60+dt.minute<630:return axis(TITLES[2],reason='The first full regular-session hour is not complete.')
+    total=f.get('bull',0)+f.get('bear',0)
+    if total<=0 or f.get('accepted',0)<20:return axis(TITLES[2],reason='Need at least 20 classified trades and positive premium.')
+    days={}
+    for r in past:
+        d=datetime.fromtimestamp(r['observed'],NY)
+        if r['version']!=VERSION or d.date()>=dt.date() or abs((d.hour*60+d.minute)-(dt.hour*60+dt.minute))>5:continue
+        prev=json.loads(r['payload']).get('options_observation') or {}
+        if prev.get('partial') or prev.get('accepted',0)<20:continue
+        p=prev.get('bull',0)+prev.get('bear',0)
+        if p>0:days[d.date()]=p
+    baseline=[days[d] for d in sorted(days,reverse=True)[:20]]
+    balance=(f['bull']-f['bear'])/total
+    if len(baseline)<20:return axis(TITLES[2],reason='Collecting 20 comparable sessions before scoring unusualness.',sessions=len(baseline),premium_balance=round(balance,3),classified=f['accepted'])
+    ratio=total/statistics.median(baseline)
+    unusual=max(0,min(1,ratio-1))
+    score=clamp(50+50*(.6*balance+.4*unusual*(1 if balance>0 else -1 if balance<0 else 0)))
+    return axis(TITLES[2],score,'60% directional premium balance; 40% excess activity versus 20 comparable sessions, signed by balance.',True,premium_balance=round(balance,3),relative_premium=round(ratio,3),sessions=20)
+
+
+def x_axis(posts,ticker,now):
+    from .screening import fingerprint,stock_context
+    from .post_quality import research_text
+    buckets=[{},{}]; seen=set(); pending=0
+    for p in sorted(posts,key=lambda p:p['ts'],reverse=True):
+        if not now-21600<p['ts']<=now:continue
+        author=str(p.get('author_id') or p.get('author') or '').strip().lower()
+        if author in ('','x user','x author','author not loaded') or not stock_context(p['text'],ticker) or not research_text(p['text']):continue
+        fp=fingerprint(p['text'])
+        if not fp or fp in seen:continue
+        seen.add(fp)
+        label=next((v['label'] for v in p.get('ticker_sentiments',[]) if v['ticker']==ticker),None)
+        if p.get('sentiment_status')!='done' or label is None:pending+=1;continue
+        bucket=0 if p['ts']>now-10800 else 1
+        # One latest classified opinion per author, per nonoverlapping window.
+        buckets[bucket].setdefault(author,label)
+    def stats(values):
+        counts={l:sum(v==l for v in values.values()) for l in ('bullish','bearish','neutral','mixed','unclear')}
+        directional=counts['bullish']+counts['bearish']
+        balance=(counts['bullish']-counts['bearish'])/directional if directional else None
+        return dict(authors=len(values),directional=directional,balance=balance,labels=counts)
+    current,previous=map(stats,buckets)
+    detail=dict(current=current,previous=previous,pending=pending)
+    if any(b['authors']<10 or b['directional']<5 for b in (current,previous)):
+        return axis(TITLES[3],reason='Each three-hour window needs ten independent authors, including five directional opinions.',**detail)
+    score=clamp(50+50*(.6*current['balance']+.4*(current['balance']-previous['balance'])/2))
+    return axis(TITLES[3],score,'60% current author-balanced direction; 40% shift versus the previous three hours. Collected sample only.',True,**detail)
+
+
+def catalyst_axis(items,now):
+    today=datetime.fromtimestamp(now,NY).date(); candidates=[]
+    for item in items:
+        try:age=(today-datetime.fromisoformat(item['report_date']).date()).days
+        except (KeyError,TypeError,ValueError):continue
+        if not 0<=age<=7:continue
+        # Deliberately a disclosed evidence rubric, not inferred earnings impact.
+        direct=item.get('link_type','direct')=='direct'
+        materiality=70 if item.get('event_key') and direct else 50 if direct else 25
+        evidence=80 if item.get('original') and direct else 60 if direct else 35
+        freshness=100 if age==0 else 70 if age==1 else 40 if age<=3 else 10
+        score=clamp(.4*materiality+.35*evidence+.25*freshness)
+        candidates.append((score,item,materiality,evidence,freshness))
+    if not candidates:return axis(TITLES[4],reason='No published research dated within seven days. Filing metadata alone is not scored as a catalyst.')
+    score,item,m,e,f=max(candidates,key=lambda r:(r[0],r[1]['report_date']))
+    return axis(TITLES[4],score,'40% event-type rubric, 35% source quality, 25% report-date freshness. Strength is separate from direction.',
+                summary=item['summary'],firm=item.get('firm'),report_date=item['report_date'],stance=item.get('stance','unclear'),link_type=item.get('link_type','direct'),materiality=m,evidence=e,freshness=f,id=item['id'])
+
+
+def candidate(axes):
+    p,v,o,x,_=axes
+    if p['score'] is None or v['score'] is None:return 'insufficient_data'
+    if v['score']<60 or p['strength']<30:return 'watch'
+    confirms=[a for a in (o,x) if a['score'] is not None and a['strength']>=30 and a['direction']==p['direction']]
+    return p['direction'] if confirms else 'watch'
+
+
+def read_posts(c,ticker,now):
+    from .context_sentiment import annotate
+    # Join all mentions for the existing sentiment cache key, after selecting this ticker.
+    rows=[dict(r) for r in c.execute('''SELECT p.*,i.author_id,GROUP_CONCAT(DISTINCT m.ticker) tickers
+      FROM posts p JOIN mentions m ON m.source=p.source AND m.post_id=p.id
+      LEFT JOIN post_identity i ON i.source=p.source AND i.post_id=p.id
+      WHERE p.source='x' AND p.ts>? AND p.ts<=? AND EXISTS
+      (SELECT 1 FROM mentions wanted WHERE wanted.source=p.source AND wanted.post_id=p.id AND wanted.ticker=?)
+      GROUP BY p.source,p.id,i.author_id ORDER BY p.ts DESC LIMIT 1200''',(now-21600,now,ticker))]
+    annotate(c,rows,ticker)
+    return rows
+
+
+def build(c,samples,catalog,focus,now):
+    from .uw_pilot import stock_measurements
+    from .research_feed import published
+    measurements=[stock_measurements(t,d,now) for t,d in samples.items() if t in catalog]
+    output=[]
+    for stock in measurements:
+        t=stock['ticker']
+        if t not in focus:continue
+        # Read comparable time slots, not every saved payload for the entire pilot.
+        # Include +/- one hour for daylight-saving boundaries; options_axis checks NY time.
+        slots=sorted({(int(now//600)+n)%144 for n in (-7,-6,-5,-1,0,1,5,6,7)})
+        history=[dict(r) for r in c.execute('SELECT * FROM signal_lab_snapshots WHERE ticker=? AND observed>? AND observed<=? AND ((slot - CAST(slot / 144 AS INTEGER) * 144) IN ('+','.join('?' for _ in slots)+') OR observed>?) ORDER BY observed',(t,now-45*86400,now,*slots,now-1200))]
+        axes=[price_axis(stock,measurements,catalog,samples[t].get('history',[])),volume_axis(stock),options_axis(stock,history,now),x_axis(read_posts(c,t,now),t,now),catalyst_axis(published(c,t),now)]
+        state=candidate(axes)
+        prev=next((r for r in reversed(history) if r['version']==VERSION and r['slot']<int(now//600)),None)
+        persistent=bool(prev and 0<now-prev['observed']<=900 and json.loads(prev['payload']).get('candidate')==state and state in ('bullish','bearish'))
+        baseline=axes[0]['direction'] if axes[0]['score'] is not None and axes[0]['strength']>=30 and axes[1]['score'] is not None and axes[1]['score']>=60 else 'watch'
+        output.append(dict(ticker=t,axes=axes,version=VERSION,observed=now,candidate=state,price_volume_baseline=baseline,setup=state+' setup' if persistent else 'Awaiting a second check' if state in ('bullish','bearish') else 'Insufficient data' if state=='insufficient_data' else 'Watching',
+                           options_observation=stock.get('filtered_options'),price_at=stock['price_at'],price=stock['candles'][-1]['close'] if stock['candles'] else None,
+                           ready=sum(a['score'] is not None for a in axes)))
+    return output
+
+
+def record(c,samples,catalog,focus,now):
+    migrate(c)
+    panels=build(c,samples,catalog,focus,now)
+    for p in panels:
+        c.execute('INSERT OR IGNORE INTO signal_lab_snapshots(ticker,slot,version,observed,price_at,price,payload) VALUES(?,?,?,?,?,?,?)',
+                  (p['ticker'],int(now//600),VERSION,now,p['price_at'],p['price'],json.dumps(p)))
+    # First known close at least an hour after observation, same session only.
+    for row in c.execute('SELECT ticker,slot,version,observed,price_at,price FROM signal_lab_snapshots WHERE outcome IS NULL AND observed<=? AND observed>?',(now-3600,now-7*86400)).fetchall():
+        invalid=not row['price'] or not row['price_at'] or row['observed']-row['price_at']>1200
+        if invalid or datetime.fromtimestamp(row['observed'],NY).date()<datetime.fromtimestamp(now,NY).date():
+            c.execute('UPDATE signal_lab_snapshots SET outcome=? WHERE ticker=? AND slot=? AND version=? AND outcome IS NULL',(json.dumps({'state':'unavailable','reason':'Stale entry' if invalid else 'No complete same-session outcome captured'}),row['ticker'],row['slot'],row['version']))
+            continue
+        bars=samples.get(row['ticker'],{}).get('candles',[])
+        window=[r for r in bars if row['observed']<r['at']<=row['observed']+4200 and datetime.fromtimestamp(r['at'],NY).date()==datetime.fromtimestamp(row['observed'],NY).date()]
+        target=next((r for r in sorted(window,key=lambda r:r['at']) if r['at']>=row['observed']+3600),None)
+        if not target:continue
+        window=[r for r in window if r['at']<=target['at']]
+        if len(window)<6 or any(b['at']-a['at']!=600 for a,b in zip(sorted(window,key=lambda r:r['at']),sorted(window,key=lambda r:r['at'])[1:])):continue
+        ret=(target['close']/row['price']-1)*100
+        result=dict(return_1h=round(ret,3),cost_adjusted_long=round(ret-.1,3),cost_adjusted_short=round(-ret-.1,3),assumed_round_trip_bps=10,
+                    low_excursion=round((min(r.get('low',r['close']) for r in window)/row['price']-1)*100,3),high_excursion=round((max(r.get('high',r['close']) for r in window)/row['price']-1)*100,3),end_at=target['at'],measured_at=now)
+        c.execute('UPDATE signal_lab_snapshots SET outcome=? WHERE ticker=? AND slot=? AND version=? AND outcome IS NULL',(json.dumps(result),row['ticker'],row['slot'],row['version']))
+    c.execute('DELETE FROM signal_lab_snapshots WHERE observed<?',(now-90*86400,))
+    return panels
+
+
+def saved(c):
+    migrate(c)
+    rows=[dict(r) for r in c.execute('SELECT ticker,observed,payload,outcome FROM signal_lab_snapshots WHERE version=? ORDER BY observed DESC LIMIT 30',(VERSION,))]
+    latest={}
+    for r in rows:latest.setdefault(r['ticker'],json.loads(r['payload']))
+    return dict(version=VERSION,stocks=list(latest.values()),history=[dict(ticker=r['ticker'],observed=r['observed'],setup=json.loads(r['payload'])['setup'],baseline=json.loads(r['payload']).get('price_volume_baseline','watch'),outcome=json.loads(r['outcome']) if r['outcome'] else None) for r in rows[:30]])

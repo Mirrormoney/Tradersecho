@@ -12,8 +12,8 @@ from .community import core,staff
 
 router=APIRouter()
 NY=ZoneInfo('America/New_York')
-PILOT=('NVDA','AMD','MU','AVGO','MSFT','META','AMZN','GOOGL','TSLA','PLTR',
-       'ORCL','ARM','MRVL','ANET','DELL','HPE','SMCI','INTC','CRWV','NBIS')
+PILOT=('NVDA','AMD','MU','AVGO','MSFT','META','AMZN','GOOGL','TSM','RMBS',
+       'ORCL','NTAP','MRVL','ANET','DELL','STX','SMCI','INTC','SNDK','WDC')
 KINDS={'candles':'ohlc/10m','net_premium':'net-prem-ticks'}
 FOCUS=('NVDA','AMD','MU')
 
@@ -82,7 +82,12 @@ def history_values(payload,now):
         if dt.date()>=today or not 570<dt.hour*60+dt.minute<=960:continue
         try:v=float(r['volume'])
         except (KeyError,TypeError,ValueError):continue
-        if math.isfinite(v) and v>=0:values[at]={'at':at,'volume':v}
+        if math.isfinite(v) and v>=0:
+            values[at]={'at':at,'volume':v}
+            try:
+                close=float(r['close'])
+                if math.isfinite(close) and close>0:values[at]['close']=close
+            except (KeyError,TypeError,ValueError):pass
     return [values[t] for t in sorted(values)]
 
 def filtered_trades(payload,ticker,now):
@@ -151,8 +156,9 @@ def run(client=None,now=None):
         if get(c,'lease',{}).get('until',0)>now:return {'state':'already_running'}
         put(c,'lease',{'token':token,'until':now+240})
         latest={(r['ticker'],r['kind']):r['fetched_at'] for r in c.execute('SELECT ticker,kind,fetched_at FROM uw_pilot_latest')}
+        upgrade_history={t for t in FOCUS if not get(c,'history_price_v1_'+t,False)}
     due=sorted([(t,k) for t in tickers for k in KINDS if latest.get((t,k),0)<int(now//600)*600],key=lambda x:latest.get(x,0))[:40]
-    extras=[(t,k) for t in FOCUS if t in s.CATALOG for k in ('history','filtered_options') if latest.get((t,k),0)<(datetime.fromtimestamp(now,NY).replace(hour=0,minute=0,second=0,microsecond=0).timestamp() if k=='history' else int(now//600)*600)]
+    extras=[(t,k) for t in FOCUS if t in s.CATALOG for k in ('history','filtered_options') if (k=='history' and t in upgrade_history) or latest.get((t,k),0)<(datetime.fromtimestamp(now,NY).replace(hour=0,minute=0,second=0,microsecond=0).timestamp() if k=='history' else int(now//600)*600)]
     due=extras+due
     own=client is None
     started=time.monotonic();done=0;failures=0;state='complete'
@@ -224,6 +230,7 @@ def run(client=None,now=None):
             data_at=values[-1]['at'] if values else None
             status='error' if error else 'empty' if not values else 'partial' if kind=='filtered_options' and values[0]['partial'] else 'ready' if kind=='history' else 'stale' if now-data_at>1200 else 'ready'
             with s.db() as c:
+                if kind=='history':put(c,'history_price_v1_'+ticker,True)
                 c.execute('INSERT INTO uw_pilot_latest(ticker,kind,fetched_at,data_at,state,error,payload) VALUES(?,?,?,?,?,?,?) ON CONFLICT(ticker,kind) DO UPDATE SET fetched_at=excluded.fetched_at,data_at=excluded.data_at,state=excluded.state,error=excluded.error,payload=excluded.payload',
                           (ticker,kind,now,data_at,status,error,json.dumps(values)))
                 # Save each source interval once, not a copy of the whole day on
@@ -239,6 +246,18 @@ def run(client=None,now=None):
         with s.db() as c:
             c.execute('DELETE FROM uw_pilot_history WHERE fetched_at<?',(now-45*86400,))
             put(c,'last_run',{'at':now,'state':state,'completed':done,'failed':failures})
+        if FOCUS:
+            # Independent evaluation failure must never stop collection or other workers.
+            from .signal_lab import record
+            try:
+                with s.db() as c:
+                    samples={}
+                    for r in c.execute('SELECT ticker,kind,payload FROM uw_pilot_latest'):
+                        if r['ticker'] in PILOT:samples.setdefault(r['ticker'],{})[r['kind']]=json.loads(r['payload'])
+                    record(c,samples,s.CATALOG,FOCUS,now)
+                    put(c,'scoring',{'at':now,'state':'ready'})
+            except Exception as exc:
+                with s.db() as c:put(c,'scoring',{'at':now,'state':'evaluation_error','error_type':type(exc).__name__})
         return {'state':state,'completed':done,'failed':failures}
     finally:
         if own and client is not None:client.close()
@@ -285,10 +304,12 @@ def overview(request:Request):
         rows=[];samples={}
         for record in c.execute('SELECT * FROM uw_pilot_latest ORDER BY ticker,kind'):
             item=dict(record);data=json.loads(item.pop('payload') or '[]')
+            if item['ticker'] not in PILOT:continue
             if item['ticker'] in ('NVDA','AMD','MU'):samples.setdefault(item['ticker'],{})[item['kind']]=data
             item['observations']=len(data);item['latest']=data[-1] if data else None
             if item['kind']!='history' and item['state']=='ready' and now-(item['data_at'] or 0)>1200:item['state']='stale'
             rows.append(item)
         usage=c.execute('SELECT * FROM uw_pilot_usage WHERE day=?',(quota_day(now),)).fetchone()
-        return {**configured(),'server_at':now,'session_open':session_open(now),'stocks':[stock_measurements(t,samples.get(t,{}),now) for t in ('NVDA','AMD','MU') if t in s.CATALOG],'rows':rows,'usage':dict(usage) if usage else None,'last_run':get(c,'last_run'),
+        from .signal_lab import saved
+        return {**configured(),'server_at':now,'session_open':session_open(now),'lab':saved(c),'scoring':get(c,'scoring'),'stocks':[stock_measurements(t,samples.get(t,{}),now) for t in ('NVDA','AMD','MU') if t in s.CATALOG],'rows':rows,'usage':dict(usage) if usage else None,'last_run':get(c,'last_run'),
                 'tickers':[t for t in PILOT if t in s.CATALOG],'local_daily_cap':32000,'scores_ready':False}

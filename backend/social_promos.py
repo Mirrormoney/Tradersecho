@@ -104,3 +104,35 @@ def artwork(report):
     d.text((50,610),'7 days of Premium free. No card required.',font=font(20),fill=MUTED)
     d.text((915,609),'tradersecho.com',font=font(25),fill=GREEN)
     return png(im)
+
+
+# Owner-approved launch countdown. Closed interval: never advertise "coming" after launch.
+SIGNAL_START=date(2026,9,24)
+SIGNAL_END=date(2026,9,30)
+SIGNAL_COPY=(
+    "Compare the signals before your next move.\n\nX activity. Options flow. Broker research. Price and volume.\n\nMeet Signal Lab: five indicators in one clear view for your AI-stock research.",
+    "A stock is trending. Do the other signals agree?\n\nCompare X activity, options pressure and broker commentary alongside price and volume.\n\nMore context. Your own conviction.",
+)
+
+def signal_slots(now):
+    local=datetime.fromtimestamp(now,NY)
+    if not SIGNAL_START<=local.date()<=SIGNAL_END:return []
+    day=(local.date()-SIGNAL_START).days
+    times=[(15,0)] if day<4 else [(10,30),(15,0)]
+    result=[]
+    for i,(hour,minute) in enumerate(times):
+        at=local.replace(hour=hour,minute=minute,second=0,microsecond=0).timestamp()
+        if 0<=now-at<3600:
+            ordinal=day if day<4 else 4+(day-4)*2+i
+            result.append(dict(edition='signal_launch',at=at,key=f'signal_launch:{local.date().isoformat()}:{hour:02}{minute:02}',variant=ordinal%2))
+    return result
+
+def prepare_signal(slot,now):
+    if slot not in signal_slots(now):raise ValueError('Signal Lab campaign is outside its approved slot')
+    days=(date(2026,10,1)-datetime.fromtimestamp(now,NY).date()).days
+    text=SIGNAL_COPY[slot['variant']]+f"\n\nSignal Lab arrives October 1st. {days} day{'s' if days!=1 else ''} to go.\nhttps://tradersecho.com"
+    if len(re.sub(r'https://\S+','x'*23,text))>280:raise ValueError('Signal Lab caption exceeds X limit')
+    return dict(edition='signal_launch',title='Signal Lab countdown',text=text,rows=[])
+
+def signal_artwork():
+    return Path(__file__).with_name('signal_launch_promo.png').read_bytes()

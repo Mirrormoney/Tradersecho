@@ -74,3 +74,5 @@ work/
 !backend/customer_api.py
 !backend/uw_pilot.py
 !backend/signal_lab.py
+
+!backend/signal_launch_promo.png

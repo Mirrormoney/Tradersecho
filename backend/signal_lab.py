@@ -4,12 +4,13 @@ Versioned pilot rules, not calibrated forecasts. Snapshots preserve what was kno
 at observation time; missing evidence does not become a neutral score.
 """
 import json, math, statistics, time
-from datetime import datetime
+from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
 
 NY = ZoneInfo('America/New_York')
-VERSION = 'lab-0.2'
-TITLES = ['Price strength', 'Volume confirmation', 'Options pressure', 'X conviction', 'Catalyst strength']
+VERSION = 'lab-0.3'
+OPTIONS_COMPATIBLE_VERSIONS = ('lab-0.2','lab-0.3')
+TITLES = ['Price strength', 'Volume confirmation', 'Options pressure', 'X attention', 'Catalyst strength']
 
 
 def migrate(c):
@@ -81,7 +82,7 @@ def options_axis(stock, past, now):
     days={}
     for r in past:
         d=datetime.fromtimestamp(r['observed'],NY)
-        if r['version']!=VERSION or d.date()>=dt.date() or abs((d.hour*60+d.minute)-(dt.hour*60+dt.minute))>5:continue
+        if r['version'] not in OPTIONS_COMPATIBLE_VERSIONS or d.date()>=dt.date() or abs((d.hour*60+d.minute)-(dt.hour*60+dt.minute))>5:continue
         prev=json.loads(r['payload']).get('options_observation') or {}
         if prev.get('partial') or prev.get('accepted',0)<20:continue
         p=prev.get('bull',0)+prev.get('bear',0)
@@ -95,33 +96,72 @@ def options_axis(stock, past, now):
     return axis(TITLES[2],score,'60% directional premium balance; 40% excess activity versus 20 comparable sessions, signed by balance.',True,premium_balance=round(balance,3),relative_premium=round(ratio,3),sessions=20)
 
 
-def x_axis(posts,ticker,now):
+def attention_counts(rows,ticker,now):
+    from .screening import stock_query
+    query=stock_query(ticker)
+    valid={r['start']:r for r in rows if r['query']==query and r['end']<=now and r['fetched_at']<=now and r['end']-r['start']==3600 and r['n']>=0}
+    end=max((r['end'] for r in valid.values()),default=0)
+    if not end or now-end>7200:return {'error':'No fresh completed hourly mention counts.'}
+    def total(end):
+        window=[valid.get(end-10800+i*3600) for i in range(3)]
+        return sum(r['n'] for r in window) if all(window) else None
+    current,previous=total(end),total(end-10800)
+    if current is None or previous is None:return {'error':'Both three-hour count windows must be complete.'}
+    local=datetime.fromtimestamp(end,NY);baseline=[]
+    for i in range(1,29):
+        prior=local-timedelta(days=i)
+        if (prior.weekday()<5)!=(local.weekday()<5):continue
+        n=total(prior.timestamp())
+        if n is not None:baseline.append(n)
+        if len(baseline)==20:break
+    if len(baseline)<3:return {'error':'Need three prior same-time days with complete comparable counts.','baseline_days':len(baseline)}
+    return dict(end=end,current=current,previous=previous,baseline=statistics.median(baseline),baseline_days=len(baseline))
+
+
+def read_attention_counts(c,ticker,now):
+    rows=[dict(r) for r in c.execute('SELECT start,end,n,query,fetched_at FROM x_counts WHERE ticker=? AND start>=? AND end<=? ORDER BY start',(ticker,now-29*86400,now))]
+    return attention_counts(rows,ticker,now)
+
+
+def x_axis(posts,ticker,now,counts=None):
     from .screening import fingerprint,stock_context
     from .post_quality import research_text
-    buckets=[{},{}]; seen=set(); pending=0
+    counts=counts or {'error':'Mention count coverage is unavailable.'}
+    if counts.get('error'):return axis(TITLES[3],reason=counts['error'],baseline_days=counts.get('baseline_days',0))
+    end=counts['end'];authors={};seen=set();accepted=0;pending=0
     for p in sorted(posts,key=lambda p:p['ts'],reverse=True):
-        if not now-21600<p['ts']<=now:continue
+        if not end-10800<p['ts']<=end:continue
         author=str(p.get('author_id') or p.get('author') or '').strip().lower()
         if author in ('','x user','x author','author not loaded') or not stock_context(p['text'],ticker) or not research_text(p['text']):continue
         fp=fingerprint(p['text'])
         if not fp or fp in seen:continue
-        seen.add(fp)
+        seen.add(fp);accepted+=1
         label=next((v['label'] for v in p.get('ticker_sentiments',[]) if v['ticker']==ticker),None)
-        if p.get('sentiment_status')!='done' or label is None:pending+=1;continue
-        bucket=0 if p['ts']>now-10800 else 1
-        # One latest classified opinion per author, per nonoverlapping window.
-        buckets[bucket].setdefault(author,label)
-    def stats(values):
-        counts={l:sum(v==l for v in values.values()) for l in ('bullish','bearish','neutral','mixed','unclear')}
-        directional=counts['bullish']+counts['bearish']
-        balance=(counts['bullish']-counts['bearish'])/directional if directional else None
-        return dict(authors=len(values),directional=directional,balance=balance,labels=counts)
-    current,previous=map(stats,buckets)
-    detail=dict(current=current,previous=previous,pending=pending)
-    if any(b['authors']<10 or b['directional']<5 for b in (current,previous)):
-        return axis(TITLES[3],reason='Each three-hour window needs ten independent authors, including five directional opinions.',**detail)
-    score=clamp(50+50*(.6*current['balance']+.4*(current['balance']-previous['balance'])/2))
-    return axis(TITLES[3],score,'60% current author-balanced direction; 40% shift versus the previous three hours. Collected sample only.',True,**detail)
+        if p.get('sentiment_status')!='done' or p.get('sentiment_analyzed_at',now)>now:label=None
+        if label is None:pending+=1
+        # Pending, neutral and unclear posts still contribute to activity breadth.
+        authors.setdefault(author,label)
+    labels={l:sum(v==l for v in authors.values()) for l in ('bullish','bearish','neutral','mixed','unclear')}
+    directional=labels['bullish']+labels['bearish']
+    sentiment='unavailable'
+    if len(authors)>=10 and directional>=5:
+        balance=(labels['bullish']-labels['bearish'])/directional
+        sentiment='bullish' if balance>.2 else 'bearish' if balance<-.2 else 'mixed'
+    current=counts['current']
+    activity=clamp(50*current/max(5,counts['baseline']))
+    acceleration=clamp(50*current/max(5,counts['previous']))
+    breadth=clamp(100*(len(authors)/accepted)*min(1,len(authors)/10)) if accepted>=5 else None
+    if current==0:breadth=0
+    # Missing sample breadth isn't zero attention: label the count-only estimate.
+    weight=.8 if breadth is None else 1
+    score=clamp((.5*activity+.3*acceleration+(.2*breadth if breadth is not None else 0))/weight)
+    return axis(TITLES[3],score,
+        '50% unusual mention activity, 30% acceleration, 20% independent-author breadth. High attention has no bullish/bearish direction.'+(' Author coverage is limited: count-only estimate uses 62.5% / 37.5%; breadth is unavailable.' if breadth is None else ''),
+        mentions_3h=current,previous_mentions_3h=counts['previous'],normal_mentions_3h=counts['baseline'],baseline_days=counts['baseline_days'],
+        window_end=end,activity_score=activity,acceleration_score=acceleration,breadth_score=breadth,
+        coverage='count-only estimate' if breadth is None else 'counts plus sampled breadth',component_coverage=80 if breadth is None else 100,
+        sampled_posts=accepted,independent_authors=len(authors),pending_sentiment=pending,sentiment=sentiment,sentiment_labels=labels,
+        sample_note='Mention counts cover the saved X query; author breadth is a filtered sample, not a census. Spam can remain in aggregate counts.')
 
 
 def catalyst_axis(items,now):
@@ -147,8 +187,9 @@ def candidate(axes):
     p,v,o,x,_=axes
     if p['score'] is None or v['score'] is None:return 'insufficient_data'
     if v['score']<60 or p['strength']<30:return 'watch'
-    confirms=[a for a in (o,x) if a['score'] is not None and a['strength']>=30 and a['direction']==p['direction']]
-    return p['direction'] if confirms else 'watch'
+    options_confirm=o['score'] is not None and o['strength']>=30 and o['direction']==p['direction']
+    attention_confirm=x['score'] is not None and x['score']>=65
+    return p['direction'] if options_confirm or attention_confirm else 'watch'
 
 
 def read_posts(c,ticker,now):
@@ -176,7 +217,7 @@ def build(c,samples,catalog,focus,now):
         # Include +/- one hour for daylight-saving boundaries; options_axis checks NY time.
         slots=sorted({(int(now//600)+n)%144 for n in (-7,-6,-5,-1,0,1,5,6,7)})
         history=[dict(r) for r in c.execute('SELECT * FROM signal_lab_snapshots WHERE ticker=? AND observed>? AND observed<=? AND ((slot - CAST(slot / 144 AS INTEGER) * 144) IN ('+','.join('?' for _ in slots)+') OR observed>?) ORDER BY observed',(t,now-45*86400,now,*slots,now-1200))]
-        axes=[price_axis(stock,measurements,catalog,samples[t].get('history',[])),volume_axis(stock),options_axis(stock,history,now),x_axis(read_posts(c,t,now),t,now),catalyst_axis(published(c,t),now)]
+        axes=[price_axis(stock,measurements,catalog,samples[t].get('history',[])),volume_axis(stock),options_axis(stock,history,now),x_axis(read_posts(c,t,now),t,now,read_attention_counts(c,t,now)),catalyst_axis(published(c,t),now)]
         state=candidate(axes)
         prev=next((r for r in reversed(history) if r['version']==VERSION and r['slot']<int(now//600)),None)
         persistent=bool(prev and 0<now-prev['observed']<=900 and json.loads(prev['payload']).get('candidate')==state and state in ('bullish','bearish'))

@@ -12,20 +12,55 @@ def test_scoring_module_is_in_deployment_allowlist():
 def post(author,ts,label,text=None):
     return dict(author=author,ts=ts,text=text or f'$NVDA {author} expects earnings growth to continue',sentiment_status='done',ticker_sentiments=[dict(ticker='NVDA',label=label)])
 
-def test_x_minimums_author_cap_and_no_future():
-    rows=[post('user'+chr(97+i),NOW-100,'bullish') for i in range(10)]
-    rows += [post('old'+chr(97+i),NOW-11000,'bearish') for i in range(10)]
-    assert lab.x_axis(rows,'NVDA',NOW)['score']==100
-    rows += [post('usera',NOW-50,'bullish',f'$NVDA same author alternative {chr(97+i)}') for i in range(20)]
-    rows += [post('future',NOW+1,'bearish')]
-    a=lab.x_axis(rows,'NVDA',NOW)
-    assert a['details']['current']['authors']==10
-    assert lab.x_axis(rows[:5],'NVDA',NOW)['score'] is None
+def counts(current=100,previous=50,baseline=50):
+    return dict(end=NOW,current=current,previous=previous,baseline=baseline,baseline_days=5)
 
-def test_pending_sentiment_not_neutral_or_directional():
-    rows=[post('user'+chr(97+i),NOW-100,'bullish') for i in range(10)]
+
+def test_attention_does_not_require_sentiment():
+    rows=[post('user'+chr(97+i),NOW-100,'neutral') for i in range(10)]
     for p in rows:p['sentiment_status']='pending'
-    assert lab.x_axis(rows,'NVDA',NOW)['details']['current']['authors']==0
+    a=lab.x_axis(rows,'NVDA',NOW,counts())
+    assert a['score']==100 and a['direction'] is None
+    assert a['details']['independent_authors']==10 and a['details']['sentiment']=='unavailable'
+    assert a['details']['component_coverage']==100
+
+
+def test_count_only_zero_missing_and_future():
+    a=lab.x_axis([],'NVDA',NOW,counts())
+    assert a['score']==100 and a['details']['breadth_score'] is None
+    assert a['details']['component_coverage']==80
+    assert lab.x_axis([],'NVDA',NOW,counts(0,0,0))['score']==0
+    assert lab.x_axis([],'NVDA',NOW)['score'] is None
+    future=[post('future',NOW+1,'bullish')]
+    assert lab.x_axis(future,'NVDA',NOW,counts())['details']['sampled_posts']==0
+
+
+def test_author_concentration_duplicates_and_separate_direction():
+    rows=[post('same',NOW-100,'bearish',f'$NVDA earnings concern {chr(97+i)} remains uncertain') for i in range(10)]
+    a=lab.x_axis(rows+rows,'NVDA',NOW,counts())
+    assert a['details']['sampled_posts']==10 and a['details']['independent_authors']==1
+    assert a['details']['breadth_score']==1
+    rows=[post('user'+chr(97+i),NOW-100,'bearish') for i in range(10)]
+    a=lab.x_axis(rows,'NVDA',NOW,counts())
+    assert a['score']==100 and a['direction'] is None and a['details']['sentiment']=='bearish'
+
+
+def test_hourly_windows_query_coverage_and_baseline():
+    from .screening import stock_query
+    rows=[]
+    # Thursday and three prior weekdays, matching NY-clock endpoints.
+    for days in (0,1,2,3):
+        end=NOW-days*86400
+        for i in range(6):rows.append(dict(start=end-(i+1)*3600,end=end-i*3600,n=10,query=stock_query('NVDA'),fetched_at=end))
+    a=lab.attention_counts(rows,'NVDA',NOW)
+    assert a['current']==30 and a['previous']==30 and a['baseline_days']==3
+    assert 'error' in lab.attention_counts(rows[1:],'NVDA',NOW)
+    assert 'error' in lab.attention_counts(rows,'NVDA',NOW+7201)
+    assert 'error' in lab.attention_counts(rows,'AI',NOW)
+    rows[-1]['fetched_at']=NOW+1
+    assert lab.attention_counts(rows,'NVDA',NOW)['baseline_days']==3 # outside baseline 3h
+    rows[-6]['fetched_at']=NOW+1
+    assert 'error' in lab.attention_counts(rows,'NVDA',NOW)
 
 def test_volume_thresholds_and_staleness():
     s=dict(price_fresh=True,volume_baseline=dict(relative_volume=2,persistence=3,sessions=20))
@@ -46,6 +81,8 @@ def test_options_partial_and_history_gates():
     assert lab.options_axis(s,past,NOW)['score'] is None
     sample['partial']=False
     assert lab.options_axis(s,past,NOW+1201)['score'] is None
+    for row in past:row['version']='lab-0.2'
+    assert lab.options_axis(s,past,NOW)['score']==100
     past[-1]['version']='older-rules'
     assert lab.options_axis(s,past,NOW)['score'] is None
 
@@ -58,9 +95,11 @@ def test_catalyst_publication_date_readthrough_and_missing():
     assert lab.catalyst_axis([{**item,'link_type':'readthrough'}],NOW)['score']<a['score']
 
 def test_setup_requires_direction_volume_and_confirmation():
-    axes=[lab.axis('Price',80,directional=True),lab.axis('Volume',80),lab.axis('Options'),lab.axis('X',80,directional=True),lab.axis('Catalyst')]
+    axes=[lab.axis('Price',80,directional=True),lab.axis('Volume',80),lab.axis('Options'),lab.axis('X',80),lab.axis('Catalyst')]
     assert lab.candidate(axes)=='bullish'
-    axes[3]=lab.axis('X',20,directional=True)
+    axes[0]=lab.axis('Price',20,directional=True)
+    assert lab.candidate(axes)=='bearish'
+    axes[3]=lab.axis('X',20)
     assert lab.candidate(axes)=='watch'
     axes[0]=lab.axis('Price')
     assert lab.candidate(axes)=='insufficient_data'

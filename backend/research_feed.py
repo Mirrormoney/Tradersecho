@@ -25,7 +25,7 @@ def clean_finding(doc,f):
     key=None
     if all(event.get(k) for k in ('broker','action','rating','date')) and event.get('action') in ('upgrade','downgrade','initiation','reiteration'):
         key='|'.join([f['ticker'],event['date'],*[re.sub(r'[^a-z0-9]','',event[k].lower()) for k in ('broker','action','rating')]])
-    return {'link_type':f.get('link_type','direct'),'link_reason':f.get('link_reason',''),'ticker':f['ticker'],'summary':text,'stance':f.get('stance','unclear'),'firm':firm,'report_date':doc.get('report_date'),'catalysts':f.get('catalysts',[]),'risks':f.get('risks',[]),'event_key':key,'original':kind=='original','id':doc['id']+':'+f['ticker']}
+    return {'_rating_event':{k:v for k,v in event.items() if k in ('broker','action','rating','date')},'_price_target':{k:v for k,v in (f.get('price_target') or {}).items() if k in ('broker','currency','current','previous')},'link_type':f.get('link_type','direct'),'link_reason':f.get('link_reason',''),'ticker':f['ticker'],'summary':text,'stance':f.get('stance','unclear'),'firm':firm,'report_date':doc.get('report_date'),'catalysts':f.get('catalysts',[]),'risks':f.get('risks',[]),'event_key':key,'original':kind=='original','id':doc['id']+':'+f['ticker']}
 
 def deduplicate(items):
     chosen={}
@@ -52,7 +52,7 @@ def published(c,ticker=None):
     return deduplicate(items)
 
 def public_item(item):
-    return {k:v for k,v in item.items() if k not in ('event_key','original','received')}
+    return {k:v for k,v in item.items() if k not in ('event_key','original','received') and not k.startswith('_')}
 
 def order_research(items,rankings,catalog,today):
     # Report date defines freshness; import time breaks ties, never makes an old note today's research.

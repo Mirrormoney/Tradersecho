@@ -84,3 +84,7 @@ def test_cached_feed_still_restricts_each_user(monkeypatch):
  assert len(f.feed('premium')['rows'])==3
  assert len(f.feed('free')['rows'])==2
  assert f.feed('free')['locked']
+
+
+def test_private_scoring_metadata_not_public():
+ assert public_item({'ticker':'NVDA','_rating_event':{'broker':'Test'},'_price_target':{'current':100}})=={'ticker':'NVDA'}

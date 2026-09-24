@@ -89,9 +89,9 @@ def test_options_partial_and_history_gates():
 def test_catalyst_publication_date_readthrough_and_missing():
     item=dict(report_date='2026-09-24',summary='Broker raises estimates.',original=True,id='a',stance='bullish')
     a=lab.catalyst_axis([item],NOW)
-    assert a['score']==73 and a['direction'] is None
-    assert lab.catalyst_axis([{**item,'report_date':'2026-09-25'}],NOW)['score'] is None
-    assert lab.catalyst_axis([{**item,'report_date':'2026-09-01'}],NOW)['score'] is None
+    assert a['score']==65 and a['direction']=='bullish'
+    assert lab.catalyst_axis([{**item,'report_date':'2026-09-25'}],NOW)['score']==50
+    assert lab.catalyst_axis([{**item,'report_date':'2026-09-01'}],NOW)['score']==50
     assert lab.catalyst_axis([{**item,'link_type':'readthrough'}],NOW)['score']<a['score']
 
 def test_setup_requires_direction_volume_and_confirmation():
@@ -130,3 +130,18 @@ def test_record_idempotency_and_forward_outcome(monkeypatch):
     result=json.loads(c.execute('SELECT outcome FROM signal_lab_snapshots').fetchone()[0])
     assert result['return_1h']==6 and result['cost_adjusted_long']==5.9
     assert result['cost_adjusted_short']==-6.1
+
+
+def test_catalyst_rating_conflicts_targets_and_latest_broker():
+    base=dict(report_date='2026-09-24',summary='Rating changed.',id='a',firm='A',stance='bullish')
+    upgrade={**base,'_rating_event':dict(broker='A',action='upgrade',rating='Buy')}
+    downgrade={**base,'id':'b','firm':'B','_rating_event':dict(broker='B',action='downgrade',rating='Sell')}
+    assert lab.catalyst_axis([upgrade],NOW)['score']==95
+    assert lab.catalyst_axis([downgrade],NOW)['score']==5
+    assert lab.catalyst_axis([upgrade,downgrade],NOW)['score']==50
+    hold={**downgrade,'_rating_event':dict(broker='B',action='downgrade',rating='Hold')}
+    assert lab.catalyst_axis([hold],NOW)['score']==25
+    assert lab.catalyst_axis([{**base,'_price_target':dict(current=120,previous=100)}],NOW)['score']==70
+    assert lab.catalyst_axis([{**base,'_price_target':dict(current=120)}],NOW)['score']==65
+    assert lab.catalyst_axis([upgrade,{**base,'received':1,'stance':'bearish'}],NOW)['score']==35
+    assert lab.catalyst_axis([],NOW)['state']=='no_research'

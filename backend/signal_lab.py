@@ -1,15 +1,15 @@
 """Private, deterministic forward evaluation. Never fetches paid data or calls AI.
 
 Versioned pilot rules, not calibrated forecasts. Snapshots preserve what was known
-at observation time; missing evidence does not become a neutral score.
+at observation time; missing research uses an explicitly labelled neutral baseline.
 """
-import json, math, statistics, time
+import json, math, statistics, time, re
 from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
 
 NY = ZoneInfo('America/New_York')
-VERSION = 'lab-0.3'
-OPTIONS_COMPATIBLE_VERSIONS = ('lab-0.2','lab-0.3')
+VERSION = 'lab-0.4'
+OPTIONS_COMPATIBLE_VERSIONS = ('lab-0.2','lab-0.3','lab-0.4')
 TITLES = ['Price strength', 'Volume confirmation', 'Options pressure', 'X attention', 'Catalyst strength']
 
 
@@ -164,23 +164,52 @@ def x_axis(posts,ticker,now,counts=None):
         sample_note='Mention counts cover the saved X query; author breadth is a filtered sample, not a census. Spam can remain in aggregate counts.')
 
 
+def rating_bucket(rating):
+    rating=re.sub(r'[^a-z]+',' ',str(rating or '').lower()).strip()
+    if rating in ('buy','strong buy','outperform','overweight','positive','sector outperform'):return 'positive'
+    if rating in ('sell','strong sell','underperform','underweight','negative','reduce','sector underperform'):return 'negative'
+    if rating in ('hold','neutral','equal weight','market perform','sector perform','in line'):return 'neutral'
+    return 'unknown'
+
+
 def catalyst_axis(items,now):
-    today=datetime.fromtimestamp(now,NY).date(); candidates=[]
+    today=datetime.fromtimestamp(now,NY).date(); brokers={}
     for item in items:
         try:age=(today-datetime.fromisoformat(item['report_date']).date()).days
         except (KeyError,TypeError,ValueError):continue
         if not 0<=age<=7:continue
-        # Deliberately a disclosed evidence rubric, not inferred earnings impact.
+        event=item.get('_rating_event') or {}; target=item.get('_price_target') or {}
         direct=item.get('link_type','direct')=='direct'
-        materiality=70 if item.get('event_key') and direct else 50 if direct else 25
-        evidence=80 if item.get('original') and direct else 60 if direct else 35
-        freshness=100 if age==0 else 70 if age==1 else 40 if age<=3 else 10
-        score=clamp(.4*materiality+.35*evidence+.25*freshness)
-        candidates.append((score,item,materiality,evidence,freshness))
-    if not candidates:return axis(TITLES[4],reason='No published research dated within seven days. Filing metadata alone is not scored as a catalyst.')
-    score,item,m,e,f=max(candidates,key=lambda r:(r[0],r[1]['report_date']))
-    return axis(TITLES[4],score,'40% event-type rubric, 35% source quality, 25% report-date freshness. Strength is separate from direction.',
-                summary=item['summary'],firm=item.get('firm'),report_date=item['report_date'],stance=item.get('stance','unclear'),link_type=item.get('link_type','direct'),materiality=m,evidence=e,freshness=f,id=item['id'])
+        broker=str(event.get('broker') or target.get('broker') or item.get('firm') or '').strip().lower()
+        # Unattributed notes cannot be treated as independent broker votes.
+        key=broker or 'unattributed'
+        order=(item['report_date'],item.get('received') or 0,str(item.get('id','')))
+        if key in brokers and order<=brokers[key][0]:continue
+        score={'bullish':65,'bearish':35}.get(item.get('stance'),50); basis='AI commentary'
+        bucket=rating_bucket(event.get('rating')); action=event.get('action')
+        scales={'upgrade':{'positive':95,'neutral':65,'negative':55,'unknown':85},
+                'downgrade':{'positive':40,'neutral':25,'negative':5,'unknown':20},
+                'initiation':{'positive':75,'neutral':50,'negative':25,'unknown':50},
+                'reiteration':{'positive':60,'neutral':50,'negative':40,'unknown':50}}
+        if direct and action in scales:
+            score=scales[action][bucket];basis=f"{action} to {event.get('rating') or 'unspecified rating'}"
+        elif direct and target.get('previous') and target.get('current'):
+            delta=100*(target['current']/target['previous']-1)
+            score=50+max(-30,min(30,delta));basis=f"Price target change {delta:+.1f}%"
+        if not direct:score=50+(score-50)*.5;basis='Sector readthrough: '+basis
+        score=clamp(50+(score-50)*(.8**age))
+        brokers[key]=(order,score,item,basis,age)
+    if not brokers:
+        result=axis(TITLES[4],50,'No published research from the last seven days. 50 is the neutral starting point, not a broker assessment.',notes=0)
+        result.update(state='no_research',direction='neutral');return result
+    votes=list(brokers.values());score=clamp(statistics.mean(v[1] for v in votes))
+    _,_,latest,_,_=max(votes,key=lambda v:v[0])
+    result=axis(TITLES[4],score,'Latest view per broker, equally weighted. Rating actions take priority over explicit price-target changes, then AI commentary. Each day reduces the distance from neutral by 20%; notes older than seven days are excluded.',
+        summary=latest['summary'],firm=latest.get('firm'),report_date=latest['report_date'],stance=latest.get('stance'),
+        notes=len(votes),mixed_views=any(v[1]>50 for v in votes) and any(v[1]<50 for v in votes),
+        assessments=[dict(broker=v[2].get('_rating_event',{}).get('broker') or v[2].get('firm') or 'Unattributed',date=v[2]['report_date'],score=v[1],basis=v[3]) for v in votes])
+    result['direction']='bullish' if score>50 else 'bearish' if score<50 else 'neutral'
+    return result
 
 
 def candidate(axes):
@@ -224,7 +253,7 @@ def build(c,samples,catalog,focus,now):
         baseline=axes[0]['direction'] if axes[0]['score'] is not None and axes[0]['strength']>=30 and axes[1]['score'] is not None and axes[1]['score']>=60 else 'watch'
         output.append(dict(ticker=t,axes=axes,version=VERSION,observed=now,candidate=state,price_volume_baseline=baseline,setup=state+' setup' if persistent else 'Awaiting a second check' if state in ('bullish','bearish') else 'Insufficient data' if state=='insufficient_data' else 'Watching',
                            options_observation=stock.get('filtered_options'),price_at=stock['price_at'],price=stock['candles'][-1]['close'] if stock['candles'] else None,
-                           ready=sum(a['score'] is not None for a in axes)))
+                           ready=sum(a['state']=='ready' for a in axes)))
     return output
 
 

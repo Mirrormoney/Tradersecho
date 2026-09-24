@@ -170,3 +170,15 @@ class ResearchTests(unittest.TestCase):
   finally:os.unlink(path)
 
 if __name__=='__main__':unittest.main()
+
+
+def test_structured_target_evidence_and_direction():
+ quote='Test firm raises NVIDIA price target to $120 from $100.'
+ data=copy.deepcopy(REPORT)
+ data['findings'][0]['price_target']=dict(broker='Test firm',currency='USD',current=120,previous=100,evidence=quote,page=2)
+ text=TEXT+'\n'+quote
+ result=r.validate_report(data,text,{'NVDA'})
+ assert result['findings'][0]['price_target']['current']==120
+ data['findings'][0]['price_target']['current']=100
+ data['findings'][0]['price_target']['previous']=120
+ assert r.validate_report(data,text,{'NVDA'})['findings'][0]['price_target'] is None

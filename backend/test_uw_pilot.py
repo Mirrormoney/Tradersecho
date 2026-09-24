@@ -9,6 +9,7 @@ NOW=datetime(2026,9,24,11,0,tzinfo=u.NY).timestamp()
 
 @pytest.fixture
 def pilot(tmp_path,monkeypatch):
+    monkeypatch.setattr(u,'FOCUS',())
     path=tmp_path/'pilot.sqlite'
     @contextmanager
     def db():
@@ -96,3 +97,44 @@ def test_measurements_do_not_mix_previous_day_or_future():
 def test_measurements_label_stale_separately():
     result=u.stock_measurements('AMD',{'candles':[{'at':NOW-1800,'close':100,'volume':50}]},NOW)
     assert result['price_at']==NOW-1800 and not result['price_fresh']
+
+def test_history_and_baseline_20_sessions_no_current_day_leak():
+    candles=[{'at':NOW-i*600,'close':100,'volume':200} for i in reversed(range(3))]
+    history=[]
+    for day in range(1,21):
+        history.extend({'at':r['at']-day*86400,'volume':100} for r in candles)
+    b=u.volume_baseline(candles,history)
+    assert b['sessions']==20 and b['relative_volume']==2 and b['persistence']==3
+    assert u.volume_baseline(candles,history[:-1])['relative_volume'] is None
+    assert u.volume_baseline(candles,[{'at':r['at'],'volume':1} for r in candles])['sessions']==0
+
+def test_options_excludes_wrong_ticker_multi_ambiguous_and_deduplicates():
+    r={'id':'a','executed_at':'2026-09-24T14:55:00Z','expiry':'2026-10-16','premium':'1000','tags':['ask_side'],'underlying_symbol':'NVDA','canceled':False,'upstream_condition_detail':'auto','option_type':'call'}
+    result=u.filtered_trades({'data':[r,r,{**r,'id':'b','underlying_symbol':'AMD'},{**r,'id':'c','upstream_condition_detail':'mlet'},{**r,'id':'d','tags':['mid_side']},{**r,'id':'e','option_type':'put'}]},'NVDA',NOW)
+    assert result['accepted']==2 and result['bull']==1000 and result['bear']==1000 and not result['partial']
+    assert u.filtered_trades({'data':[r]*500},'NVDA',NOW)['partial']
+
+def test_extra_datasets_use_shared_budget_and_once_daily_history(pilot,monkeypatch):
+    enable(monkeypatch);monkeypatch.setattr(u,'FOCUS',('NVDA',));calls=[]
+    def handler(r):
+        calls.append(str(r.url));return httpx.Response(200,json={'data':[]})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert u.run(client,NOW)['completed']==4
+        assert u.run(client,NOW+600)['completed']==3
+    assert sum('timeframe=2M' in url for url in calls)==1
+    assert sum('/api/option-trades?' in url for url in calls)==2
+    with pilot.db() as c:assert c.execute('SELECT reserved FROM uw_pilot_usage').fetchone()[0]==7
+
+def test_options_pagination_overlaps_boundary_and_counts_requests(pilot,monkeypatch):
+    enable(monkeypatch);monkeypatch.setattr(u,'FOCUS',('NVDA',));pages=[]
+    def trade(i):return {'id':str(i),'executed_at':datetime.fromtimestamp(NOW-i,u.NY).isoformat(),'expiry':'2026-10-16','premium':1,'tags':['ask_side'],'underlying_symbol':'NVDA','canceled':False,'upstream_condition_detail':'auto','option_type':'call'}
+    def handler(r):
+        if r.url.path!='/api/option-trades':return httpx.Response(200,json={'data':[]})
+        pages.append(r.url.params.get('older_than'))
+        return httpx.Response(200,json={'data':[trade(i) for i in range(500)] if len(pages)==1 else [trade(499),trade(500)]})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:assert u.run(client,NOW)['failed']==0
+    with pilot.db() as c:
+        row=json.loads(c.execute("SELECT payload FROM uw_pilot_latest WHERE kind='filtered_options'").fetchone()[0])[0]
+        assert row['accepted']==501 and row['bull']==501 and not row['partial']
+        assert c.execute('SELECT reserved FROM uw_pilot_usage').fetchone()[0]==5
+    assert len(pages)==2

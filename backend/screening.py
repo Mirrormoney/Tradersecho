@@ -1,6 +1,27 @@
 """Transparent sample screening, not a claim that accounts are human."""
 import re, hashlib
 from difflib import SequenceMatcher
+from functools import lru_cache
+from collections import Counter
+
+@lru_cache(maxsize=2048)
+def _characters(text):
+    return Counter(text)
+
+@lru_cache(maxsize=8192)
+def _same_template(text,other):
+    """Exact old threshold, with cheap upper bounds before quadratic matching.
+
+    Ordered arguments preserve SequenceMatcher's asymmetric matching behavior.
+    The bounded cache also reuses comparisons for posts mentioning many tickers.
+    """
+    if text==other:return True
+    if len(text)<=30:return False
+    total=len(text)+len(other)
+    if 2*min(len(text),len(other))<=.9*total:return False
+    left,right=_characters(text),_characters(other)
+    if 2*sum(min(n,right.get(char,0)) for char,n in left.items())<=.9*total:return False
+    return SequenceMatcher(None,text,other).ratio()>.9
 
 def stock_query(ticker):
     # Confirmed token collisions require explicit company context in paid counts.
@@ -36,7 +57,7 @@ def screen(posts,classifier,ticker):
         if not research_text(p['text']):duplicates+=1;continue
         if key in seen_author_days: repeated+=1;continue
         seen_author_days.add(key)
-        if not text or any(text==other or (len(text)>30 and SequenceMatcher(None,text,other).ratio()>.9) for other in templates):
+        if not text or any(_same_template(text,other) for other in templates):
             duplicates+=1;continue
         templates.append(text)
         stance=next((v['label'] for v in p.get('ticker_sentiments',[]) if v['ticker']==ticker),'unclear')

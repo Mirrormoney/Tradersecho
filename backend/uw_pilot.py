@@ -77,6 +77,7 @@ def run(client=None,now=None):
     tickers=[t for t in PILOT if t in s.CATALOG]
     token=secrets.token_hex(12)
     with s.db() as c:
+        migrate(c)
         c.execute('BEGIN IMMEDIATE')
         if get(c,'cooldown',0)>now:return {'state':'provider_paused'}
         if get(c,'lease',{}).get('until',0)>now:return {'state':'already_running'}
@@ -147,6 +148,7 @@ def cron(request:Request):
 def overview(request:Request):
     staff(request,owner=True);s=core();now=time.time()
     with s.db() as c:
+        migrate(c)
         rows=[]
         for record in c.execute('SELECT * FROM uw_pilot_latest ORDER BY ticker,kind'):
             item=dict(record);data=json.loads(item.pop('payload') or '[]')

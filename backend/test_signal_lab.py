@@ -4,6 +4,11 @@ from . import signal_lab as lab
 
 NOW=datetime(2026,9,24,12,0,tzinfo=lab.NY).timestamp()
 
+def test_scoring_module_is_in_deployment_allowlist():
+    from pathlib import Path
+    ignore=(Path(__file__).resolve().parents[1]/'.vercelignore').read_text(encoding='utf8')
+    assert '!backend/signal_lab.py' in ignore.splitlines()
+
 def post(author,ts,label,text=None):
     return dict(author=author,ts=ts,text=text or f'$NVDA {author} expects earnings growth to continue',sentiment_status='done',ticker_sentiments=[dict(ticker='NVDA',label=label)])
 

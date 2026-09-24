@@ -92,7 +92,7 @@ def history_values(payload,now):
 
 def filtered_trades(payload,ticker,now):
     rows=payload.get('data') if isinstance(payload,dict) else None
-    if not isinstance(rows,list) or len(rows)>6000:raise ValueError('Unexpected options shape')
+    if not isinstance(rows,list) or len(rows)>12000:raise ValueError('Unexpected options shape')
     accepted={};excluded=0
     for r in rows:
         if not isinstance(r,dict):excluded+=1;continue
@@ -195,14 +195,14 @@ def run(client=None,now=None):
                 body=response.json()
                 if kind=='filtered_options':
                     gathered=[];seen=set();partial=False;cursor=now+1
-                    for page in range(12):
+                    for page in range(24):
                         batch=body.get('data') if isinstance(body,dict) else None
                         if not isinstance(batch,list) or len(batch)>500:raise ValueError('Unexpected options page')
                         fresh=[r for r in batch if isinstance(r,dict) and r.get('id') and r['id'] not in seen]
                         gathered.extend(fresh);seen.update(r['id'] for r in fresh)
                         if len(batch)<500:break
                         oldest=min((timestamp(r.get('executed_at')) or now for r in batch if isinstance(r,dict)),default=now)
-                        if not fresh or oldest>=cursor or page==11 or time.monotonic()-started>140:
+                        if not fresh or oldest>=cursor or page==23 or time.monotonic()-started>140:
                             partial=True;break
                         # Overlap the boundary millisecond; dedup IDs so equal-time
                         # trades are not silently dropped by an exclusive cursor.
@@ -248,8 +248,8 @@ def run(client=None,now=None):
             put(c,'last_run',{'at':now,'state':state,'completed':done,'failed':failures})
         if FOCUS:
             # Independent evaluation failure must never stop collection or other workers.
-            from .signal_lab import record
             try:
+                from .signal_lab import record
                 with s.db() as c:
                     samples={}
                     for r in c.execute('SELECT ticker,kind,payload FROM uw_pilot_latest'):

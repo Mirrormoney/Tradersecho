@@ -72,3 +72,4 @@ work/
 
 !backend/plan_limits.py
 !backend/customer_api.py
+!backend/uw_pilot.py

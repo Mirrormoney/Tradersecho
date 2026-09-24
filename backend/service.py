@@ -20,6 +20,8 @@ DEMO_CATALOG = {'NVDA':('NVIDIA','Semiconductors'), 'TSLA':('Tesla','Automotive'
 from .stocks import Catalog, router as stocks_router, migrate as migrate_stocks
 CATALOG=Catalog()
 app = FastAPI(title='Tradersecho', version='2.0.0')
+from .uw_pilot import router as uw_pilot_router, migrate as migrate_uw_pilot
+app.include_router(uw_pilot_router)
 from .engagement import router as engagement_router, migrate as migrate_engagement
 app.include_router(engagement_router)
 from .research_feed import router as research_feed_router
@@ -44,6 +46,7 @@ def db():
 
 def init():
     with db() as c:
+        migrate_uw_pilot(c)
         c.executescript('''
         PRAGMA journal_mode=WAL;
         CREATE TABLE IF NOT EXISTS accounts(id TEXT PRIMARY KEY,email TEXT UNIQUE,password TEXT,plan TEXT NOT NULL DEFAULT 'free',demo INTEGER NOT NULL DEFAULT 0,stripe_customer TEXT);

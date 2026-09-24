@@ -154,6 +154,10 @@
     {
       "path": "/api/cron/echo",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/uw-pilot",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

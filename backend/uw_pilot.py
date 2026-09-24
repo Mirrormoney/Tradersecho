@@ -254,7 +254,9 @@ def run(client=None,now=None):
                     samples={}
                     for r in c.execute('SELECT ticker,kind,payload FROM uw_pilot_latest'):
                         if r['ticker'] in PILOT:samples.setdefault(r['ticker'],{})[r['kind']]=json.loads(r['payload'])
-                    record(c,samples,s.CATALOG,FOCUS,now)
+                    # Timestamp the decision after ingestion, not at worker start.
+                    # X/research that arrived during collection was not known earlier.
+                    record(c,samples,s.CATALOG,FOCUS,time.time())
                     put(c,'scoring',{'at':now,'state':'ready'})
             except Exception as exc:
                 with s.db() as c:put(c,'scoring',{'at':now,'state':'evaluation_error','error_type':type(exc).__name__})

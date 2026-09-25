@@ -20,10 +20,10 @@ function MorePosts({rows,source,Posts}){
 export function StockDetail({onBack,ticker,name,row,intraday,windowDays,asOf,coverageDays,source,user,refresh,posts,postsLoading,postsError,postOrder,setPostOrder,postFeed,setPostFeed,Posts,Spark,Sentiment,watchlist,toggleWatch}){
  const [signal,setSignal]=useState(null)
  useEffect(()=>{let active=true;api('/signal-lab').then(d=>{if(active)setSignal(d.stocks.find(s=>s.ticker===ticker)||null)}).catch(()=>{});return()=>{active=false}},[ticker,refresh])
- const [research,setResearch]=useState([]),[researchError,setResearchError]=useState('')
+ const [research,setResearch]=useState([]),[researchError,setResearchError]=useState(''),[researchLoading,setResearchLoading]=useState(true)
  const staff=['owner','admin'].includes(user?.role)
  const canResearch=staff||user?.plan==='premium'
- useEffect(()=>{let active=true;setResearch([]);setResearchError('');if(!canResearch)return;api('/member-research/'+encodeURIComponent(ticker)).then(d=>{if(active){setResearch(d.documents||[]);setResearchError('')}}).catch(()=>{if(active)setResearchError('Research is temporarily unavailable.')});return()=>{active=false}},[ticker,canResearch,refresh])
+ useEffect(()=>{let active=true;setResearch([]);setResearchError('');setResearchLoading(canResearch);if(!canResearch)return;api('/member-research/'+encodeURIComponent(ticker)).then(d=>{if(active){setResearch(d.documents||[]);setResearchError('');setResearchLoading(false)}}).catch(()=>{if(active){setResearchError('Research is temporarily unavailable.');setResearchLoading(false)}});return()=>{active=false}},[ticker,canResearch,refresh])
  const findings=research.flatMap(d=>(d.findings||[]).filter(f=>f.ticker===ticker).map(f=>({report:d,finding:f})))
  findings.sort((a,b)=>(b.report.report_date||'').localeCompare(a.report.report_date||''))
  const latest=findings[0]
@@ -41,11 +41,12 @@ export function StockDetail({onBack,ticker,name,row,intraday,windowDays,asOf,cov
    {postsError&&<p className="error">X context could not be loaded.</p>}
    <small className="muted block">Research and posts provide context; they do not prove what caused attention to change.</small>
   </DetailSection>
-  {(findings.length>0||researchError)&&<DetailSection title={`Latest research${findings.length?' · '+findings.length:''}`}>
+  <DetailSection title={`Latest research${findings.length?' · '+findings.length:''}`}>
    {researchError&&<p className="error">{researchError}</p>}
+   {!canResearch?<p className="muted">Broker research is included with Premium. <a href="/plans">Explore plans ↗</a></p>:researchLoading?<p className="muted" role="status">Loading latest research…</p>:!researchError&&!findings.length&&<p className="muted">No recent research available.</p>}
    {findings.slice(0,1).map(({report,finding},i)=><article className="detail-research" key={report.id+'-'+i}><div className="section-head">{report.firm&&<strong>{report.firm}</strong>}<span className="tag">{finding.link_type==='sector_readthrough'?'Sector read-through · no stock rating':`${finding.stance} · author’s stance`}</span></div>{report.report_date&&<small className="muted">Report date · {report.report_date}</small>}{finding.link_type==='sector_readthrough'&&<p className="muted">{finding.link_reason}</p>}<p>{finding.summary}</p>{finding.catalysts?.length>0&&<p><strong>What to watch: </strong>{finding.catalysts.join(' · ')}</p>}{finding.risks?.length>0&&<p><strong>Risks: </strong>{finding.risks.join(' · ')}</p>}</article>)}
    {findings.length>1&&<DetailSection title={`More research · ${findings.length-1}`} initialOpen={false}>{findings.slice(1).map(({report,finding},i)=><article className="detail-research" key={report.id+'-'+i}><strong>{report.firm}</strong><small className="muted"> · {report.report_date}</small><p>{finding.summary}</p></article>)}</DetailSection>}
-  </DetailSection>}
+  </DetailSection>
   <DetailSection title="Behind the mentions · X posts">
    <div className="detail-post-controls"><label>Post order<select value={postOrder} onChange={e=>setPostOrder(e.target.value)}><option value="latest">Latest posts</option><option value="engagement">Most liked takes</option></select></label><label>Post selection<select value={postFeed} onChange={e=>setPostFeed(e.target.value)}><option value="research">Research · curated first</option><option value="all">All collected posts · unfiltered</option></select></label></div>
    <Posts rows={posts.slice(0,2)} source={source} loading={postsLoading} error={postsError}/>

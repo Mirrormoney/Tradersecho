@@ -157,6 +157,10 @@ def scan(client,deadline):
   if r.status_code in (403,404):
    with core().db() as c:c.execute('UPDATE research_drive_folders SET checked=? WHERE id=?',(time.time(),folder['id']))
    continue
+  if r.status_code==400 and folder['page']:
+   # Expired/invalid listing cursors must not block the other folders.
+   with core().db() as c:c.execute('UPDATE research_drive_folders SET page=NULL,checked=? WHERE id=?',(time.time(),folder['id']))
+   continue
   r.raise_for_status();payload=r.json()
   with core().db() as c:
    for f in payload.get('files',[]):
@@ -266,7 +270,12 @@ def run():
    if os.getenv('RESEARCH_DRIVE_PUBLISH_ENABLED')=='true':publish_validated()
    result={'state':'ok'}
  except TimeoutError:result={'state':'batch_yielded'}
- except httpx.HTTPStatusError as e:result={'state':'reconnect_required' if e.response.status_code in (400,401) else 'provider_error','http_status':e.response.status_code}
+ except httpx.HTTPStatusError as e:
+  try:
+   detail=e.response.json().get('error',{})
+   reason=detail if isinstance(detail,str) else (detail.get('errors') or [{}])[0].get('reason','unknown')
+  except Exception:reason='unknown'
+  result={'state':'reconnect_required' if stage=='authentication' and e.response.status_code in (400,401) else 'provider_error','stage':stage,'http_status':e.response.status_code,'reason':str(reason)[:80]}
  except Exception as exc:result={'state':'needs_review','stage':stage,'error_type':type(exc).__name__}
  finally:
   with core().db() as c:

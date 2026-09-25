@@ -1,0 +1,5 @@
+.referral-link-row{display:flex;align-items:flex-end;gap:12px;margin:20px 0 24px}
+.referral-link-row label{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
+.referral-link-row input{width:100%;min-width:0;box-sizing:border-box}
+.referral-link-row .button{flex-shrink:0}
+@media(max-width:600px){.referral-link-row{flex-direction:column;align-items:stretch}}

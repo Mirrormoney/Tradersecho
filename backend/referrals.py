@@ -83,7 +83,7 @@ def eligibility(c,r,now):
     fingerprints=set()
     for inv in invoices:
         charge=inv.get('charge')
-        if isinstance(charge,str):charge=get('charges/'+quote(charge,safe=''))
+        if isinstance(charge,str):return 'review',None,sid
         if not charge or charge.get('status')!='succeeded':return 'review',None,sid
         if charge.get('amount_refunded',0)>0 or charge.get('refunded') or charge.get('disputed'):return 'ineligible',None,sid
         fp=charge.get('payment_method_details',{}).get('card',{}).get('fingerprint')
@@ -187,7 +187,7 @@ def refund_or_dispute(r):
     result=get('invoices',{'subscription':r['subscription'],'status':'paid','limit':100,'expand[0]':'data.charge'})
     for i in result.get('data',[]):
         ch=i.get('charge')
-        if isinstance(ch,str):ch=get('charges/'+quote(ch,safe=''))
+        if isinstance(ch,str):continue
         if isinstance(ch,dict) and (ch.get('amount_refunded',0)>0 or ch.get('refunded') or ch.get('disputed')):return True
     return False
 
@@ -203,6 +203,7 @@ def run():
     errors=0
     try:
         for row in rows:
+            if time.time()-now>90:break
             try:check_one(row['id'],now)
             except ValueError:
                 errors+=1

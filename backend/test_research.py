@@ -182,3 +182,11 @@ def test_structured_target_evidence_and_direction():
  data['findings'][0]['price_target']['current']=100
  data['findings'][0]['price_target']['previous']=120
  assert r.validate_report(data,text,{'NVDA'})['findings'][0]['price_target'] is None
+
+def test_real_estate_prescreen_preserves_universe_readthrough():
+ text='US residential property rents and apartment vacancies remain in focus. '*8
+ catalog={'NVDA':'NVIDIA Corporation','EQIX':'Equinix, Inc.'}
+ assert r.prescreen('US Real Estate.pdf',text,catalog)['skip']
+ assert not r.prescreen('US Real Estate.pdf',text+' Data centres face new power constraints.',catalog)['skip']
+ assert not r.prescreen('US Real Estate.pdf',text+' Equinix sees stronger demand.',catalog)['skip']
+ assert not r.prescreen('US Real Estate.pdf','unreadable',catalog)['skip']

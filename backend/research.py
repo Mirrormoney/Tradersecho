@@ -352,7 +352,7 @@ def mentioned_candidates(text,catalog):
 
 def prescreen(filename,text,catalog):
     """Conservative, token-free screen. No filename-only exclusions."""
-    sector=re.search(r'\b(healthcare|health care|biotech|consumer|retail)\b',filename,re.I)
+    sector=re.search(r'\b(healthcare|health care|biotech|consumer|retail|real[ _-]+estate|residential[ _-]+property|homebuilders)\b',filename,re.I)
     if not sector or not catalog or len(text.strip())<120:
         return {'skip':False,'reason':'Full analysis available; no safe sector exclusion.'}
     # Broken extraction, non-text pages, and broad cross-sector notes are ambiguous.
@@ -370,6 +370,8 @@ def prescreen(filename,text,catalog):
         stem=re.split(r'\b(?:incorporated|corporation|corp|inc|limited|ltd|plc|class|common|holdings)\b',name,flags=re.I)[0].strip(' ,.')
         normalized=re.sub(r'[^a-z0-9]+',' ',stem.lower()).strip()
         if len(normalized)>=3 and re.search(r'\b'+re.escape(normalized)+r'\b',folded):hits.add(ticker)
+    if re.search(r'\b(data[ -]?cent(?:er|re)s?|semiconductors?|HBM|DRAM|NAND|memory chips?|GPU[s]?|AI infrastructure|power generation|grid infrastructure|liquid cooling|quantum)\b',haystack,re.I):
+        return {'skip':False,'reason':'Potential AI-universe sector read-through; keep for analysis.'}
     if hits:return {'skip':False,'reason':'Potential covered names found; keep for analysis.','candidates':sorted(hits)}
     return {'skip':True,'reason':'Sector-specific filename; no covered ticker or company name found in selectable text. Images and aliases may require manual review.'}
 

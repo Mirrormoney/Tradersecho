@@ -3,6 +3,7 @@ import {api} from './api.js'
 import './pricing.css'
 import {ApiAddon} from './ApiAddon.jsx'
 
+const featureOrder=value=>value==='Not included'?2:/preview/i.test(value)?1:0
 const features=[
  ['Stock rankings','Top 5','Top 20 per timeframe'],
  ['Day, week & month views','Included','Included'],
@@ -33,6 +34,7 @@ export function Pricing({user,status,onSignup,onAccount}){
   <div className="pricing-grid">
    {['free','premium','founder'].map(tier=>{
     const paid=tier!=='free',founder=tier==='founder',selected=tier==='free'?!premium&&!user?.trial_active:founder?user?.billing_tier==='founder':premium&&user?.billing_tier!=='founder'
+    const visibleFeatures=paid?features:[...features].sort((a,b)=>featureOrder(a[1])-featureOrder(b[1]))
     const choice=founder?'founder':annual?'yearly':'monthly'
     const available=Boolean(status?.billing_options?.[choice])
     return <section key={tier} className={'pricing-card '+tier} aria-label={tier+' plan'}>
@@ -43,7 +45,7 @@ export function Pricing({user,status,onSignup,onAccount}){
      <button className={'button full '+(paid?'primary':'')} disabled={Boolean(busy)||(paid&&(premium||!available))} onClick={()=>paid?choose(choice):user?onAccount():onSignup()}>
       {busy===choice?'Opening secure checkout…':selected&&user?'Your current plan':paid?premium?'Premium access included':available?founder?'Become a Founder':'Get Premium':'Payments opening soon':user?'Manage account':'Create free account'}
      </button>
-     <ul className="pricing-features">{features.map(([label,free,full,founderValue])=><li key={label} className={!paid&&free==='Not included'?'excluded':''}><span aria-hidden="true">{!paid&&free==='Not included'?'−':'✓'}</span><div>{label}<strong>{founder?(founderValue||full):paid?full:free}</strong></div></li>)}</ul>
+     <ul className="pricing-features">{visibleFeatures.map(([label,free,full,founderValue])=><li key={label} className={!paid&&free==='Not included'?'excluded':''}><span aria-hidden="true">{!paid&&free==='Not included'?'−':'✓'}</span><div>{label}<strong>{founder?(founderValue||full):paid?full:free}</strong></div></li>)}</ul>
      <p className="pricing-card-note">{founder?'One payment. No renewal. Higher personal allowances than Premium; shared collection budgets still apply.':paid?'Renews automatically until cancelled. Collected data is shared; requests remain subject to the platform budget.':'Upgrade whenever you want a closer look.'}</p>
     </section>
    })}

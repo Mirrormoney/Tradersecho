@@ -1,6 +1,6 @@
-"""Private PDF research pilot. Read-only IMAP, content dedup, explicit analysis/review.
+"""Private research import with verified seven-day mailbox retention.
 
-Mailbox originals are never marked read, moved or deleted. Only staff can read
+Completed originals may be deleted after seven days; unresolved mail is retained. Only staff can read
 drafts; validated recent notes can publish through the approved automatic pipeline.
 """
 import email,hashlib,hmac,imaplib,io,json,os,re,secrets,ssl,time
@@ -128,6 +128,39 @@ def save_recovered(c,document_id,text,pages,state,error):
     c.execute("UPDATE research_documents SET text=?,pages=?,status=?,error=?,updated=? WHERE id=? AND status='needs_review'",(text,pages,state,error,time.time(),document_id))
 
 
+def cleanup_mail(mailbox,validity):
+    """Delete only proven-complete originals; UID EXPUNGE never touches other mail."""
+    now=time.time()
+    with core().db() as c:
+        previous=meta(c,'mail_cleanup',{})
+        if previous.get('at',0)>now-86400:return {'state':'not_due','deleted':0,'at':previous['at']}
+    caps={v.decode().upper() if isinstance(v,bytes) else str(v).upper() for v in mailbox.capabilities}
+    if 'UIDPLUS' not in caps:return {'state':'uid_expunge_unavailable','deleted':0}
+    if mailbox.select('INBOX',readonly=False)[0]!='OK':return {'state':'write_access_unavailable','deleted':0}
+    if mailbox.response('UIDVALIDITY')[1][0].decode()!=validity:return {'state':'mailbox_changed','deleted':0}
+    cutoff=datetime.fromtimestamp(now-7*86400,timezone.utc).strftime('%d-%b-%Y')
+    status,data=mailbox.uid('search',None,'BEFORE',cutoff)
+    if status!='OK':raise RuntimeError('Cleanup search failed')
+    deleted=0
+    for uid in data[0].split():
+        mid=validity+':'+uid.decode()
+        with core().db() as c:
+            mapping=meta(c,'mail_documents:'+mid,{})
+            ids=mapping.get('ids',[])
+            if not mapping.get('complete') or not ids:continue
+            states=[c.execute('SELECT status FROM research_documents WHERE id=?',(did,)).fetchone() for did in ids]
+            if any(not row or row['status'] not in ('draft','no_match','screened_out') for row in states):continue
+        status,_=mailbox.uid('store',uid,'+FLAGS.SILENT',r'(\Deleted)')
+        if status!='OK':raise RuntimeError('Cleanup marking failed')
+        status,_=mailbox.uid('expunge',uid)
+        if status!='OK':
+            mailbox.uid('store',uid,'-FLAGS.SILENT',r'(\Deleted)')
+            raise RuntimeError('Cleanup deletion failed')
+        deleted+=1
+        if deleted>=30:break
+    return {'state':'ok','deleted':deleted}
+
+
 def import_mail(token=None):
     from . import research_images
     password=os.getenv('RESEARCH_IMAP_PASSWORD')
@@ -151,7 +184,8 @@ def import_mail(token=None):
                 seen=c.execute('SELECT status FROM research_messages WHERE id=?',(mid,)).fetchone()
                 recheck=meta(c,'four_page_retry_enabled',False) and not meta(c,'four_page_mail:'+mid,False)
                 image_recheck=(uid in recent or (seen and seen['status']=='images_pending')) and not c.execute('SELECT 1 FROM research_image_messages WHERE id=?',(mid,)).fetchone()
-                if seen and not recheck and not image_recheck:continue
+                cleanup_recheck=not meta(c,'mail_documents:'+mid,None)
+                if seen and not recheck and not image_recheck and not cleanup_recheck:continue
             if checked>=3:break
             checked+=1
             if recheck:
@@ -173,7 +207,7 @@ def import_mail(token=None):
             except Exception:
                 with core().db() as c:c.execute('INSERT OR IGNORE INTO research_messages VALUES(?,?,?)',(mid,'parse_needs_review',time.time()))
                 continue
-            pending_images=False;supported=0;unsupported=0
+            pending_images=False;supported=0;unsupported=0;document_ids=[];attachment_failure=False
             for index,part in enumerate(attachments):
                 try:
                     name=str(part.get_filename() or '')
@@ -187,9 +221,11 @@ def import_mail(token=None):
                     did=hashlib.sha256(content).hexdigest()
                 except Exception:
                     # A malformed MIME part must not discard its healthy siblings.
+                    attachment_failure=True
                     did=hashlib.sha256(('unreadable:'+mid+':'+str(index)).encode()).hexdigest()
                     with core().db() as c:c.execute('INSERT OR IGNORE INTO research_documents(id,filename,sender,received,text,pages,status,error,updated) VALUES(?,?,?,?,?,?,?,?,?)',(did,'Unreadable email attachment',sender,time.time(),'',0,'needs_review','Attachment decoding failed; other attachments continue',time.time()))
                     continue
+                document_ids.append(did)
                 with core().db() as c:
                     exists=c.execute('SELECT 1 FROM research_documents WHERE id=?',(did,)).fetchone()
                     recovering=claim_recovery(c,did) if exists else False
@@ -219,12 +255,17 @@ def import_mail(token=None):
                     if recovering:save_recovered(c,did,text,pages,state,error)
                 imported+=1
             with core().db() as c:
+                put(c,'mail_documents:'+mid,{'ids':document_ids,'complete':bool(supported) and not (pending_images or unsupported or attachment_failure)})
                 if not pending_images:
                     c.execute('INSERT OR IGNORE INTO research_image_messages VALUES(?,?)',(mid,time.time()))
                 state='images_pending' if pending_images else ('imported' if supported else 'no_supported_attachments')
                 if unsupported and supported and not pending_images:state='imported_with_unsupported_attachments'
                 c.execute('INSERT INTO research_messages VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,updated=excluded.updated',(mid,state,time.time()))
-        return {'state':'ok','imported':imported,'image_attempts':image_calls,'images_deferred':deferred,'image_state':image_state}
+        try:cleanup=cleanup_mail(mailbox,validity)
+        except Exception:cleanup={'state':'failed','deleted':0}
+        if cleanup['state']!='not_due':
+            with core().db() as c:put(c,'mail_cleanup',dict(cleanup,at=time.time()))
+        return {'cleanup':cleanup,'state':'ok','imported':imported,'image_attempts':image_calls,'images_deferred':deferred,'image_state':image_state}
     finally:
         try:mailbox.logout()
         except Exception:pass

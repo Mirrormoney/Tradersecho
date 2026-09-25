@@ -27,6 +27,10 @@
       }
     },
     {
+      "source": "/signal-lab",
+      "destination": "/index.html"
+    },
+    {
       "source": "/trending-research",
       "destination": "/index.html"
     },

@@ -3,13 +3,13 @@ import {api} from './api.js'
 import {dualTime} from './time.js'
 import './signal-lab.css'
 const names=['Price','Volume','Options','X activity','Catalyst']
-export function SignalRadar({axes=[]}){
- const point=(i,v)=>{const a=-Math.PI/2+i*Math.PI*2/5;return [150+Math.cos(a)*78*v/100,122+Math.sin(a)*78*v/100]}
+export function SignalRadar({axes=[],compact=false}){
+ const point=(i,v)=>{const a=-Math.PI/2+i*Math.PI*2/5;return [(compact?140:150)+Math.cos(a)*(compact?82:78)*v/100,(compact?100:122)+Math.sin(a)*(compact?82:78)*v/100]}
  const poly=v=>names.map((_,i)=>point(i,v).join(',')).join(' ')
  const visible=axes.flatMap((a,i)=>a.strength==null?[]:[{i,p:point(i,a.strength)}])
- return <svg className="signal-pentagon" viewBox="0 0 300 245" role="img" aria-label={axes.map(a=>a.name+': '+(a.score??'not ready')).join(', ')}>
+ return <svg className="signal-pentagon" viewBox={compact?"0 0 280 200":"0 0 300 245"} role="img" aria-label={axes.map(a=>a.name+': '+(a.score??'not ready')).join(', ')}>
  {[25,50,75,100].map(v=><polygon key={v} points={poly(v)} fill="none" stroke="currentColor" opacity=".2"/>)}
- {names.map((n,i)=>{const p=point(i,133);return <text key={n} x={p[0]} y={p[1]} textAnchor="middle" dominantBaseline="middle">{n}</text>})}
+ {names.map((n,i)=>{const p=compact?[[140,10],[244,66],[205,186],[75,186],[36,66]][i]:point(i,133);return <text key={n} x={p[0]} y={p[1]} textAnchor="middle" dominantBaseline="middle">{n}</text>})}
  {visible.length>=3&&<polygon points={visible.map(a=>a.p.join(',')).join(' ')} fill="currentColor" opacity=".23"/>}
  {visible.length>1&&visible.map((a,i)=>{const b=visible[(i+1)%visible.length];return <line key={a.i} x1={a.p[0]} y1={a.p[1]} x2={b.p[0]} y2={b.p[1]} stroke="currentColor" strokeWidth="2" strokeDasharray={(b.i-a.i+5)%5>1?'4 4':undefined}/>})}
  {visible.map(a=><circle key={a.i} cx={a.p[0]} cy={a.p[1]} r="4" fill="currentColor"/>)}
@@ -22,8 +22,8 @@ function useSignals(){
 }
 export function SignalTeaser({compact=false}){
  const {data,error}=useSignals()
- return <section className={'signal-teaser '+(compact?'signal-compact':'')} aria-label="Signal Lab preview"><div className="section-head"><div><span className="eyebrow">SIGNAL LAB · EARLY PREVIEW</span><h2>Compare the signals.</h2></div><a className="text-link" href="/signal-lab">Explore Signal Lab ↗</a></div><p className="muted">Three test names, ordered by saved X activity.</p>
- <div className="signal-cards">{data?.stocks.map((s,i)=><a className="signal-card" href={'/signal-lab?ticker='+s.ticker} key={s.ticker}><div className="signal-card-title"><span><strong>${s.ticker}</strong><small>{s.name}</small></span><span className="signal-rank">0{i+1}</span></div><SignalRadar axes={s.axes}/><span className="signal-card-foot">{s.stale?'Last saved view':'Latest saved view'}<span>Explore ↗</span></span></a>)}</div>
+ return <section className={'signal-teaser '+(compact?'signal-compact':'')} aria-label="Signal Lab preview"><div className="section-head"><div><span className="eyebrow">SIGNAL LAB · EARLY PREVIEW</span><h2>Compare the signals.</h2></div><a className="text-link" href="/signal-lab">Explore Signal Lab ↗</a></div>{!compact&&<p className="muted">Three test names, ordered by saved X activity.</p>}
+ <div className="signal-cards">{data?.stocks.map((s,i)=><a className="signal-card" href={'/signal-lab?ticker='+s.ticker} key={s.ticker}><div className="signal-card-title"><span><strong>${s.ticker}</strong><small>{s.name}</small></span><span className="signal-rank">0{i+1}</span></div><SignalRadar axes={s.axes} compact={compact}/><span className="signal-card-foot">{s.stale?'Last saved view':'Latest saved view'}<span>Explore ↗</span></span></a>)}</div>
  {!data&&<p role="status">{error||'Loading Signal Lab…'}</p>}{data&&!data.stocks.length&&<p>First observations are being prepared.</p>}
  </section>
 }

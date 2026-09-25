@@ -50,6 +50,7 @@ export function Pricing({user,status,onSignup,onAccount}){
     </section>
    })}
   </div>
+  <p className="muted">Have a promotional code? Enter it in secure Stripe checkout for monthly or annual Premium. Invite friends from My account to earn Premium rewards.</p>
   <ApiAddon user={user}/>
   {error&&<p className="error" role="alert">{error}</p>}
   <div className="pricing-footnotes"><p>All prices in USD. Applicable taxes will be shown before payment. Founder access lasts while Tradersecho is operated as an active service; it is not a guarantee of perpetual operation.</p><p>Coverage depends on available X data. Paid membership does not guarantee complete coverage, investment returns or instant collection. Choose morning, closing, weekly and monthly research emails in My account.</p>{!status?.billing_configured&&<p>Plans are available to compare during our private preview. Checkout opens after payment setup and testing.</p>}</div>

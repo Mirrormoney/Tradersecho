@@ -688,7 +688,7 @@ def test_checkout_tiers_reuse_and_account_binding(monkeypatch):
         if path=='customers':return {'id':'cus_own'}
         if path.endswith('/line_items'):return {'data':[{'price':{'id':'price_yearly'}}]}
         if path=='checkout/sessions':
-            counter[0]+=1;sid='cs_'+str(counter[0]);sessions[sid]={'id':sid,'status':'open','url':'https://checkout.stripe.com/test/'+sid};return sessions[sid]
+            counter[0]+=1;sid='cs_'+str(counter[0]);sessions[sid]={'id':sid,'status':'open','url':'https://checkout.stripe.com/test/'+sid,'allow_promotion_codes':data.get('allow_promotion_codes')=='true'};return sessions[sid]
         if path.endswith('/expire'):
             sessions[path.split('/')[2]]['status']='expired';return {}
         if path.startswith('checkout/sessions/'):return sessions[path.split('/')[-1]]

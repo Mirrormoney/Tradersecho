@@ -66,6 +66,8 @@ def init():
         migrate_engagement(c)
         from .payments import migrate as migrate_payments
         migrate_payments(c)
+        from .referrals import migrate as migrate_referrals
+        migrate_referrals(c)
         migrate_stocks(c)
         from .sec_filings import migrate as migrate_sec
         migrate_sec(c)
@@ -144,7 +146,7 @@ def public_account(u):
     from .payments import account_details
     from .account_security import trial_account
     u=trial_account(u) if 'trial_active' not in dict(u) else dict(u)
-    return {k:u[k] for k in ['id','email','plan','role','status','display_name','email_verified']} | {'demo':bool(u['demo']),'trial_active':u['trial_active'],'trial_started_at':u.get('trial_started_at'),'trial_ends_at':u.get('trial_ends_at')} | account_details(u)
+    return {k:u[k] for k in ['id','email','plan','role','status','display_name','email_verified']} | {'demo':bool(u['demo']),'trial_active':u['trial_active'],'trial_started_at':u.get('trial_started_at'),'trial_ends_at':u.get('trial_ends_at'),'referral_active':u.get('referral_active',False),'referral_ends_at':u.get('referral_ends_at')} | account_details(u)
 
 def session(response, uid, expected_password=None):
     token=secrets.token_urlsafe(32)
@@ -196,11 +198,14 @@ def signup(payload:SignupCredentials,request:Request,response:Response):
         try: c.execute('INSERT INTO accounts(id,email,password,display_name,created_at,last_login) VALUES(?,?,?,?,?,?)',(uid,email,password_hash(payload.password),name,time.time(),time.time()))
         except IntegrityError: raise HTTPException(409,'That email or username is already in use.')
         if payload.owner_code: claim_owner(c,payload.owner_code,email,uid)
+        from .referrals import attach
+        attach(c,uid,request.cookies.get('te_referral',''))
         from .owner_reports import enqueue_signup
         enqueue_signup(c,uid,time.time())
         c.execute('INSERT INTO newsletter_preferences(user_id,editions,trial_reminder) VALUES(?,?,1)',(uid,json.dumps(['morning','final','weekly','monthly'])))
         u=c.execute('SELECT * FROM accounts WHERE id=?',(uid,)).fetchone()
     session(response,uid)
+    response.delete_cookie('te_referral',path='/')
     result=public_account(u)
     from .account_security import configured,issue
     result['verification_email']='unavailable'
@@ -507,3 +512,6 @@ if DIST.exists():
     def favicon(): return FileResponse(DIST/'favicon.svg')
     @app.get('/')
     def index(): return FileResponse(DIST/'index.html')
+
+from .referrals import router as referrals_router
+app.include_router(referrals_router)

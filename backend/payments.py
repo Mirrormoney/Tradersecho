@@ -96,7 +96,7 @@ def create_checkout(u,tier):
             if session['status']=='open':
                 if existing['tier']==tier:
                     lines=stripe('GET','checkout/sessions/'+quote(existing['id'],safe='')+'/line_items').get('data',[])
-                    if len(lines)==1 and lines[0]['price']['id']==os.environ[TIERS[tier][0]]:return {'url':session['url']}
+                    if len(lines)==1 and lines[0]['price']['id']==os.environ[TIERS[tier][0]] and (tier=='founder' or session.get('allow_promotion_codes')):return {'url':session['url']}
                 stripe('POST','checkout/sessions/'+quote(existing['id'],safe='')+'/expire')
         price_id=os.environ[TIERS[tier][0]]
         validate_price(stripe('GET','prices/'+quote(price_id,safe='')),tier)
@@ -109,6 +109,7 @@ def create_checkout(u,tier):
               'line_items[0][price]':price_id,'line_items[0][quantity]':'1','payment_method_types[0]':'card',
               'metadata[account_id]':u['id'],'metadata[tier]':tier,'success_url':s.ORIGIN+'/?billing=success',
               'cancel_url':s.ORIGIN+'/?billing=cancelled','billing_address_collection':'required'}
+        if tier in ('monthly','yearly'):data['allow_promotion_codes']='true'
         prefix='payment_intent_data' if tier=='founder' else 'subscription_data'
         data[prefix+'[metadata][account_id]']=u['id'];data[prefix+'[metadata][tier]']=tier
         if os.getenv('STRIPE_AUTOMATIC_TAX','false').lower()=='true':
@@ -193,5 +194,8 @@ def process_event(event_id,kind,obj):
         elif kind in ['charge.refunded','charge.dispute.created','charge.dispute.closed']:
             charge=obj if kind=='charge.refunded' else stripe('GET','charges/'+quote(obj['charge'],safe=''))
             if charge.get('payment_intent'):sync_entitlement(c,'payment',charge['payment_intent'])
+        if kind in ['charge.refunded','charge.dispute.created','charge.dispute.closed']:
+            customer=charge.get('customer')
+            if customer:c.execute('UPDATE referrals SET checked=0 WHERE friend IN (SELECT id FROM accounts WHERE stripe_customer=?)',(customer,))
         c.execute('INSERT INTO webhook_events VALUES(?)',(event_id,))
     return {'received':True}

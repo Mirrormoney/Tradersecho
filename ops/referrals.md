@@ -1,0 +1,14 @@
+# Referrals and event promotions
+
+My account provides an account-bound referral link. It saves a first-party HttpOnly cookie for 30 days. Only new registrations can be attributed; the latest link wins. Verification is required for both accounts. Inviter sees aggregate progress, never the friend's identity/payment details.
+
+The protected hosted /api/cron/referrals worker checks up to two records hourly, with a durable lease and oldest-checked ordering. It verifies current subscription and paid Stripe invoices, 45 elapsed days from first payment, and two distinct paid billing periods for monthly referrals. Trials, zero-payment invoices, proration-only payments, Founder/API purchases, refunds, disputes, cancelled subscriptions, repeated/shared payment cards and self-referrals cannot qualify.
+
+Six rewards per UTC calendar year. Free: 30 days of access after any current trial/access. Monthly: one future invoice's base subscription fee covered via a product-restricted once-only coupon. Annual: $9 off renewal. Monthly rewards queue separately; annual referral discounts can accumulate up to the invoice amount. Event promotions cannot stack with referral rewards: the reward waits. Permanent complimentary/Founder recipients do not receive extra access.
+
+Reward actions are persisted before Stripe calls with stable coupon IDs/idempotency keys. An ambiguous action beyond 20 hours is held for reconciliation instead of risking a duplicate. Refund/dispute webhooks prioritize rechecks. Remaining access/unused coupons can be revoked; consumed rewards are never charged back automatically. Worker results: meta.referral_worker_result. Held operations: referrals.state='review'. Inspect saved reward and Stripe subscription/invoices before resolving; never blindly clear an ambiguous action.
+
+## Event codes (no campaign activated by this release)
+Use Stripe Dashboard > Product catalogue > Coupons / Promotion codes. Create a product-restricted coupon for Premium ONLY; choose percentage/fixed amount, once or a limited duration, then create a customer-facing code with explicit expiry, redemption cap and (where wanted) first-time transaction restriction. Codes appear in monthly/yearly Checkout, not Founder or API checkout. Checkout accepts a single promotional code. A 25%-off-three-month campaign is only an example, not an active discount. A repeating coupon can also discount an annual invoice, so use separate Premium monthly/annual products when a campaign must apply to only one billing interval, or explicitly restrict the offered checkout paths before launch. Test in the isolated Stripe sandbox first.
+
+Normal renewal prices resume after a limited promotion. Disabling a code prevents new redemptions; it does not remove a customer's existing applied discount. No live purchases or promotional campaign creation were performed for this release.

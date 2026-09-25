@@ -23,7 +23,13 @@ def configured():
 def trial_account(user,now=None):
     u=dict(user);now=time.time() if now is None else now
     u['trial_active']=bool(not u['demo'] and u['status']=='active' and u['email_verified'] and u['plan']=='free' and (u.get('trial_ends_at') or 0)>now)
-    if u['trial_active']:u['plan']='premium'
+    from .referrals import access_until
+    until=None
+    if not u['demo'] and u['plan']=='free' and u['email_verified']:
+        with core().db() as c:until=access_until(c,u['id'],now)
+    u['referral_ends_at']=until
+    u['referral_active']=bool(until and not u['demo'] and u['status']=='active' and u['email_verified'])
+    if u['trial_active'] or u['referral_active']:u['plan']='premium'
     return u
 
 def start_trial(c,uid):

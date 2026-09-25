@@ -160,9 +160,9 @@ def run(client=None,now=None):
         upgrade_history={t for t in HISTORY_FOCUS if not get(c,'history_price_v1_'+t,False)}
     due=sorted([(t,k) for t in tickers for k in KINDS if latest.get((t,k),0)<int(now//600)*600],key=lambda x:latest.get(x,0))[:40]
     extras=[(t,k) for t in HISTORY_FOCUS if t in s.CATALOG for k in ('history','filtered_options') if (k=='history' and t in upgrade_history) or latest.get((t,k),0)<(datetime.fromtimestamp(now,NY).replace(hour=0,minute=0,second=0,microsecond=0).timestamp() if k=='history' else int(now//600)*600)]
-    # Oldest completed work first across prices and options; unfinished work
-    # remains oldest on the next tick instead of restarting with the same names.
-    due=sorted(extras+due,key=lambda item:latest.get(item,0))
+    # Refresh the full price benchmark basket before paginated options work.
+    # Other work remains oldest-first so continuation does not starve added names.
+    due=sorted(extras+due,key=lambda item:(0 if item[1]=='candles' else 1,latest.get(item,0)))
     own=client is None
     started=time.monotonic();done=0;failures=0;state='complete'
     try:
@@ -329,7 +329,7 @@ def public_signals(response:Response):
     rows=[]
     for panel in panels:
         if panel['ticker'] not in ('NVDA','AMD','MU'):continue
-        axes=[{k:a.get(k) for k in ('name','score','strength','direction','state','reason')} for a in panel['axes']]
+        axes=[{**{k:a.get(k) for k in ('name','score','strength','direction','state','reason')},'as_of':a.get('details',{}).get('as_of')} for a in panel['axes']]
         rows.append(dict(ticker=panel['ticker'],name=s.CATALOG.get(panel['ticker'],(panel['ticker'],))[0],observed=panel['observed'],axes=axes,
             stale=now-panel['observed']>1200,activity=axes[3]['score']))
     rows.sort(key=lambda r:(-(r['activity'] if r['activity'] is not None else -1),r['ticker']))

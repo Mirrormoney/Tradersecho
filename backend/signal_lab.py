@@ -8,8 +8,8 @@ from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
 
 NY = ZoneInfo('America/New_York')
-VERSION = 'lab-0.4'
-OPTIONS_COMPATIBLE_VERSIONS = ('lab-0.2','lab-0.3','lab-0.4')
+VERSION = 'lab-0.5'
+OPTIONS_COMPATIBLE_VERSIONS = ('lab-0.2','lab-0.3','lab-0.4','lab-0.5')
 TITLES = ['Price strength', 'Volume confirmation', 'Options pressure', 'X attention', 'Catalyst strength']
 
 
@@ -234,6 +234,18 @@ def read_posts(c,ticker,now):
     return rows
 
 
+def aligned_price_inputs(stock, measurements, catalog, now):
+    """Compare actual candles at one recent common endpoint, never mismatched returns."""
+    from .uw_pilot import stock_measurements
+    for end in sorted({bar['at'] for bar in stock['candles'] if 0<=now-bar['at']<=1200},reverse=True):
+        aligned=[stock_measurements(m['ticker'],{'candles':[bar for bar in m['candles'] if bar['at']<=end]},now) for m in measurements]
+        target=next(m for m in aligned if m['ticker']==stock['ticker'])
+        peers=[m for m in aligned if m['ticker']!=stock['ticker'] and m['price_at']==end and m['price_fresh'] and m['return_60m'] is not None]
+        sector=[m for m in peers if catalog[m['ticker']][1]==catalog[stock['ticker']][1]]
+        if target['return_60m'] is not None and len(peers)>=10 and len(sector)>=5:return target,aligned
+    return stock,measurements
+
+
 def build(c,samples,catalog,focus,now):
     from .uw_pilot import stock_measurements
     from .research_feed import published
@@ -246,7 +258,10 @@ def build(c,samples,catalog,focus,now):
         # Include +/- one hour for daylight-saving boundaries; options_axis checks NY time.
         slots=sorted({(int(now//600)+n)%144 for n in (-7,-6,-5,-1,0,1,5,6,7)})
         history=[dict(r) for r in c.execute('SELECT * FROM signal_lab_snapshots WHERE ticker=? AND observed>? AND observed<=? AND ((slot - CAST(slot / 144 AS INTEGER) * 144) IN ('+','.join('?' for _ in slots)+') OR observed>?) ORDER BY observed',(t,now-45*86400,now,*slots,now-1200))]
-        axes=[price_axis(stock,measurements,catalog,samples[t].get('history',[])),volume_axis(stock),options_axis(stock,history,now),x_axis(read_posts(c,t,now),t,now,read_attention_counts(c,t,now)),catalyst_axis(published(c,t),now)]
+        price_stock,price_peers=aligned_price_inputs(stock,measurements,catalog,now)
+        price=price_axis(price_stock,price_peers,catalog,samples[t].get('history',[]))
+        price['details']['as_of']=price_stock['price_at']
+        axes=[price,volume_axis(stock),options_axis(stock,history,now),x_axis(read_posts(c,t,now),t,now,read_attention_counts(c,t,now)),catalyst_axis(published(c,t),now)]
         state=candidate(axes)
         prev=next((r for r in reversed(history) if r['version']==VERSION and r['slot']<int(now//600)),None)
         persistent=bool(prev and 0<now-prev['observed']<=900 and json.loads(prev['payload']).get('candidate')==state and state in ('bullish','bearish'))
@@ -286,6 +301,7 @@ def record(c,samples,catalog,focus,now):
 def saved(c):
     migrate(c)
     rows=[dict(r) for r in c.execute('SELECT ticker,observed,payload,outcome FROM signal_lab_snapshots WHERE version=? ORDER BY observed DESC LIMIT 30',(VERSION,))]
+    newest=[dict(r) for r in c.execute('SELECT ticker,payload FROM (SELECT ticker,payload,ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY observed DESC) AS position FROM signal_lab_snapshots WHERE version=?) ranked WHERE position=1',(VERSION,))]
     latest={}
-    for r in rows:latest.setdefault(r['ticker'],json.loads(r['payload']))
+    for r in newest:latest[r['ticker']]=json.loads(r['payload'])
     return dict(version=VERSION,stocks=list(latest.values()),history=[dict(ticker=r['ticker'],observed=r['observed'],setup=json.loads(r['payload'])['setup'],baseline=json.loads(r['payload']).get('price_volume_baseline','watch'),outcome=json.loads(r['outcome']) if r['outcome'] else None) for r in rows[:30]])

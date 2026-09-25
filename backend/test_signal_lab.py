@@ -145,3 +145,31 @@ def test_catalyst_rating_conflicts_targets_and_latest_broker():
     assert lab.catalyst_axis([{**base,'_price_target':dict(current=120)}],NOW)['score']==65
     assert lab.catalyst_axis([upgrade,{**base,'received':1,'stance':'bearish'}],NOW)['score']==35
     assert lab.catalyst_axis([],NOW)['state']=='no_research'
+
+def test_price_comparison_uses_latest_complete_common_interval():
+    from .uw_pilot import stock_measurements
+    end=NOW
+    bars=[dict(at=end-(14-i)*600,close=100+i*.1,high=101+i*.1,low=99+i*.1,volume=100) for i in range(15)]
+    data={'NVDA':{'candles':bars},**{f'P{i}':{'candles':bars[:-1] if i<4 else bars} for i in range(10)}}
+    catalog={t:('name','sector') for t in data}
+    ms=[stock_measurements(t,d,NOW+60) for t,d in data.items()]
+    target,peers=lab.aligned_price_inputs(ms[0],ms,catalog,NOW+60)
+    assert target['price_at']==NOW-600
+    assert all(p['price_at']==NOW-600 for p in peers)
+    history=[]
+    for i in range(1,21):history.extend([dict(at=NOW-600-i*86400-3600,close=100),dict(at=NOW-600-i*86400,close=101)])
+    assert lab.price_axis(target,peers,catalog,history)['score'] is not None
+    # Never fill with an old peer window once freshness expires.
+    stale=[stock_measurements(t,d,NOW+1300) for t,d in data.items()]
+    target,peers=lab.aligned_price_inputs(stale[0],stale,catalog,NOW+1300)
+    assert lab.price_axis(target,peers,catalog,history)['score'] is None
+
+
+def test_saved_keeps_public_names_when_new_tickers_have_more_rows():
+    c=sqlite3.connect(':memory:');c.row_factory=sqlite3.Row;lab.migrate(c)
+    for ticker in ('NVDA','AMD','MU'):
+        payload={'ticker':ticker,'setup':'Watching'}
+        c.execute('INSERT INTO signal_lab_snapshots VALUES(?,?,?,?,?,?,?,?)',(ticker,1,lab.VERSION,NOW-600,None,None,json.dumps(payload),None))
+    for i in range(40):
+        c.execute('INSERT INTO signal_lab_snapshots VALUES(?,?,?,?,?,?,?,?)',('AVGO',i+2,lab.VERSION,NOW+i,None,None,json.dumps({'ticker':'AVGO','setup':'Watching'}),None))
+    assert {s['ticker'] for s in lab.saved(c)['stocks']}=={'NVDA','AMD','MU','AVGO'}

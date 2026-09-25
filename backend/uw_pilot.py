@@ -7,7 +7,7 @@ import os,time,json,secrets,hmac,ssl,math,statistics
 from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
 import httpx
-from fastapi import APIRouter,Request,HTTPException
+from fastapi import APIRouter,Request,HTTPException,Response
 from .community import core,staff
 
 router=APIRouter()
@@ -315,3 +315,20 @@ def overview(request:Request):
         from .signal_lab import saved
         return {**configured(),'server_at':now,'session_open':session_open(now),'lab':saved(c),'scoring':get(c,'scoring'),'stocks':[stock_measurements(t,samples.get(t,{}),now) for t in ('NVDA','AMD','MU') if t in s.CATALOG],'rows':rows,'usage':dict(usage) if usage else None,'last_run':get(c,'last_run'),
                 'tickers':[t for t in PILOT if t in s.CATALOG],'local_daily_cap':32000,'scores_ready':False}
+
+
+@router.get('/api/signal-lab')
+def public_signals(response:Response):
+    """Owner approved public derived scores on 2026-09-25; never return provider records."""
+    from .signal_lab import saved
+    s=core();now=time.time()
+    with s.db() as c:panels=saved(c)['stocks']
+    rows=[]
+    for panel in panels:
+        if panel['ticker'] not in ('NVDA','AMD','MU'):continue
+        axes=[{k:a.get(k) for k in ('name','score','strength','direction','state','reason')} for a in panel['axes']]
+        rows.append(dict(ticker=panel['ticker'],name=s.CATALOG.get(panel['ticker'],(panel['ticker'],))[0],observed=panel['observed'],axes=axes,
+            stale=now-panel['observed']>1200,activity=axes[3]['score']))
+    rows.sort(key=lambda r:(-(r['activity'] if r['activity'] is not None else -1),r['ticker']))
+    response.headers['Cache-Control']='public, max-age=60, s-maxage=120'
+    return dict(stocks=rows,scope='3-stock preview',server_at=now)

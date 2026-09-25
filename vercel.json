@@ -27,6 +27,10 @@
       }
     },
     {
+      "source": "/stocks/:ticker",
+      "destination": "/index.html"
+    },
+    {
       "source": "/signal-lab",
       "destination": "/index.html"
     },

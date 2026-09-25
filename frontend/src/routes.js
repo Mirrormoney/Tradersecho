@@ -4,7 +4,8 @@ export const pagePaths={home:'/home',signal:'/signal-lab',market:'/marketpulse',
 export const modalPaths={plans:'/plans',method:'/how-it-works',contact:'/contact',privacy:'/privacy',terms:'/terms',auth:'/login',forgot:'/forgot-password',owner:'/owner-setup',import:'/admin/import'}
 export function readRoute(path=location.pathname){
  const clean=path.replace(/\/+$/,'')||'/'
- const page=Object.keys(pagePaths).find(k=>pagePaths[k]===clean)
+ const stock=/^\/stocks\/[A-Z0-9.\-]{1,12}$/i.test(clean)
+ const page=stock?(history.state?.page||'market'):Object.keys(pagePaths).find(k=>pagePaths[k]===clean)
  const modal=Object.keys(modalPaths).find(k=>modalPaths[k]===clean)||''
  return {page:page||(clean.startsWith('/admin/')?'admin':'home'),modal}
 }

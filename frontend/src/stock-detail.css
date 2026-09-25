@@ -24,3 +24,5 @@
  .stock-page-main>.stock-detail-section:last-child{grid-row:3}
  .stock-page-main>.stock-detail-section,.stock-page-side>.stock-detail-section{min-width:0;align-self:stretch}
 }
+
+.stock-page .stock-detail-section[open]>summary{padding-bottom:14px;border-bottom:1px solid var(--line)}

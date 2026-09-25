@@ -89,9 +89,9 @@ def test_options_partial_and_history_gates():
 def test_catalyst_publication_date_readthrough_and_missing():
     item=dict(report_date='2026-09-24',summary='Broker raises estimates.',original=True,id='a',stance='bullish')
     a=lab.catalyst_axis([item],NOW)
-    assert a['score']==65 and a['direction']=='bullish'
-    assert lab.catalyst_axis([{**item,'report_date':'2026-09-25'}],NOW)['score']==50
-    assert lab.catalyst_axis([{**item,'report_date':'2026-09-01'}],NOW)['score']==50
+    assert a['score']==40 and a['direction']=='bullish'
+    assert lab.catalyst_axis([{**item,'report_date':'2026-09-25'}],NOW)['score']==0
+    assert lab.catalyst_axis([{**item,'report_date':'2026-09-01'}],NOW)['score']==0
     assert lab.catalyst_axis([{**item,'link_type':'readthrough'}],NOW)['score']<a['score']
 
 def test_setup_requires_direction_volume_and_confirmation():
@@ -137,13 +137,13 @@ def test_catalyst_rating_conflicts_targets_and_latest_broker():
     upgrade={**base,'_rating_event':dict(broker='A',action='upgrade',rating='Buy')}
     downgrade={**base,'id':'b','firm':'B','_rating_event':dict(broker='B',action='downgrade',rating='Sell')}
     assert lab.catalyst_axis([upgrade],NOW)['score']==95
-    assert lab.catalyst_axis([downgrade],NOW)['score']==5
-    assert lab.catalyst_axis([upgrade,downgrade],NOW)['score']==50
+    assert lab.catalyst_axis([downgrade],NOW)['score']==95
+    assert lab.catalyst_axis([upgrade,downgrade],NOW)['score']==95
     hold={**downgrade,'_rating_event':dict(broker='B',action='downgrade',rating='Hold')}
-    assert lab.catalyst_axis([hold],NOW)['score']==25
-    assert lab.catalyst_axis([{**base,'_price_target':dict(current=120,previous=100)}],NOW)['score']==70
-    assert lab.catalyst_axis([{**base,'_price_target':dict(current=120)}],NOW)['score']==65
-    assert lab.catalyst_axis([upgrade,{**base,'received':1,'stance':'bearish'}],NOW)['score']==35
+    assert lab.catalyst_axis([hold],NOW)['score']==85
+    assert lab.catalyst_axis([{**base,'_price_target':dict(current=120,previous=100)}],NOW)['score']==60
+    assert lab.catalyst_axis([{**base,'_price_target':dict(current=120)}],NOW)['score']==40
+    assert lab.catalyst_axis([upgrade,{**base,'received':1,'stance':'bearish'}],NOW)['score']==40
     assert lab.catalyst_axis([],NOW)['state']=='no_research'
 
 def test_price_comparison_uses_latest_complete_common_interval():
@@ -173,3 +173,17 @@ def test_saved_keeps_public_names_when_new_tickers_have_more_rows():
     for i in range(40):
         c.execute('INSERT INTO signal_lab_snapshots VALUES(?,?,?,?,?,?,?,?)',('AVGO',i+2,lab.VERSION,NOW+i,None,None,json.dumps({'ticker':'AVGO','setup':'Watching'}),None))
     assert {s['ticker'] for s in lab.saved(c)['stocks']}=={'NVDA','AMD','MU','AVGO'}
+
+
+def test_catalyst_strength_direction_and_decay():
+    base=dict(report_date='2026-09-24',summary='Changed',firm='A')
+    down={**base,'_rating_event':dict(action='downgrade',rating='Sell')}
+    up={**base,'firm':'B','_rating_event':dict(action='upgrade',rating='Buy')}
+    assert lab.catalyst_axis([down],NOW)['direction']=='bearish'
+    assert lab.catalyst_axis([up,down],NOW)['direction']=='mixed'
+    assert lab.catalyst_axis([down],NOW+86400)['score']==76
+    assert lab.catalyst_axis([],NOW)['strength']==0
+    for previous,current in [(100,120),(100,80)]:
+        a=lab.catalyst_axis([{**base,'_price_target':dict(previous=previous,current=current)}],NOW)
+        assert a['strength']==60
+        assert a['direction']==('bullish' if current>previous else 'bearish')

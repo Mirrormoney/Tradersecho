@@ -1,15 +1,15 @@
 """Private, deterministic forward evaluation. Never fetches paid data or calls AI.
 
 Versioned pilot rules, not calibrated forecasts. Snapshots preserve what was known
-at observation time; missing research uses an explicitly labelled neutral baseline.
+at observation time; missing research has zero catalyst strength.
 """
 import json, math, statistics, time, re
 from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
 
 NY = ZoneInfo('America/New_York')
-VERSION = 'lab-0.5'
-OPTIONS_COMPATIBLE_VERSIONS = ('lab-0.2','lab-0.3','lab-0.4','lab-0.5')
+VERSION = 'lab-0.6'
+OPTIONS_COMPATIBLE_VERSIONS = ('lab-0.2','lab-0.3','lab-0.4','lab-0.5','lab-0.6')
 TITLES = ['Price strength', 'Volume confirmation', 'Options pressure', 'X attention', 'Catalyst strength']
 
 
@@ -185,30 +185,32 @@ def catalyst_axis(items,now):
         key=broker or 'unattributed'
         order=(item['report_date'],item.get('received') or 0,str(item.get('id','')))
         if key in brokers and order<=brokers[key][0]:continue
-        score={'bullish':65,'bearish':35}.get(item.get('stance'),50); basis='AI commentary'
+        score={'bullish':65,'bearish':35}.get(item.get('stance'),50); strength=40 if score!=50 else 20; basis='AI commentary'
         bucket=rating_bucket(event.get('rating')); action=event.get('action')
         scales={'upgrade':{'positive':95,'neutral':65,'negative':55,'unknown':85},
                 'downgrade':{'positive':40,'neutral':25,'negative':5,'unknown':20},
                 'initiation':{'positive':75,'neutral':50,'negative':25,'unknown':50},
                 'reiteration':{'positive':60,'neutral':50,'negative':40,'unknown':50}}
         if direct and action in scales:
-            score=scales[action][bucket];basis=f"{action} to {event.get('rating') or 'unspecified rating'}"
+            score=scales[action][bucket]
+            strength={'upgrade':{'positive':95,'neutral':80,'negative':70,'unknown':85},'downgrade':{'positive':70,'neutral':85,'negative':95,'unknown':85},'initiation':{'positive':75,'neutral':60,'negative':75,'unknown':60},'reiteration':{'positive':30,'neutral':20,'negative':30,'unknown':20}}[action][bucket]
+            basis=f"{action} to {event.get('rating') or 'unspecified rating'}"
         elif direct and target.get('previous') and target.get('current'):
             delta=100*(target['current']/target['previous']-1)
-            score=50+max(-30,min(30,delta));basis=f"Price target change {delta:+.1f}%"
-        if not direct:score=50+(score-50)*.5;basis='Sector readthrough: '+basis
+            score=50+max(-30,min(30,delta));strength=min(70,40+abs(delta)) if abs(delta)>=.1 else 20;basis=f"Price target change {delta:+.1f}%"
+        if not direct:strength*=.5;score=50+(score-50)*.5;basis='Sector readthrough: '+basis
         score=clamp(50+(score-50)*(.8**age))
-        brokers[key]=(order,score,item,basis,age)
+        brokers[key]=(order,score,item,basis,age,clamp(strength*(.8**age)))
     if not brokers:
-        result=axis(TITLES[4],50,'No published research from the last seven days. 50 is the neutral starting point, not a broker assessment.',notes=0)
+        result=axis(TITLES[4],0,'No published research from the last seven days. No recent catalyst.',notes=0)
         result.update(state='no_research',direction='neutral');return result
     votes=list(brokers.values());score=clamp(statistics.mean(v[1] for v in votes))
-    _,_,latest,_,_=max(votes,key=lambda v:v[0])
-    result=axis(TITLES[4],score,'Latest view per broker, equally weighted. Rating actions take priority over explicit price-target changes, then AI commentary. Each day reduces the distance from neutral by 20%; notes older than seven days are excluded.',
+    latest=max(votes,key=lambda v:v[0])[2]
+    result=axis(TITLES[4],clamp(statistics.mean(v[5] for v in votes)),'Research significance, not bullishness. Latest view per broker, equally weighted: rating changes 70-95, initiations 60-75, price-target changes 40-70, routine commentary 20-40. Readthroughs receive half weight in strength. Strength decays 20% daily; notes older than seven days are excluded. Direction is shown separately.',
         summary=latest['summary'],firm=latest.get('firm'),report_date=latest['report_date'],stance=latest.get('stance'),
         notes=len(votes),mixed_views=any(v[1]>50 for v in votes) and any(v[1]<50 for v in votes),
-        assessments=[dict(broker=v[2].get('_rating_event',{}).get('broker') or v[2].get('firm') or 'Unattributed',date=v[2]['report_date'],score=v[1],basis=v[3]) for v in votes])
-    result['direction']='bullish' if score>50 else 'bearish' if score<50 else 'neutral'
+        assessments=[dict(broker=v[2].get('_rating_event',{}).get('broker') or v[2].get('firm') or 'Unattributed',date=v[2]['report_date'],score=v[5],direction='bullish' if v[1]>50 else 'bearish' if v[1]<50 else 'neutral',basis=v[3]) for v in votes])
+    result['direction']='mixed' if result['details']['mixed_views'] else 'bullish' if score>50 else 'bearish' if score<50 else 'neutral'
     return result
 
 

@@ -9,7 +9,7 @@ NOW=datetime(2026,9,24,11,0,tzinfo=u.NY).timestamp()
 
 @pytest.fixture
 def pilot(tmp_path,monkeypatch):
-    monkeypatch.setattr(u,'FOCUS',())
+    monkeypatch.setattr(u,'HISTORY_FOCUS',())
     path=tmp_path/'pilot.sqlite'
     @contextmanager
     def db():
@@ -115,7 +115,7 @@ def test_options_excludes_wrong_ticker_multi_ambiguous_and_deduplicates():
     assert u.filtered_trades({'data':[r]*500},'NVDA',NOW)['partial']
 
 def test_extra_datasets_use_shared_budget_and_once_daily_history(pilot,monkeypatch):
-    enable(monkeypatch);monkeypatch.setattr(u,'FOCUS',('NVDA',));calls=[]
+    enable(monkeypatch);monkeypatch.setattr(u,'HISTORY_FOCUS',('NVDA',));calls=[]
     def handler(r):
         calls.append(str(r.url));return httpx.Response(200,json={'data':[]})
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
@@ -126,7 +126,7 @@ def test_extra_datasets_use_shared_budget_and_once_daily_history(pilot,monkeypat
     with pilot.db() as c:assert c.execute('SELECT reserved FROM uw_pilot_usage').fetchone()[0]==7
 
 def test_options_pagination_overlaps_boundary_and_counts_requests(pilot,monkeypatch):
-    enable(monkeypatch);monkeypatch.setattr(u,'FOCUS',('NVDA',));pages=[]
+    enable(monkeypatch);monkeypatch.setattr(u,'HISTORY_FOCUS',('NVDA',));pages=[]
     def trade(i):return {'id':str(i),'executed_at':datetime.fromtimestamp(NOW-i,u.NY).isoformat(),'expiry':'2026-10-16','premium':1,'tags':['ask_side'],'underlying_symbol':'NVDA','canceled':False,'upstream_condition_detail':'auto','option_type':'call'}
     def handler(r):
         if r.url.path!='/api/option-trades':return httpx.Response(200,json={'data':[]})
@@ -138,3 +138,9 @@ def test_options_pagination_overlaps_boundary_and_counts_requests(pilot,monkeypa
         assert row['accepted']==501 and row['bull']==501 and not row['partial']
         assert c.execute('SELECT reserved FROM uw_pilot_usage').fetchone()[0]==5
     assert len(pages)==2
+
+def test_expanded_history_scope_keeps_public_focus_small():
+ assert len(u.HISTORY_FOCUS)==len(set(u.HISTORY_FOCUS))==13
+ assert set(u.HISTORY_FOCUS)<=set(u.PILOT)
+ assert u.FOCUS==('NVDA','AMD','MU')
+ assert set(u.HISTORY_FOCUS)-set(u.FOCUS)=={'AVGO','MSFT','META','AMZN','GOOGL','TSM','ANET','MRVL','ORCL','RMBS'}

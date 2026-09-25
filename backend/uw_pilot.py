@@ -16,6 +16,7 @@ PILOT=('NVDA','AMD','MU','AVGO','MSFT','META','AMZN','GOOGL','TSM','RMBS',
        'ORCL','NTAP','MRVL','ANET','DELL','STX','SMCI','INTC','SNDK','WDC')
 KINDS={'candles':'ohlc/10m','net_premium':'net-prem-ticks'}
 FOCUS=('NVDA','AMD','MU')
+HISTORY_FOCUS=FOCUS+('AVGO','MSFT','META','AMZN','GOOGL','TSM','ANET','MRVL','ORCL','RMBS')
 
 def migrate(c):
     c.executescript('''
@@ -156,10 +157,12 @@ def run(client=None,now=None):
         if get(c,'lease',{}).get('until',0)>now:return {'state':'already_running'}
         put(c,'lease',{'token':token,'until':now+240})
         latest={(r['ticker'],r['kind']):r['fetched_at'] for r in c.execute('SELECT ticker,kind,fetched_at FROM uw_pilot_latest')}
-        upgrade_history={t for t in FOCUS if not get(c,'history_price_v1_'+t,False)}
+        upgrade_history={t for t in HISTORY_FOCUS if not get(c,'history_price_v1_'+t,False)}
     due=sorted([(t,k) for t in tickers for k in KINDS if latest.get((t,k),0)<int(now//600)*600],key=lambda x:latest.get(x,0))[:40]
-    extras=[(t,k) for t in FOCUS if t in s.CATALOG for k in ('history','filtered_options') if (k=='history' and t in upgrade_history) or latest.get((t,k),0)<(datetime.fromtimestamp(now,NY).replace(hour=0,minute=0,second=0,microsecond=0).timestamp() if k=='history' else int(now//600)*600)]
-    due=extras+due
+    extras=[(t,k) for t in HISTORY_FOCUS if t in s.CATALOG for k in ('history','filtered_options') if (k=='history' and t in upgrade_history) or latest.get((t,k),0)<(datetime.fromtimestamp(now,NY).replace(hour=0,minute=0,second=0,microsecond=0).timestamp() if k=='history' else int(now//600)*600)]
+    # Oldest completed work first across prices and options; unfinished work
+    # remains oldest on the next tick instead of restarting with the same names.
+    due=sorted(extras+due,key=lambda item:latest.get(item,0))
     own=client is None
     started=time.monotonic();done=0;failures=0;state='complete'
     try:
@@ -246,7 +249,7 @@ def run(client=None,now=None):
         with s.db() as c:
             c.execute('DELETE FROM uw_pilot_history WHERE fetched_at<?',(now-45*86400,))
             put(c,'last_run',{'at':now,'state':state,'completed':done,'failed':failures})
-        if FOCUS:
+        if HISTORY_FOCUS:
             # Independent evaluation failure must never stop collection or other workers.
             try:
                 from .signal_lab import record
@@ -256,7 +259,7 @@ def run(client=None,now=None):
                         if r['ticker'] in PILOT:samples.setdefault(r['ticker'],{})[r['kind']]=json.loads(r['payload'])
                     # Timestamp the decision after ingestion, not at worker start.
                     # X/research that arrived during collection was not known earlier.
-                    record(c,samples,s.CATALOG,FOCUS,time.time())
+                    record(c,samples,s.CATALOG,HISTORY_FOCUS,time.time())
                     put(c,'scoring',{'at':now,'state':'ready'})
             except Exception as exc:
                 with s.db() as c:put(c,'scoring',{'at':now,'state':'evaluation_error','error_type':type(exc).__name__})

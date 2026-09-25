@@ -27,7 +27,7 @@ def test_plan_limits_founder_and_free(database):
     database.execute("INSERT INTO billing_entitlements VALUES('f','u','founder',1)")
     assert limits(database,u)=={'saved_stocks':50,'personal_voices':5,'ticker_refreshes':5}
     database.execute('UPDATE billing_entitlements SET active=0')
-    assert limits(database,{**u,'plan':'free'})=={'saved_stocks':5,'personal_voices':0,'ticker_refreshes':0}
+    assert limits(database,{**u,'plan':'free'})=={'saved_stocks':5,'personal_voices':3,'ticker_refreshes':0}
 
 def test_quota_limits_and_reset(database):
     now=1780000020

@@ -6,4 +6,4 @@ def limits(c, user):
         return {'saved_stocks': 50, 'personal_voices': 5, 'ticker_refreshes': 5}
     if user['plan'] == 'premium':
         return {'saved_stocks': 25, 'personal_voices': 3, 'ticker_refreshes': 3}
-    return {'saved_stocks': 5, 'personal_voices': 0, 'ticker_refreshes': 0}
+    return {'saved_stocks': 5, 'personal_voices': 3, 'ticker_refreshes': 0}

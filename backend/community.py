@@ -180,8 +180,8 @@ def overview(request:Request):
     return {'accounts':totals,'traffic':traffic,'pages':pages,'audit':logs,'today':today,'views_30d':sum(x['views'] for x in traffic),'visitors_today':next((x['visitors'] for x in traffic if x['day']==today),0)}
 
 def member(request):
-    u=core().account(request);core().premium(u,'x')
-    if u['demo']: raise HTTPException(403,'The community is for real Premium accounts. Preview accounts cannot enter.')
+    u=core().account(request)
+    if u['demo']: raise HTTPException(403,'The community is for registered accounts. Preview accounts cannot enter.')
     return u
 
 class Message(BaseModel):

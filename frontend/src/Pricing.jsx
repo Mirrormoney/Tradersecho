@@ -8,11 +8,11 @@ const features=[
  ['Day, week & month views','Included','Included'],
  ['Saved stocks','5 stocks','25 stocks','50 stocks'],
  ['Shared tracked voices','Included','Included'],
- ['Personal tracked voices','Not included','Up to 3 accounts','Up to 5 accounts'],
+ ['Personal tracked voices','Up to 3 accounts','Up to 3 accounts','Up to 5 accounts'],
  ['AI Supply Chain','Sector preview only','Full heatmap & sector rankings'],
  ['Trending Research','Preview only','Full broker research summaries'],
  ['Scheduled research emails','Not included','Four opt-in editions'],
- ['Trading room','Not included','Included'],
+ ['Trading room','Included','Included'],
  ['Ticker refresh requests','Not included','Up to 3 per day','Up to 5 per day'],
 ]
 export function Pricing({user,status,onSignup,onAccount}){

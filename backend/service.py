@@ -322,15 +322,12 @@ def posts(request:Request,ticker:str='',window:int=Query(1,ge=1,le=30),source:st
         if ticker: clauses.append('EXISTS(SELECT 1 FROM mentions filter_m WHERE filter_m.source=p.source AND filter_m.post_id=p.id AND filter_m.ticker=?)');args.append(ticker.upper())
         if personal:
             u=account(request)
-            if u['plan']!='premium' and u['role'] not in ('owner','admin'):raise HTTPException(403,'Personal voices require Premium.')
             if u['demo'] and source!='demo':raise HTTPException(403,'Sign in with a real account to view live voices.')
             clauses.append('p.author IN (SELECT handle FROM handles WHERE user_id=?)');args.append(u['id'])
         elif tracked:
             u=account(request)
             if u['demo'] and source!='demo':raise HTTPException(403,'Sign in with a real account to view live voices.')
-            if u['plan']=='premium' or u['role'] in ('owner','admin'):
-                clauses.append('p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices)');args.append(u['id'])
-            else:clauses.append('p.author IN (SELECT handle FROM admin_voices)')
+            clauses.append('p.author IN (SELECT handle FROM handles WHERE user_id=? UNION SELECT handle FROM admin_voices)');args.append(u['id'])
         ordering='p.likes DESC,p.ts DESC' if order=='engagement' else 'p.ts DESC'
         rows=c.execute('SELECT p.*,GROUP_CONCAT(DISTINCT m.ticker) tickers FROM posts p LEFT JOIN mentions m ON p.source=m.source AND p.id=m.post_id WHERE '+' AND '.join(clauses)+' GROUP BY p.source,p.id ORDER BY '+ordering+' LIMIT 500',args).fetchall()
         curated={r[0] for r in c.execute('SELECT handle FROM admin_voices')}
@@ -369,12 +366,12 @@ class Handle(BaseModel):
 
 @app.get('/api/handles')
 def handles(request:Request):
-    u=account(request);premium(u)
+    u=account(request)
     with db() as c: return [dict(r) for r in c.execute('SELECT handle,note FROM handles WHERE user_id=? ORDER BY handle',(u['id'],))]
 
 @app.post('/api/handles')
 def add_handle(payload:Handle,request:Request):
-    u=account(request);premium(u)
+    u=account(request)
     handle=normalize_handle(payload.handle)
     with db() as c:
         c.execute('BEGIN IMMEDIATE')
@@ -388,7 +385,7 @@ def add_handle(payload:Handle,request:Request):
 
 @app.delete('/api/handles/{handle}')
 def remove_handle(handle:str,request:Request):
-    u=account(request);premium(u)
+    u=account(request)
     with db() as c: c.execute('DELETE FROM handles WHERE user_id=? AND handle=?',(u['id'],normalize_handle(handle)))
     return {'ok':True}
 

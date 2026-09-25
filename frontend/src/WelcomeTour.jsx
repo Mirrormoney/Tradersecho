@@ -10,7 +10,7 @@ const steps=[
  {page:'supply',target:'.supply-cell',title:'A sector at a glance.',text:'Each tile groups companies in one part of the AI economy. Premium unlocks its attention metrics. Below are the top three per sector; selecting a tile opens the full sector ranking.'},
  {menu:['research'],title:'Then: Trending Research.',text:'Find concise research linked to the stocks we cover. Letâ€™s look at a featured note.',next:'Open Trending Research â†’'},
  {page:'research',target:'.research-featured-card',title:'The newest research, easy to scan.',text:'Each tile shows a stock, its summary and the noteâ€™s publication date. Expand it for detail or open the stock and its TradingView chart. The list below is ordered by research freshness. Premium unlocks the full selection.'},
- {menu:['voices','community','filings'],title:'And much more to explore.',text:'Follow collected X takes in Tracked voices, exchange ideas in the Premium Trading room, and check original company disclosures in SEC Filings.',next:'Finish tour â†’'}
+ {menu:['voices','community','filings'],title:'And much more to explore.',text:'Follow collected X takes in Tracked voices, exchange ideas in the Trading room, and check original company disclosures in SEC Filings.',next:'Finish tour â†’'}
 ]
 export function WelcomeTour({user,ready,modal,replay,navigate}){
  const [step,setStep]=useState(null),[visibleStep,setVisibleStep]=useState(null),[checked,setChecked]=useState(false),[rect,setRect]=useState(null),[position,setPosition]=useState({left:16,top:100}),[missing,setMissing]=useState(false)

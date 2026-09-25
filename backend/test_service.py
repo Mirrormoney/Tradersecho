@@ -52,7 +52,7 @@ def test_accounts_isolation_limits_and_logout():
     assert c.get('/api/watchlist').status_code==401
     assert c.post('/api/auth/signup',json={'display_name':'Signup Trader 52','email':'first@example.com','password':'long-test-password'}).status_code==200
     assert c.cookies.get('te_session')
-    assert c.get('/api/handles').status_code==403
+    assert c.get('/api/handles').status_code==200
     for ticker in list(s.CATALOG)[:5]: assert c.put('/api/watchlist/'+ticker).status_code==200
     assert c.put('/api/watchlist/AMZN').status_code==403
     assert c.put('/api/watchlist/NVDA').status_code==200
@@ -190,9 +190,9 @@ def test_verified_trial_starts_once_expires_and_preserves_paid_access(monkeypatc
     with s.db() as db:
         assert 'trialvoice' in shared_handles(db)
         db.execute('UPDATE accounts SET trial_ends_at=? WHERE id=?',(time.time()-1,u['id']))
-        assert 'trialvoice' not in shared_handles(db)
+        assert 'trialvoice' in shared_handles(db)
     assert c.get('/api/me').json()['plan']=='free'
-    assert c.get('/api/community/messages').status_code==403
+    assert c.get('/api/community/messages').status_code==200
     assert c.post('/api/auth/start-trial').status_code==409
     with s.db() as db:
         db.execute("UPDATE accounts SET plan='premium' WHERE id=?",(u['id'],))
@@ -239,15 +239,13 @@ def test_public_gate_owner_invitation_and_admin_controls():
     assert member.post('/api/auth/login',json={'email':m['email'],'password':'long-test-password'}).status_code==403
 
 
-def test_premium_room_privacy_rate_limits_reports_and_moderation():
+def test_free_room_privacy_rate_limits_reports_and_moderation():
     from .community import create_owner_invite
     owner,_=make_account('owner@example.com',create_owner_invite('owner@example.com'))
     free,f=make_account('free@example.com')
-    assert free.get('/api/community/messages').status_code==403
-    assert free.post('/api/community/messages',json={'body':'Denied'}).status_code==403
+    assert free.get('/api/community/messages').status_code==200
     demo=TestClient(s.app);demo.post('/api/auth/demo')
     assert demo.get('/api/community/messages').status_code==403
-    owner.patch('/api/admin/users/'+f['id'],json={'plan':'premium'})
     free.put('/api/profile',json={'display_name':'Test Trader'})
     message=free.post('/api/community/messages',json={'body':'My thesis for $NVDA <script>bad()</script>','ticker':'NVDA'})
     assert message.status_code==200
@@ -262,7 +260,7 @@ def test_premium_room_privacy_rate_limits_reports_and_moderation():
     assert free.get('/api/community/messages').json()==[]
     assert owner.get('/api/admin/reports').json()==[]
     owner.patch('/api/admin/users/'+f['id'],json={'plan':'free'})
-    assert free.get('/api/community/messages').status_code==403
+    assert free.get('/api/community/messages').status_code==200
 
 
 def test_traffic_is_deduplicated_and_excludes_staff_and_optouts():
@@ -429,7 +427,6 @@ def test_shared_voices_limits_privacy_and_collection(monkeypatch):
     members=[]
     for i in range(5):
         member,u=make_account(f'voice{i}@example.com')
-        owner.patch('/api/admin/users/'+u['id'],json={'plan':'premium'})
         assert member.post('/api/handles',json={'handle':'@SharedVoice','note':f'private{i}'}).status_code==200
         members.append((member,u))
     a,u=members[0]

@@ -11,6 +11,7 @@ from . import research as research
 from .community import core
 router=APIRouter()
 ROOT='11V-290xs-HF7ifWEJaFT2P1iO0O38Vff'
+ROOTS=(ROOT,'1kkJowGz1MWj0GSV-3XKm2bTdTk8uXplz')
 CALLBACK='https://tradersecho.com/api/drive/callback'
 SCOPE='https://www.googleapis.com/auth/drive.readonly'
 API='https://www.googleapis.com/drive/v3/files'
@@ -30,7 +31,8 @@ def migrate(c):
  c.executescript('''CREATE TABLE IF NOT EXISTS research_drive_folders(id TEXT PRIMARY KEY,parent TEXT,page TEXT,checked REAL NOT NULL DEFAULT 0);
  CREATE TABLE IF NOT EXISTS research_drive_files(id TEXT PRIMARY KEY,parent TEXT,version TEXT NOT NULL,name TEXT NOT NULL,size INTEGER NOT NULL,status TEXT NOT NULL,document_id TEXT,seen REAL NOT NULL,error TEXT);
  CREATE INDEX IF NOT EXISTS drive_pending ON research_drive_files(status,seen);''')
- c.execute('INSERT OR IGNORE INTO research_drive_folders(id,parent,checked) VALUES(?,?,?)',(ROOT,'',0))
+ for root in ROOTS:
+  c.execute('INSERT OR IGNORE INTO research_drive_folders(id,parent,checked) VALUES(?,?,?)',(root,'',0))
  if 'modified_at' not in [r['name'] for r in c.execute('PRAGMA table_info(research_drive_files)')]:
   c.execute('ALTER TABLE research_drive_files ADD COLUMN modified_at REAL')
  if not get(c,'file_modified_filter_v1',False):
@@ -53,7 +55,7 @@ def status(request:Request):
   counts={r['status']:r['n'] for r in c.execute('SELECT status,COUNT(*) n FROM research_drive_files GROUP BY status')}
   cutoff=time.time()-7*86400
   recent={r['status']:r['n'] for r in c.execute('SELECT status,COUNT(*) n FROM research_drive_files WHERE modified_at>=? GROUP BY status',(cutoff,))}
-  return {'recent_files':recent,'recent_total':sum(recent.values()),'configured':configured(),'enabled':os.getenv('RESEARCH_DRIVE_ENABLED')=='true','publishing_enabled':os.getenv('RESEARCH_DRIVE_PUBLISH_ENABLED')=='true','connected':bool(get(c,'connection')),'worker':get(c,'worker',{}),'files':counts,'root':ROOT}
+  return {'recent_files':recent,'recent_total':sum(recent.values()),'configured':configured(),'enabled':os.getenv('RESEARCH_DRIVE_ENABLED')=='true','publishing_enabled':os.getenv('RESEARCH_DRIVE_PUBLISH_ENABLED')=='true','connected':bool(get(c,'connection')),'worker':get(c,'worker',{}),'files':counts,'root':ROOT,'roots':list(ROOTS),'folder_access':get(c,'folder_access',{})}
 @router.post('/api/admin/drive/connect')
 def start(request:Request):
  production();u=owner(request)
@@ -127,7 +129,7 @@ def under_root(client,fid,deadline=None):
   if deadline is not None and time.monotonic()>deadline:raise TimeoutError('Drive check deadline')
   if not pending:return False
   current=pending.pop()
-  if current==ROOT:return True
+  if current in ROOTS:return True
   if current in visited:continue
   visited.add(current)
   r=client.get(API+'/'+current,params={'fields':'parents,trashed','supportsAllDrives':'true'});r.raise_for_status();d=r.json()
@@ -148,7 +150,14 @@ def scan(client,deadline):
    continue
   params={'q':discovery_query(folder['id']),'fields':'nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum)','pageSize':100,'orderBy':'modifiedTime desc','supportsAllDrives':'true','includeItemsFromAllDrives':'true'}
   if folder['page']:params['pageToken']=folder['page']
-  r=client.get(API,params=params);r.raise_for_status();payload=r.json()
+  r=client.get(API,params=params)
+  if folder['id'] in ROOTS:
+   with core().db() as c:
+    access=get(c,'folder_access',{});access[folder['id']]={'status':r.status_code,'at':time.time()};put(c,'folder_access',access)
+  if r.status_code in (403,404):
+   with core().db() as c:c.execute('UPDATE research_drive_folders SET checked=? WHERE id=?',(time.time(),folder['id']))
+   continue
+  r.raise_for_status();payload=r.json()
   with core().db() as c:
    for f in payload.get('files',[]):
     if f['mimeType']==FOLDER:

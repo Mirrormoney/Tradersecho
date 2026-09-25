@@ -160,3 +160,6 @@ def test_server_query_filters_only_pdf_modified_time():
  assert "modifiedTime >= '2026-09-14T00:00:00Z'" in query
  assert "(mimeType='application/vnd.google-apps.folder' or (mimeType='application/pdf' and modifiedTime" in query
  assert "trashed=false" in query
+
+def test_second_approved_root_descendant_allowed():
+ with client({'pdf':{'parents':['second']},'second':{'parents':[d.ROOTS[1]]}}) as c:assert d.under_root(c,'pdf')

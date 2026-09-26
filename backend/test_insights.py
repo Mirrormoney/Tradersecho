@@ -34,3 +34,27 @@ def test_beneficiary_links_and_sources():
   assert b['ticker'] in tickers
   assert b['source'] in sources
   assert b['why'] and b['watch'] and b['timing'] and b['page']
+
+def test_all_topics_private_and_complete(monkeypatch):
+ import json
+ from pathlib import Path
+ tickers={r['ticker'] for r in json.loads(Path(__file__).with_name('stock_universe.json').read_text())}
+ class Core:
+  def account(self,request):return {'demo':False,'role':request.headers.get('test-role','member')}
+ monkeypatch.setattr(community,'core',lambda:Core())
+ app=FastAPI();app.include_router(insights.router);client=TestClient(app)
+ assert client.get('/api/admin/insights').status_code==403
+ listing=client.get('/api/admin/insights',headers={'test-role':'admin'})
+ assert listing.headers['cache-control']=='private, no-store'
+ assert len(listing.json())==7
+ for slug,a in insights.ARTICLES.items():
+  path='/api/admin/insights/'+slug
+  assert client.get(path).status_code==403
+  assert client.get(path,headers={'test-role':'admin'}).status_code==200
+  assert client.get('/api/insights/'+slug).status_code==404
+  refs={s['id'] for s in a['sources']}
+  assert len(a['timeline'])>=2 and a['intro'] and a['questions']
+  for b in a['beneficiaries']:
+   assert b['ticker'] in tickers and b['source'] in refs
+  for event in a['timeline']:assert event['source'] in refs
+ assert client.get('/api/admin/insights/missing',headers={'test-role':'admin'}).status_code==404

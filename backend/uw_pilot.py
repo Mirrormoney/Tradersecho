@@ -335,3 +335,18 @@ def public_signals(response:Response):
     rows.sort(key=lambda r:(-(r['activity'] if r['activity'] is not None else -1),r['ticker']))
     response.headers['Cache-Control']='public, max-age=60, s-maxage=120'
     return dict(stocks=rows,scope='3-stock preview',server_at=now)
+
+
+@router.get('/api/admin/signal-lab-overview')
+def admin_signal_overview(request:Request,response:Response):
+    staff(request,owner=True)
+    from .signal_lab import saved
+    s=core();now=time.time()
+    with s.db() as c:panels=saved(c)['stocks']
+    rows=[]
+    for panel in panels:
+        if panel['ticker'] not in s.CATALOG:continue
+        axes=[{k:a.get(k) for k in ('name','score','strength','direction','state','reason')} for a in panel['axes']]
+        rows.append(dict(ticker=panel['ticker'],name=s.CATALOG[panel['ticker']][0],axes=axes,observed=panel['observed'],stale=now-panel['observed']>1200))
+    response.headers['Cache-Control']='private, no-store'
+    return dict(stocks=rows,server_at=now)

@@ -16,3 +16,17 @@ def test_public_response_strips_private_provider_data(monkeypatch):
  assert all('details' not in a for a in row['axes'])
  assert row['stale'] and row['activity']==65
  assert 'public' in response.headers['Cache-Control']
+
+def test_admin_overview_keeps_expanded_coverage_private(monkeypatch):
+ @contextmanager
+ def db():yield object()
+ calls=[]
+ monkeypatch.setattr(uw_pilot,'staff',lambda request,owner=False:calls.append(owner))
+ monkeypatch.setattr(uw_pilot,'core',lambda:SimpleNamespace(db=db,CATALOG={'NVDA':('NVIDIA',),'AVGO':('Broadcom',)}))
+ axes=[dict(name=str(i),score=None,strength=None,details={'raw':'private'}) for i in range(5)]
+ monkeypatch.setattr(signal_lab,'saved',lambda c:{'stocks':[dict(ticker=t,observed=1,axes=axes) for t in ('NVDA','AVGO','OUTSIDE')]})
+ response=Response();result=uw_pilot.admin_signal_overview(object(),response)
+ assert calls==[True]
+ assert [r['ticker'] for r in result['stocks']]==['NVDA','AVGO']
+ assert response.headers['Cache-Control']=='private, no-store'
+ assert all('details' not in a for r in result['stocks'] for a in r['axes'])

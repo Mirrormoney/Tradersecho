@@ -20,6 +20,7 @@ def pilot(tmp_path,monkeypatch):
         c.execute('CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT)');u.migrate(c)
     s=SimpleNamespace(db=db,CATALOG={'NVDA':('NVIDIA','Semiconductors')})
     monkeypatch.setattr(u,'core',lambda:s);monkeypatch.setattr(u.time,'sleep',lambda n:None)
+    monkeypatch.setattr(u,'fast_tickers',lambda c,catalog,now:list(catalog)[:20])
     for key in ['UW_API_KEY','UW_PILOT_ENABLED','UW_PRIVATE_EVALUATION_APPROVED']:monkeypatch.delenv(key,raising=False)
     return s
 
@@ -34,14 +35,15 @@ def test_partial_failure_continues_and_deduplicates_tick(pilot,monkeypatch):
     def handler(request):
         calls.append(request.url.path)
         if 'ohlc' in request.url.path:return httpx.Response(500)
+        if 'option-trades' in request.url.path:return httpx.Response(200,json={'data':[]})
         return httpx.Response(200,json={'data':[{'tape_time':'2026-09-24T14:59:00Z','net_call_premium':'12','net_put_premium':'-4'}]},headers={'x-uw-daily-req-count':'2','x-uw-token-req-limit':'40000'})
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        assert u.run(client,NOW)=={'state':'complete','completed':1,'failed':1}
+        assert u.run(client,NOW)=={'state':'complete','completed':2,'failed':2}
         assert u.run(client,NOW+60)['completed']==0
-    assert len(calls)==2
+    assert len(calls)==4
     with pilot.db() as c:
         assert c.execute('SELECT COUNT(*) FROM uw_pilot_history').fetchone()[0]==1
-        assert c.execute('SELECT reserved FROM uw_pilot_usage').fetchone()[0]==2
+        assert c.execute('SELECT reserved FROM uw_pilot_usage').fetchone()[0]==4
 
 def test_rate_limit_pauses_without_retries(pilot,monkeypatch):
     enable(monkeypatch)
@@ -144,3 +146,51 @@ def test_expanded_history_scope_keeps_public_focus_small():
  assert set(u.HISTORY_FOCUS)<=set(u.PILOT)
  assert u.FOCUS==('NVDA','AMD','MU')
  assert set(u.HISTORY_FOCUS)-set(u.FOCUS)=={'AVGO','MSFT','META','AMZN','GOOGL','TSM','ANET','MRVL','ORCL','RMBS'}
+
+
+def test_full_universe_eligibility_and_refresh_cadences():
+    names=[f'T{i:03}' for i in range(363)]
+    fast=names[:20]
+    latest={(t,k):NOW for t in names for k in (*u.KINDS,'filtered_options','history')}
+    assert u.collection_due(names,fast,latest,NOW+60)==[]
+    due=u.collection_due(names,fast,latest,NOW+600)
+    assert len(due)==60 and {t for t,k in due}==set(fast)
+    due=u.collection_due(names,fast,latest,NOW+3600)
+    assert len(due)==363*3 and {t for t,k in due}==set(names)
+    promoted=u.collection_due(names,[names[-1]],latest,NOW+600)
+    assert {t for t,k in promoted}=={names[-1]}
+
+
+def test_work_rotation_preserves_fast_background_and_history():
+    names=[f'T{i:03}' for i in range(363)]
+    due=u.collection_due(names,names[:20],{},NOW)
+    assert len(due)==363*4 and len(set(due))==len(due)
+    assert sum(k=='history' for t,k in due[:8])==1
+    assert sum(t in names[:20] and k!='history' for t,k in due[:8])==2
+    latest={job:NOW for job in due[:80]}
+    continued=u.collection_due(names,names[:20],latest,NOW+120)
+    assert not set(due[:80]) & set(continued)
+    assert set(due[80:])==set(continued)
+
+
+def test_non_pilot_stock_receives_all_datasets(pilot,monkeypatch):
+    enable(monkeypatch)
+    pilot.CATALOG={'NEW':('New covered name','Software')}
+    calls=[]
+    def handler(r):
+        calls.append(r)
+        return httpx.Response(200,json={'data':[]})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert u.run(client,NOW)['completed']==4
+    assert any('/stock/NEW/' in r.url.path for r in calls)
+    assert any(r.url.params.get('ticker_symbol')=='NEW' for r in calls)
+    with pilot.db() as c:
+        assert u.get(c,'collection_scope')['eligible_count']==1
+        assert not u.get(c,'history_price_v1_NEW',False)
+
+
+def test_provider_lower_allowance_is_respected(pilot,monkeypatch):
+    enable(monkeypatch)
+    with pilot.db() as c:c.execute('INSERT INTO uw_pilot_usage VALUES(?,?,?,?)',(u.quota_day(NOW),30000,30000,30000))
+    with httpx.Client(transport=httpx.MockTransport(lambda r:pytest.fail('provider cap bypass'))) as client:
+        assert u.run(client,NOW)['state']=='daily_limit'

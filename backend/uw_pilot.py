@@ -18,6 +18,43 @@ KINDS={'candles':'ohlc/10m','net_premium':'net-prem-ticks'}
 FOCUS=('NVDA','AMD','MU')
 HISTORY_FOCUS=FOCUS+('AVGO','MSFT','META','AMZN','GOOGL','TSM','ANET','MRVL','ORCL','RMBS')
 
+def fast_tickers(c,catalog,now):
+    """Reuse saved X measurements; never buy extra X requests for prioritization."""
+    cached=get(c,'fast_universe',{})
+    if cached.get('slot')==int(now//600):
+        return [t for t in cached.get('tickers',[]) if t in catalog][:20]
+    try:
+        from .live_collection import intraday_rows
+        ranked=[r['ticker'] for r in intraday_rows(now) if r.get('state')=='measured' and r['ticker'] in catalog]
+        source='intraday'
+    except Exception:
+        ranked=cached.get('tickers',[]);source='last_available'
+    names=list(dict.fromkeys(t for t in ranked+list(PILOT) if t in catalog))[:20]
+    put(c,'fast_universe',{'slot':int(now//600),'tickers':names,'source':source})
+    return names
+
+def collection_due(tickers,fast,latest,now):
+    """Interleave active names, the wider universe and daily history fairly.
+
+    Unfinished jobs remain due next tick. No fixed pilot membership excludes a
+    covered stock, and fast-lane demand cannot starve background history.
+    """
+    lanes=[[],[],[]];fast=set(fast)
+    midnight=datetime.fromtimestamp(now,NY).replace(hour=0,minute=0,second=0,microsecond=0).timestamp()
+    for ticker in tickers:
+        cadence=600 if ticker in fast else 3600
+        for kind in (*KINDS,'filtered_options','history'):
+            at=latest.get((ticker,kind),0)
+            cutoff=midnight if kind=='history' else int(now//cadence)*cadence
+            if at>=cutoff:continue
+            lanes[2 if kind=='history' else 0 if ticker in fast else 1].append((ticker,kind))
+    for lane in lanes:lane.sort(key=lambda job:(latest.get(job,0),list((*KINDS,'filtered_options','history')).index(job[1]),job[0]))
+    result=[]
+    while any(lanes):
+        for lane,count in zip(lanes,(2,5,1)):
+            result.extend(lane[:count]);del lane[:count]
+    return result
+
 def migrate(c):
     c.executescript('''
     CREATE TABLE IF NOT EXISTS uw_pilot_latest(ticker TEXT,kind TEXT,fetched_at REAL,data_at REAL,state TEXT,error TEXT,payload TEXT,PRIMARY KEY(ticker,kind));
@@ -147,8 +184,8 @@ def run(client=None,now=None):
     now=now or time.time();s=core();flags=configured()
     if not all(flags.values()):return {'state':'setup_required',**flags}
     if not session_open(now):return {'state':'outside_session'}
-    # Basic pilot limited to twenty in-universe stocks. Expand only after validation.
-    tickers=[t for t in PILOT if t in s.CATALOG]
+    # All active covered stocks are eligible, including future universe additions.
+    tickers=sorted(s.CATALOG)
     token=secrets.token_hex(12)
     with s.db() as c:
         migrate(c)
@@ -157,20 +194,17 @@ def run(client=None,now=None):
         if get(c,'lease',{}).get('until',0)>now:return {'state':'already_running'}
         put(c,'lease',{'token':token,'until':now+240})
         latest={(r['ticker'],r['kind']):r['fetched_at'] for r in c.execute('SELECT ticker,kind,fetched_at FROM uw_pilot_latest')}
-        upgrade_history={t for t in HISTORY_FOCUS if not get(c,'history_price_v1_'+t,False)}
-    due=sorted([(t,k) for t in tickers for k in KINDS if latest.get((t,k),0)<int(now//600)*600],key=lambda x:latest.get(x,0))[:40]
-    extras=[(t,k) for t in HISTORY_FOCUS if t in s.CATALOG for k in ('history','filtered_options') if (k=='history' and t in upgrade_history) or latest.get((t,k),0)<(datetime.fromtimestamp(now,NY).replace(hour=0,minute=0,second=0,microsecond=0).timestamp() if k=='history' else int(now//600)*600)]
-    # Refresh the full price benchmark basket before paginated options work.
-    # Other work remains oldest-first so continuation does not starve added names.
-    due=sorted(extras+due,key=lambda item:(0 if item[1]=='candles' else 1,latest.get(item,0)))
+        fast=fast_tickers(c,s.CATALOG,now)
+        put(c,'collection_scope',{'eligible_count':len(tickers),'fast_tickers':fast,'fast_seconds':600,'background_seconds':3600})
+    due=collection_due(tickers,fast,latest,now)
     own=client is None
-    started=time.monotonic();done=0;failures=0;state='complete'
+    started=time.monotonic();done=0;failures=0;state='complete';updated=set()
     try:
         if own:
             context=ssl.create_default_context();context.load_default_certs()
             client=httpx.Client(timeout=8,verify=context,headers={'Authorization':'Bearer '+os.environ['UW_API_KEY'],'Accept':'application/json'})
         for ticker,kind in due:
-            if time.monotonic()-started>150:state='continued_next_tick';break
+            if time.monotonic()-started>90:state='continued_next_tick';break
             with s.db() as c:
                 c.execute('BEGIN IMMEDIATE')
                 day=quota_day(now)
@@ -205,7 +239,7 @@ def run(client=None,now=None):
                         gathered.extend(fresh);seen.update(r['id'] for r in fresh)
                         if len(batch)<500:break
                         oldest=min((timestamp(r.get('executed_at')) or now for r in batch if isinstance(r,dict)),default=now)
-                        if not fresh or oldest>=cursor or page==23 or time.monotonic()-started>140:
+                        if not fresh or oldest>=cursor or page==23 or time.monotonic()-started>80:
                             partial=True;break
                         # Overlap the boundary millisecond; dedup IDs so equal-time
                         # trades are not silently dropped by an exclusive cursor.
@@ -233,7 +267,7 @@ def run(client=None,now=None):
             data_at=values[-1]['at'] if values else None
             status='error' if error else 'empty' if not values else 'partial' if kind=='filtered_options' and values[0]['partial'] else 'ready' if kind=='history' else 'stale' if now-data_at>1200 else 'ready'
             with s.db() as c:
-                if kind=='history':put(c,'history_price_v1_'+ticker,True)
+                if kind=='history' and values and not error:put(c,'history_price_v1_'+ticker,True)
                 c.execute('INSERT INTO uw_pilot_latest(ticker,kind,fetched_at,data_at,state,error,payload) VALUES(?,?,?,?,?,?,?) ON CONFLICT(ticker,kind) DO UPDATE SET fetched_at=excluded.fetched_at,data_at=excluded.data_at,state=excluded.state,error=excluded.error,payload=excluded.payload',
                           (ticker,kind,now,data_at,status,error,json.dumps(values)))
                 # Save each source interval once, not a copy of the whole day on
@@ -243,23 +277,29 @@ def run(client=None,now=None):
                 if http_status in (401,403,429):
                     put(c,'cooldown',now+(3600 if http_status!=429 else 900));state='provider_paused'
             if error:failures+=1
-            else:done+=1
+            else:
+                done+=1
+                if values and kind=='filtered_options':updated.add(ticker)
             if state=='provider_paused':break
             time.sleep(1.05) # At most about 57 calls/min, below the documented client default.
         with s.db() as c:
             c.execute('DELETE FROM uw_pilot_history WHERE fetched_at<?',(now-45*86400,))
             put(c,'last_run',{'at':now,'state':state,'completed':done,'failed':failures})
-        if HISTORY_FOCUS:
+        if updated:
             # Independent evaluation failure must never stop collection or other workers.
             try:
                 from .signal_lab import record
                 with s.db() as c:
                     samples={}
-                    for r in c.execute('SELECT ticker,kind,payload FROM uw_pilot_latest'):
-                        if r['ticker'] in PILOT:samples.setdefault(r['ticker'],{})[r['kind']]=json.loads(r['payload'])
+                    selected=sorted(updated)
+                    # Compact candles preserve sector peers across the universe;
+                    # large historical/flow payloads are read only for scored names.
+                    sql='SELECT ticker,kind,payload FROM uw_pilot_latest WHERE ticker IN ('+','.join('?' for _ in selected)+') OR kind=\'candles\''
+                    for r in c.execute(sql,selected):
+                        if r['ticker'] in s.CATALOG:samples.setdefault(r['ticker'],{})[r['kind']]=json.loads(r['payload'])
                     # Timestamp the decision after ingestion, not at worker start.
                     # X/research that arrived during collection was not known earlier.
-                    record(c,samples,s.CATALOG,HISTORY_FOCUS,time.time())
+                    record(c,samples,s.CATALOG,sorted(updated),time.time())
                     put(c,'scoring',{'at':now,'state':'ready'})
             except Exception as exc:
                 with s.db() as c:put(c,'scoring',{'at':now,'state':'evaluation_error','error_type':type(exc).__name__})
@@ -307,7 +347,7 @@ def overview(request:Request):
     with s.db() as c:
         migrate(c)
         rows=[];samples={}
-        for record in c.execute('SELECT * FROM uw_pilot_latest ORDER BY ticker,kind'):
+        for record in c.execute('SELECT * FROM uw_pilot_latest WHERE ticker IN ('+','.join('?' for _ in PILOT)+') ORDER BY ticker,kind',PILOT):
             item=dict(record);data=json.loads(item.pop('payload') or '[]')
             if item['ticker'] not in PILOT:continue
             if item['ticker'] in ('NVDA','AMD','MU'):samples.setdefault(item['ticker'],{})[item['kind']]=data
@@ -317,7 +357,7 @@ def overview(request:Request):
         usage=c.execute('SELECT * FROM uw_pilot_usage WHERE day=?',(quota_day(now),)).fetchone()
         from .signal_lab import saved
         return {**configured(),'server_at':now,'session_open':session_open(now),'lab':saved(c),'scoring':get(c,'scoring'),'stocks':[stock_measurements(t,samples.get(t,{}),now) for t in ('NVDA','AMD','MU') if t in s.CATALOG],'rows':rows,'usage':dict(usage) if usage else None,'last_run':get(c,'last_run'),
-                'tickers':[t for t in PILOT if t in s.CATALOG],'local_daily_cap':32000,'scores_ready':False}
+                'tickers':sorted(s.CATALOG),'collection_scope':get(c,'collection_scope',{'eligible_count':len(s.CATALOG),'fast_seconds':600,'background_seconds':3600}),'local_daily_cap':32000,'scores_ready':False}
 
 
 @router.get('/api/signal-lab')

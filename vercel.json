@@ -169,7 +169,7 @@
     },
     {
       "path": "/api/cron/uw-pilot",
-      "schedule": "*/10 * * * *"
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/cron/referrals",

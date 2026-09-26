@@ -281,7 +281,8 @@ def record(c,samples,catalog,focus,now):
         c.execute('INSERT OR IGNORE INTO signal_lab_snapshots(ticker,slot,version,observed,price_at,price,payload) VALUES(?,?,?,?,?,?,?)',
                   (p['ticker'],int(now//600),VERSION,now,p['price_at'],p['price'],json.dumps(p)))
     # First known close at least an hour after observation, same session only.
-    for row in c.execute('SELECT ticker,slot,version,observed,price_at,price FROM signal_lab_snapshots WHERE outcome IS NULL AND observed<=? AND observed>?',(now-3600,now-7*86400)).fetchall():
+    outcome_tickers=list(focus) or ['']
+    for row in c.execute('SELECT ticker,slot,version,observed,price_at,price FROM signal_lab_snapshots WHERE ticker IN ('+','.join('?' for _ in outcome_tickers)+') AND outcome IS NULL AND observed<=? AND observed>?',(*outcome_tickers,now-3600,now-7*86400)).fetchall():
         invalid=not row['price'] or not row['price_at'] or row['observed']-row['price_at']>1200
         if invalid or datetime.fromtimestamp(row['observed'],NY).date()<datetime.fromtimestamp(now,NY).date():
             c.execute('UPDATE signal_lab_snapshots SET outcome=? WHERE ticker=? AND slot=? AND version=? AND outcome IS NULL',(json.dumps({'state':'unavailable','reason':'Stale entry' if invalid else 'No complete same-session outcome captured'}),row['ticker'],row['slot'],row['version']))

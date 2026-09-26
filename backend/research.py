@@ -578,3 +578,44 @@ def ticker_research(ticker:str,request:Request):
         docs.append({'id':row['id'],'model':row['model'],**result})
     docs.sort(key=lambda d:d.get('report_date') or '',reverse=True)
     return {'documents':docs[:10]}
+
+
+@router.get('/api/admin/research-specmail-check')
+def specmail_check(request:Request):
+    """Owner-only read probe. Return schema/lengths, never keys or private message bodies."""
+    secret=os.getenv('CRON_SECRET','')
+    if not secret or not hmac.compare_digest(request.headers.get('authorization',''),'Bearer '+secret):
+        staff(request,owner=True)
+    if os.getenv('VERCEL_ENV')!='production':raise HTTPException(403,'Production only')
+    key=os.getenv('RESEARCH_SPECMAIL_READ_KEY','').strip()
+    if not key:return {'configured':False}
+    base='https://thecleanestsetup.com'
+    try:
+        with httpx.Client(timeout=20,follow_redirects=False,headers={'X-Read-Key':key}) as client:
+            r=client.get(base+'/api/admin/specmail',params={'limit':1})
+            result={'configured':True,'list_http_status':r.status_code}
+            if r.status_code!=200:return result
+            value=r.json()
+            result['list_fields']=list(value) if isinstance(value,dict) else ['array']
+            rows=value if isinstance(value,list) else next((v for v in value.values() if isinstance(v,list)),[])
+            result['returned_messages']=len(rows)
+            if not rows:return result
+            row=rows[0]
+            if not isinstance(row,dict):return result
+            result['list_item_fields']=list(row)
+            ident=row.get('id')
+            if ident is None:return result
+            r=client.get(base+'/api/admin/specmail-msg',params={'id':str(ident)})
+            result['message_http_status']=r.status_code
+            if r.status_code==200:
+                msg=r.json()
+                def shape(v,depth=0):
+                    if depth>3:return type(v).__name__
+                    if isinstance(v,dict):return {k:shape(x,depth+1) for k,x in v.items()}
+                    if isinstance(v,list):return {'count':len(v),'item_schema':shape(v[0],depth+1) if v else None}
+                    if isinstance(v,str):return {'type':'string','characters':len(v)}
+                    return type(v).__name__
+                result['message_schema']=shape(msg)
+            return result
+    except (httpx.HTTPError,ValueError):
+        return {'configured':True,'state':'connection_or_response_error'}

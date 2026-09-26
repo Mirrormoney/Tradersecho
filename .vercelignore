@@ -87,3 +87,4 @@ work/
 
 !backend/signal_evergreen_promo.png
 !backend/insights_evergreen_promo.png
+!backend/signal_history.py

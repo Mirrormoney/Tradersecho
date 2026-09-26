@@ -350,3 +350,14 @@ def admin_signal_overview(request:Request,response:Response):
         rows.append(dict(ticker=panel['ticker'],name=s.CATALOG[panel['ticker']][0],axes=axes,observed=panel['observed'],stale=now-panel['observed']>1200))
     response.headers['Cache-Control']='private, no-store'
     return dict(stocks=rows,server_at=now)
+
+@router.get('/api/admin/signal-lab-detail/{ticker}')
+def admin_signal_detail(ticker:str,request:Request,response:Response):
+    staff(request,owner=True)
+    s=core();ticker=ticker.upper()
+    if ticker not in s.CATALOG:raise HTTPException(404,'Stock is not in the covered universe')
+    from .signal_history import detail
+    with s.db() as c:result=detail(c,ticker,time.time())
+    if result is None:raise HTTPException(404,'No saved Signal Lab observations for this stock')
+    response.headers['Cache-Control']='private, max-age=60'
+    return {**result,'name':s.CATALOG[ticker][0]}

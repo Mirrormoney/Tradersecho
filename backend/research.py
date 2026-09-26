@@ -592,8 +592,16 @@ def specmail_check(request:Request):
     base='https://thecleanestsetup.com'
     try:
         with httpx.Client(timeout=20,follow_redirects=False,headers={'X-Read-Key':key}) as client:
-            r=client.get(base+'/api/admin/specmail',params={'limit':1})
-            result={'configured':True,'list_http_status':r.status_code}
+            r=client.get(base+'/api/admin/specmail')
+            result={'configured':True,'list_http_status':r.status_code,'content_type':r.headers.get('content-type'),'server':r.headers.get('server'),'auth_method':'X-Read-Key','endpoint':'/api/admin/specmail'}
+            if r.status_code!=200:
+                body=r.text.strip()
+                result['response_kind']='plain_not_found' if body=='Not found' else 'html' if body.lower().startswith(('<!doctype html','<html')) else 'other'
+                if body=='Not found':result['error_body']='Not found'
+                try:
+                    error=r.json()
+                    if isinstance(error,dict) and error.get('error') in ('missing','auth','unauthorized'):result['error_code']=error['error']
+                except ValueError:pass
             if r.status_code!=200:return result
             value=r.json()
             result['list_fields']=list(value) if isinstance(value,dict) else ['array']

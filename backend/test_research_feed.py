@@ -21,17 +21,20 @@ class FeedTests(unittest.TestCase):
  def test_uncertain_events_and_own_comments_preserved(self):
   a,b=self.finding(),self.finding(True);a['event_key']=None;b['event_key']=None
   self.assertEqual(len(deduplicate([a,b])),2)
- def test_free_receives_only_two_rows(self):
-  r=restrict_feed([{'ticker':'AES'},{'ticker':'FLNC'}],[{'ticker':'ARRY'}],False)
-  self.assertEqual(len(r['rows']),2);self.assertEqual(r['other'],[])
- def test_free_fallback_only_two(self):
-  r=restrict_feed([],[{'ticker':'AES'},{'ticker':'ARRY'}],False)
-  self.assertEqual(len(r['other']),2)
- def test_two_row_limit_spans_sections(self):
-  r=restrict_feed([{'ticker':'AES'}],[{'ticker':'ARRY'},{'ticker':'FLNC'}],False)
+ def test_free_receives_only_three_rows(self):
+  rows=[{'ticker':t} for t in ['AES','FLNC','ARRY','MU']]
+  r=restrict_feed(rows,[{'ticker':'NVDA'}],False)
+  self.assertEqual(r['rows'],rows[:3]);self.assertEqual(r['other'],[])
+  self.assertTrue(r['locked'])
+ def test_free_fallback_only_three(self):
+  rows=[{'ticker':t} for t in ['AES','FLNC','ARRY','MU']]
+  r=restrict_feed([],rows,False)
+  self.assertEqual(r['other'],rows[:3])
+ def test_three_row_limit_spans_sections(self):
+  r=restrict_feed([{'ticker':'AES'}],[{'ticker':'ARRY'},{'ticker':'FLNC'},{'ticker':'MU'}],False)
   self.assertEqual(r['rows'],[{'ticker':'AES'}])
-  self.assertEqual(r['other'],[{'ticker':'ARRY'}])
-  self.assertEqual(r['total'],3)
+  self.assertEqual(r['other'],[{'ticker':'ARRY'},{'ticker':'FLNC'}])
+  self.assertEqual(r['total'],4)
  def test_premium_access_and_demo(self):
   self.assertTrue(premium({'plan':'premium'}));self.assertFalse(premium({'plan':'free'}));self.assertFalse(premium({'plan':'premium','demo':True}))
  def test_no_internal_keys(self):
@@ -78,11 +81,11 @@ def test_published_ticker_filter_happens_in_database(monkeypatch):
 def test_cached_feed_still_restricts_each_user(monkeypatch):
  from backend import research_feed as f
  from types import SimpleNamespace
- rows=[{'ticker':x} for x in ['PANW','MU','AES']]
+ rows=[{'ticker':x} for x in ['PANW','MU','AES','ARRY']]
  monkeypatch.setattr(f,'shared_overview',lambda:(rows,[],123,'2026-09-23'))
  monkeypatch.setattr(f,'core',lambda:SimpleNamespace(account=lambda req:{'plan':req}))
- assert len(f.feed('premium')['rows'])==3
- assert len(f.feed('free')['rows'])==2
+ assert len(f.feed('premium')['rows'])==4
+ assert len(f.feed('free')['rows'])==3
  assert f.feed('free')['locked']
 
 

@@ -74,9 +74,9 @@ def order_research(items,rankings,catalog,today):
     return [row(t,True) for t in selected],[row(t) for t in recent if t not in selected]
 
 def restrict_feed(ranked,other,full):
-    # Enforce two preview stocks across both sections; hidden research never leaves the API.
-    preview_rows=ranked[:2]
-    preview_other=other[:max(0,2-len(preview_rows))]
+    # Enforce three preview stocks across both sections; hidden research never leaves the API.
+    preview_rows=ranked[:3]
+    preview_other=other[:max(0,3-len(preview_rows))]
     return {'rows':ranked if full else preview_rows,'other':other if full else preview_other,'locked':not full,'total':len(ranked)+len(other),'featured_total':len(ranked)}
 
 _feed_cache=None

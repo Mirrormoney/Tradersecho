@@ -8,13 +8,13 @@ def test_campaign_exact_dates_count_and_unique_captions():
     found=[];captions=[]
     for day in range(24,31):
         slots=p.signal_slots(ts(day,10,30))+p.signal_slots(ts(day))
-        assert len(slots)==(1 if day<28 else 2)
+        assert len(slots)==1
         for slot in slots:
             found.append(slot['key'])
             text=p.prepare_signal(slot,slot['at'])['text'];captions.append(text)
             assert len(re.sub(r'https://\S+','x'*23,text))<=280
-    assert len(found)==len(set(found))==10
-    assert len(set(captions))==10
+    assert len(found)==len(set(found))==7
+    assert len(set(captions))==7
     assert not p.signal_slots(ts(23))
     assert not p.signal_slots(ts(1,month=10))
     assert not p.signal_slots(ts(24,14,59))

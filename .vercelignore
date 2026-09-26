@@ -84,3 +84,6 @@ work/
 !backend/insight_updates.py
 
 !backend/insights_launch_promo.png
+
+!backend/signal_evergreen_promo.png
+!backend/insights_evergreen_promo.png

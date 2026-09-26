@@ -213,9 +213,9 @@ def run(now=None,manual_promo=False,manual_research=False):
                     n=c.execute("SELECT COUNT(*) FROM social_editions WHERE id LIKE 'promo:%' AND status='published'").fetchone()[0]
                 p=social_promos.prepare(n%len(social_promos.COPY));image=social_promos.artwork(p)
             elif slot['edition']=='signal_launch':
-                p=social_promos.prepare_signal(slot,now);image=social_promos.signal_artwork()
+                p=social_promos.prepare_signal(slot,now);image=social_promos.signal_artwork(now)
             elif slot['edition']=='insights_launch':
-                p=social_promos.prepare_insights(slot,now);image=social_promos.insights_artwork()
+                p=social_promos.prepare_insights(slot,now);image=social_promos.insights_artwork(now)
             elif slot['edition']=='research':
                 p=social_research.prepare(now,approved=manual_research);image=social_research.artwork(p)
             else:p=prepare(slot['edition'],now);image=card(p)

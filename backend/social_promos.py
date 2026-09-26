@@ -114,40 +114,47 @@ SIGNAL_COPY=(
     "A stock is trending. Do the other signals agree?\n\nCompare X activity, options pressure and broker commentary alongside price and volume.\n\nMore context. Your own conviction.",
 )
 
+LAUNCH_DATE=date(2026,10,1)
+
 def signal_slots(now):
     local=datetime.fromtimestamp(now,NY)
-    if not SIGNAL_START<=local.date()<=SIGNAL_END:return []
+    if local.date()<SIGNAL_START:return []
+    if local.date()>=LAUNCH_DATE and (local.date()-LAUNCH_DATE).days%2!=1:return []
+    at=local.replace(hour=15,minute=0,second=0,microsecond=0).timestamp()
+    if not 0<=now-at<3600:return []
     day=(local.date()-SIGNAL_START).days
-    times=[(15,0)] if day<4 else [(10,30),(15,0)]
-    result=[]
-    for i,(hour,minute) in enumerate(times):
-        at=local.replace(hour=hour,minute=minute,second=0,microsecond=0).timestamp()
-        if 0<=now-at<3600:
-            ordinal=day if day<4 else 4+(day-4)*2+i
-            result.append(dict(edition='signal_launch',at=at,key=f'signal_launch:{local.date().isoformat()}:{hour:02}{minute:02}',variant=ordinal%2))
-    return result
+    variant=day%2 if local.date()<LAUNCH_DATE else ((local.date()-LAUNCH_DATE).days//2)%2
+    return [dict(edition='signal_launch',at=at,key=f'signal_launch:{local.date().isoformat()}:1500',variant=variant)]
 
 def prepare_signal(slot,now):
     if slot not in signal_slots(now):raise ValueError('Signal Lab campaign is outside its approved slot')
     days=(date(2026,10,1)-datetime.fromtimestamp(now,NY).date()).days
-    text=SIGNAL_COPY[slot['variant']]+f"\n\nSignal Lab arrives October 1st. {days} day{'s' if days!=1 else ''} to go.\nhttps://tradersecho.com"
+    text=SIGNAL_COPY[slot['variant']]+(f"\n\nSignal Lab arrives October 1st. {days} day{'s' if days!=1 else ''} to go." if days>0 else "\n\nExplore Signal Lab.")+"\nhttps://tradersecho.com/signal-lab"
     if len(re.sub(r'https://\S+','x'*23,text))>280:raise ValueError('Signal Lab caption exceeds X limit')
-    return dict(edition='signal_launch',title='Signal Lab countdown',text=text,rows=[])
+    return dict(edition='signal_launch',title='Signal Lab countdown' if days>0 else 'Explore Signal Lab',text=text,rows=[])
 
-def signal_artwork():
-    return Path(__file__).with_name('signal_launch_promo.png').read_bytes()
+def signal_artwork(now=None):
+    evergreen=now is not None and datetime.fromtimestamp(now,NY).date()>=LAUNCH_DATE
+    return Path(__file__).with_name('signal_evergreen_promo.png' if evergreen else 'signal_launch_promo.png').read_bytes()
 
-# Approved one-time announcement, separate from the evergreen two-day rotation.
+# Approved daily feature campaign, alternating from October 1.
 INSIGHTS_COPY="From HBM to 800 VDC: understand what’s changing in AI infrastructure.\n\nExplore key developments, expected milestones and potential beneficiaries—all in one place.\n\nAI Insights Lab arrives October 1.\n\nhttps://tradersecho.com/ai-insights"
 
 def insights_slots(now):
-    at=datetime(2026,9,26,12,0,tzinfo=NY).timestamp()
-    return [dict(edition='insights_launch',at=at,key='insights_launch:2026-09-26:1200')] if 0<=now-at<3600 else []
+    local=datetime.fromtimestamp(now,NY)
+    if local.date()<date(2026,9,26):return []
+    if local.date()>=LAUNCH_DATE and (local.date()-LAUNCH_DATE).days%2!=0:return []
+    hour=12 if local.date()<LAUNCH_DATE else 15
+    at=local.replace(hour=hour,minute=0,second=0,microsecond=0).timestamp()
+    return [dict(edition='insights_launch',at=at,key=f'insights_launch:{local.date().isoformat()}:{hour:02}00')] if 0<=now-at<3600 else []
 
 def prepare_insights(slot,now):
     if slot not in insights_slots(now):raise ValueError('AI Insights announcement is outside its approved slot')
     if len(re.sub(r'https://\S+','x'*23,INSIGHTS_COPY))>280:raise ValueError('AI Insights caption exceeds X limit')
-    return dict(edition='insights_launch',title='AI Insights Lab arrives October 1',text=INSIGHTS_COPY,rows=[])
+    evergreen=datetime.fromtimestamp(now,NY).date()>=LAUNCH_DATE
+    text=INSIGHTS_COPY.replace('AI Insights Lab arrives October 1.','Explore AI Insights Lab.') if evergreen else INSIGHTS_COPY
+    return dict(edition='insights_launch',title='Explore AI Insights Lab' if evergreen else 'AI Insights Lab arrives October 1',text=text,rows=[])
 
-def insights_artwork():
-    return Path(__file__).with_name('insights_launch_promo.png').read_bytes()
+def insights_artwork(now=None):
+    evergreen=now is not None and datetime.fromtimestamp(now,NY).date()>=LAUNCH_DATE
+    return Path(__file__).with_name('insights_evergreen_promo.png' if evergreen else 'insights_launch_promo.png').read_bytes()

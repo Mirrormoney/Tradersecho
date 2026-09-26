@@ -1,3 +1,4 @@
+import {SignalBadge} from './SignalBadge.jsx'
 import {SignalStockDetail} from './SignalStockDetail.jsx'
 import React,{useEffect,useState} from 'react'
 import {api} from './api.js'
@@ -6,7 +7,7 @@ import {rankSignals} from './signalRanking.mjs'
 import './signal-overview.css'
 const number=v=>v==null?'—':Number(v.toFixed(1))
 function Total({stock}){return <><strong>{number(stock.total)}</strong><small>{stock.available===5?' / 500':` points · ${stock.available}/5 available`}</small></>}
-function Leaders({title,caption,rows,activity=false,onOpen}){return <section className="lab-leaders"><div className="section-head"><div><h2>{title}</h2><p className="muted">{caption}</p></div></div><div className="lab-leader-grid">{rows.slice(0,3).map((s,i)=><article className="panel lab-leader" key={s.ticker}><div className="section-head"><div><button className="lab-open-stock lab-tile-link" aria-label={`Open ${s.ticker} Signal Lab details`} onClick={()=>onOpen(s.ticker)}>${s.ticker}</button><small className="block muted">{s.name}</small></div><span className="signal-rank">0{i+1}</span></div><SignalRadar axes={s.axes}/><div className="lab-card-score">{activity?<><strong>{number(s.activity)}</strong><small> / 100 X activity</small></>:<Total stock={s}/>}</div><small className="muted">{s.available<5?'Partial coverage · ':''}{s.stale?'Last saved view':'Latest saved view'}</small></article>)}</div>{!rows.length&&<p className="muted">Waiting for saved scores.</p>}</section>}
+function Leaders({title,caption,rows,activity=false,onOpen}){return <section className="lab-leaders"><div className="section-head"><div><h2>{title}</h2><p className="muted">{caption}</p></div></div><div className="lab-leader-grid">{rows.slice(0,3).map((s,i)=><article className="panel lab-leader" key={s.ticker}><div className="section-head"><div><button className="lab-open-stock lab-tile-link" aria-label={`Open ${s.ticker} Signal Lab details`} onClick={()=>onOpen(s.ticker)}>${s.ticker}</button><small className="block muted">{s.name}</small></div><span className="signal-rank">0{i+1}</span></div><div className="lab-badged-radar"><SignalBadge candidate={s.candidate}/><SignalRadar axes={s.axes}/></div><div className="lab-card-score">{activity?<><strong>{number(s.activity)}</strong><small> / 100 X activity</small></>:<Total stock={s}/>}</div><small className="muted">{s.available<5?'Partial coverage · ':''}{s.stale?'Last saved view':'Latest saved view'}</small></article>)}</div>{!rows.length&&<p className="muted">Waiting for saved scores.</p>}</section>}
 export function SignalOverview(){
  const [selected,setSelected]=useState(null)
  const [data,setData]=useState(null),[error,setError]=useState(''),[query,setQuery]=useState(''),[sort,setSort]=useState('total')

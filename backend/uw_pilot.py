@@ -347,7 +347,7 @@ def admin_signal_overview(request:Request,response:Response):
     for panel in panels:
         if panel['ticker'] not in s.CATALOG:continue
         axes=[{k:a.get(k) for k in ('name','score','strength','direction','state','reason')} for a in panel['axes']]
-        rows.append(dict(ticker=panel['ticker'],name=s.CATALOG[panel['ticker']][0],axes=axes,observed=panel['observed'],stale=now-panel['observed']>1200))
+        rows.append(dict(ticker=panel['ticker'],name=s.CATALOG[panel['ticker']][0],candidate=panel.get('candidate'),axes=axes,observed=panel['observed'],stale=now-panel['observed']>1200))
     response.headers['Cache-Control']='private, no-store'
     return dict(stocks=rows,server_at=now)
 

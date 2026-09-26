@@ -197,7 +197,7 @@ def run(now=None,manual_promo=False,manual_research=False):
         if value(c,'social_paused',True) or not value(c,'social_label_confirmed',False):return {'state':'paused'}
         if c.execute("SELECT 1 FROM social_editions WHERE status IN ('uncertain','failed') LIMIT 1").fetchone():return {'state':'review_required'}
     result={'state':'ok','sent':0}
-    slots=due_slots(now)+social_promos.slots(now)+social_research.slots(now)+social_promos.signal_slots(now)+social_promos.insights_slots(now)
+    slots=[slot for slot in due_slots(now) if slot['edition']!='final']+social_promos.slots(now)+social_research.slots(now)+social_promos.signal_slots(now)+social_promos.insights_slots(now)
     if manual_research:
         slots=[{'edition':'research','at':now,'key':'research:'+datetime.fromtimestamp(now,NY).date().isoformat()}]
     if manual_promo:

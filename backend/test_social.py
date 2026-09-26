@@ -271,3 +271,15 @@ def test_monthly_worker_publishes_once(monkeypatch):
     assert social.run(now+300)['sent']==0
     with s.db() as c:assert c.execute("SELECT status FROM social_editions WHERE id='monthly:2026-10-01'").fetchone()[0]=='published'
     assert len(calls)==1
+
+
+def test_after_bell_disabled_without_changing_newsletter(monkeypatch):
+    now=setup(monkeypatch)
+    closing=datetime(2026,9,28,16,30,tzinfo=social.NY).timestamp()
+    assert any(s['edition']=='final' for s in social.due_slots(closing))
+    for module,name in [(social.social_promos,'slots'),(social.social_promos,'signal_slots'),(social.social_promos,'insights_slots'),(social.social_research,'slots')]:
+        monkeypatch.setattr(module,name,lambda now:[])
+    monkeypatch.setattr(social,'prepare',lambda *args:pytest.fail('Closing post must not be prepared'))
+    monkeypatch.setattr(social,'client',lambda *args:pytest.fail('No X request expected'))
+    result=social.run(closing)
+    assert result=={'state':'ok','sent':0}

@@ -7,7 +7,7 @@ import email,hashlib,hmac,imaplib,io,json,os,re,secrets,ssl,time
 from datetime import datetime,timedelta,timezone,date
 from email import policy
 import httpx
-from fastapi import APIRouter,HTTPException,Request
+from fastapi import APIRouter,HTTPException,Request,Response
 from pydantic import BaseModel,Field,ConfigDict
 from typing import Literal
 from .community import core,staff
@@ -581,8 +581,9 @@ def ticker_research(ticker:str,request:Request):
 
 
 @router.get('/api/admin/research-specmail-check')
-def specmail_check(request:Request):
+def specmail_check(request:Request,response:Response):
     """Owner-only read probe. Return schema/lengths, never keys or private message bodies."""
+    response.headers['Cache-Control']='private, no-store'
     secret=os.getenv('CRON_SECRET','')
     if not secret or not hmac.compare_digest(request.headers.get('authorization',''),'Bearer '+secret):
         staff(request,owner=True)

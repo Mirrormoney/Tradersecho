@@ -238,7 +238,7 @@ for topic in [{'slug': 'hbm',
            'practical answer.',
   'distinction': 'CoWoS, 3D stacking and photonic integration are different technologies. Capacity in one '
                  'process cannot automatically replace capacity in another.',
-  'summary': 'The useful milestones are customer qualification, manufacturing yield and usable outputâ€”not '
+  'summary': 'The useful milestones are customer qualification, manufacturing yield and usable output, not '
              'just factory announcements.',
   'sources': [{'id': 'tsm',
                'name': 'TSMC',

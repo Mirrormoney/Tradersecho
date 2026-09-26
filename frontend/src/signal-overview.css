@@ -6,3 +6,5 @@
 .lab-leader>.section-head{margin-bottom:4px}.lab-leader .signal-pentagon text{font-size:14px}
 
 .lab-overview table .lab-shape-heading{text-align:center}.lab-overview .lab-table-radar{text-align:center}.lab-table-radar .signal-pentagon{margin:0 auto}
+
+.lab-overview .lab-comparison{table-layout:fixed;width:100%;min-width:1020px}.lab-comparison .lab-rank-col{width:44px}.lab-comparison .lab-stock-col{width:165px}.lab-comparison .lab-shape-col{width:192px}.lab-comparison .lab-total-col{width:145px}.lab-overview .lab-comparison th,.lab-overview .lab-comparison td{padding-left:10px;padding-right:10px}.lab-overview .lab-stock-cell{white-space:normal;overflow:hidden}.lab-overview .lab-company-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;overflow-wrap:anywhere;line-height:1.45;margin-top:5px;max-width:145px}.lab-overview .lab-comparison .lab-table-radar{min-width:0;width:auto;padding:6px 8px}

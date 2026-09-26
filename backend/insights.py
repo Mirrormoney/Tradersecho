@@ -118,7 +118,8 @@ ARTICLE = {'slug': '800-vdc',
                     'why': 'The AWS power-rack integrator is considering STM as a second source alongside '
                            'Toshiba, seeking alternatives to its current SiC and silicon supplier.',
                     'watch': 'Qualification and a confirmed sourcing award. Evaluation alone does not establish '
-                             'future revenue.'},
+                             'future revenue.',
+                    'short_reason': 'Under evaluation as a second source for AWS power-rack semiconductors.'},
                    {'ticker': 'ETN',
                     'name': 'Eaton',
                     'stage': 'SST development',
@@ -129,7 +130,8 @@ ARTICLE = {'slug': '800-vdc',
                     'why': 'Goldman’s expert describes Eaton preparing SST customer samples using capabilities '
                            'from its Resilient Power acquisition.',
                     'watch': 'Sample delivery, customer qualification and production orders. The 2029 window is '
-                             'an industry forecast, not Eaton guidance.'},
+                             'an industry forecast, not Eaton guidance.',
+                    'short_reason': 'Developing solid-state transformers for next-generation datacenter power.'},
                    {'ticker': 'VRT',
                     'name': 'Vertiv',
                     'stage': 'Transition equipment',
@@ -140,7 +142,8 @@ ARTICLE = {'slug': '800-vdc',
                     'why': 'The expert identifies Vertiv’s medium-voltage UPS approach as an intermediate step '
                            'that removes power-conversion stages while retaining traditional technology.',
                     'watch': 'Customer adoption and orders for the intermediate design. It is not evidence of a '
-                             'confirmed full 800 VDC design win.'},
+                             'confirmed full 800 VDC design win.',
+                    'short_reason': 'Intermediate power-conversion equipment could support the transition.'},
                    {'ticker': 'SEDG',
                     'name': 'SolarEdge',
                     'stage': 'Longer-term opportunity',
@@ -151,9 +154,10 @@ ARTICLE = {'slug': '800-vdc',
                            'experience, initially targeting US datacenters.',
                     'watch': 'Safety, datacenter qualification and commercial wins. Goldman’s expert also flags '
                              'redundancy and field-service requirements as barriers to entry.',
-                    'also_source': 'gs'}],
+                    'also_source': 'gs',
+                    'short_reason': 'Applying DC power expertise to future 800 VDC and SST systems.'}],
  'beneficiary_context': 'Outside our covered universe: Edgewater identifies Infineon as the established '
-                        'SiC/CoolMOS supplier to the lead AWS power-rack integrator. The four covered names below '
+                        'SiC/CoolMOS supplier to the lead AWS power-rack integrator. The four covered names shown '
                         'represent different stages of opportunity, not confirmed winners or a return ranking.'}
 
 @router.get('/api/admin/insights/800-vdc')

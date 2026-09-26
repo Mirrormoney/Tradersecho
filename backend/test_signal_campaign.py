@@ -12,6 +12,7 @@ def test_campaign_exact_dates_count_and_unique_captions():
         for slot in slots:
             found.append(slot['key'])
             text=p.prepare_signal(slot,slot['at'])['text'];captions.append(text)
+            assert text.endswith('https://tradersecho.com')
             assert len(re.sub(r'https://\S+','x'*23,text))<=280
     assert len(found)==len(set(found))==7
     assert len(set(captions))==7

@@ -129,7 +129,7 @@ def signal_slots(now):
 def prepare_signal(slot,now):
     if slot not in signal_slots(now):raise ValueError('Signal Lab campaign is outside its approved slot')
     days=(date(2026,10,1)-datetime.fromtimestamp(now,NY).date()).days
-    text=SIGNAL_COPY[slot['variant']]+(f"\n\nSignal Lab arrives October 1st. {days} day{'s' if days!=1 else ''} to go." if days>0 else "\n\nExplore Signal Lab.")+"\nhttps://tradersecho.com/signal-lab"
+    text=SIGNAL_COPY[slot['variant']]+(f"\n\nSignal Lab arrives October 1st. {days} day{'s' if days!=1 else ''} to go." if days>0 else "\n\nExplore Signal Lab.")+("\nhttps://tradersecho.com" if days>0 else "\nhttps://tradersecho.com/signal-lab")
     if len(re.sub(r'https://\S+','x'*23,text))>280:raise ValueError('Signal Lab caption exceeds X limit')
     return dict(edition='signal_launch',title='Signal Lab countdown' if days>0 else 'Explore Signal Lab',text=text,rows=[])
 
@@ -152,7 +152,7 @@ def prepare_insights(slot,now):
     if slot not in insights_slots(now):raise ValueError('AI Insights announcement is outside its approved slot')
     if len(re.sub(r'https://\S+','x'*23,INSIGHTS_COPY))>280:raise ValueError('AI Insights caption exceeds X limit')
     evergreen=datetime.fromtimestamp(now,NY).date()>=LAUNCH_DATE
-    text=INSIGHTS_COPY.replace('AI Insights Lab arrives October 1.','Explore AI Insights Lab.') if evergreen else INSIGHTS_COPY
+    text=INSIGHTS_COPY.replace('AI Insights Lab arrives October 1.','Explore AI Insights Lab.') if evergreen else INSIGHTS_COPY.replace('https://tradersecho.com/ai-insights','https://tradersecho.com')
     return dict(edition='insights_launch',title='Explore AI Insights Lab' if evergreen else 'AI Insights Lab arrives October 1',text=text,rows=[])
 
 def insights_artwork(now=None):

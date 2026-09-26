@@ -1,6 +1,6 @@
 """Private topic starter. No public publication route or scheduled processing."""
 from fastapi import APIRouter, Request, Response, HTTPException
-from .community import staff
+from .community import staff, core
 router=APIRouter()
 ARTICLE = {'slug': '800-vdc',
  'title': '800 VDC: powering the next generation of AI datacenters',
@@ -633,4 +633,7 @@ def starter(slug: str, request: Request, response: Response):
     response.headers['Cache-Control']='private, no-store'
     if slug not in ARTICLES:
         raise HTTPException(404, 'Topic not found')
-    return ARTICLES[slug]
+    from .insight_updates import merge_updates
+    with core().db() as c:
+        rows=c.execute("SELECT result FROM research_documents WHERE status IN ('draft','published','no_match') AND result LIKE ? ORDER BY updated DESC LIMIT 100", ('%"topic": "'+slug+'"%',)).fetchall()
+    return merge_updates(ARTICLES[slug],rows)

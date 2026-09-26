@@ -80,3 +80,5 @@ work/
 !backend/referrals.py
 
 !backend/insights.py
+
+!backend/insight_updates.py

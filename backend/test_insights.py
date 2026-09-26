@@ -2,10 +2,18 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from . import insights, community
+import sqlite3
+from contextlib import contextmanager
+@contextmanager
+def empty_db():
+ c=sqlite3.connect(':memory:');c.execute('CREATE TABLE research_documents(result TEXT,status TEXT,updated REAL)')
+ try:yield c
+ finally:c.close()
 
 def test_topic_requires_staff_and_never_caches(monkeypatch):
  app=FastAPI();app.include_router(insights.router);client=TestClient(app)
  class Core:
+  db=staticmethod(empty_db)
   def account(self,request):return {'demo':False,'role':request.headers.get('test-role','member')}
  monkeypatch.setattr(community,'core',lambda:Core())
  for role in ('member','premium','founder'):
@@ -40,6 +48,7 @@ def test_all_topics_private_and_complete(monkeypatch):
  from pathlib import Path
  tickers={r['ticker'] for r in json.loads(Path(__file__).with_name('stock_universe.json').read_text())}
  class Core:
+  db=staticmethod(empty_db)
   def account(self,request):return {'demo':False,'role':request.headers.get('test-role','member')}
  monkeypatch.setattr(community,'core',lambda:Core())
  app=FastAPI();app.include_router(insights.router);client=TestClient(app)

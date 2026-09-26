@@ -631,9 +631,26 @@ def topics(request: Request, response: Response):
 def starter(slug: str, request: Request, response: Response):
     staff(request)
     response.headers['Cache-Control']='private, no-store'
+    return insight_data(slug)
+
+def insight_data(slug):
     if slug not in ARTICLES:
         raise HTTPException(404, 'Topic not found')
     from .insight_updates import merge_updates
     with core().db() as c:
         rows=c.execute("SELECT result FROM research_documents WHERE status IN ('draft','published','no_match') AND result LIKE ? ORDER BY updated DESC LIMIT 100", ('%"topic": "'+slug+'"%',)).fetchall()
     return merge_updates(ARTICLES[slug],rows)
+
+@router.get('/api/insights')
+def insight_previews(response:Response):
+ response.headers['Cache-Control']='public, max-age=60'
+ return [{'slug':a['slug'],'title':a['title'],'intro':a['intro']} for a in ARTICLES.values()]
+
+@router.get('/api/insights/{slug}')
+def member_insight(slug:str,request:Request,response:Response):
+ from .pro_access import require_pro
+ require_pro(request)
+ response.headers['Cache-Control']='private, no-store'
+ result=insight_data(slug)
+ result['editorial']='Source-dated research developments. Earlier forecasts are retained as new information arrives.'
+ return result

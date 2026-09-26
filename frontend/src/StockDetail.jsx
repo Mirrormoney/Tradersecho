@@ -1,5 +1,6 @@
 import {SignalRadar} from './SignalLab.jsx'
 import {StockActions} from './Engagement.jsx'
+import {ProLock} from './ProFeatures.jsx'
 import React,{useEffect,useState} from 'react'
 import {api} from './api.js'
 import {dualTime} from './time.js'
@@ -19,10 +20,10 @@ function MorePosts({rows,source,Posts}){
 }
 export function StockDetail({onBack,ticker,name,row,intraday,windowDays,asOf,coverageDays,source,user,refresh,posts,postsLoading,postsError,postOrder,setPostOrder,postFeed,setPostFeed,Posts,Spark,Sentiment,watchlist,toggleWatch}){
  const [signal,setSignal]=useState(null)
- useEffect(()=>{let active=true;api('/signal-lab').then(d=>{if(active)setSignal(d.stocks.find(s=>s.ticker===ticker)||null)}).catch(()=>{});return()=>{active=false}},[ticker,refresh])
+ useEffect(()=>{let active=true;setSignal(null);if(!user?.pro_access)return;api('/signal-lab/detail/'+encodeURIComponent(ticker)).then(d=>{if(active)setSignal(d)}).catch(()=>{});return()=>{active=false}},[ticker,refresh,user?.pro_access])
  const [research,setResearch]=useState([]),[researchError,setResearchError]=useState(''),[researchLoading,setResearchLoading]=useState(true)
  const staff=['owner','admin'].includes(user?.role)
- const canResearch=staff||user?.plan==='premium'
+ const canResearch=staff||['premium','pro'].includes(user?.plan)
  useEffect(()=>{let active=true;setResearch([]);setResearchError('');setResearchLoading(canResearch);if(!canResearch)return;api('/member-research/'+encodeURIComponent(ticker)).then(d=>{if(active){setResearch(d.documents||[]);setResearchError('');setResearchLoading(false)}}).catch(()=>{if(active){setResearchError('Research is temporarily unavailable.');setResearchLoading(false)}});return()=>{active=false}},[ticker,canResearch,refresh])
  const findings=research.flatMap(d=>(d.findings||[]).filter(f=>f.ticker===ticker).map(f=>({report:d,finding:f})))
  findings.sort((a,b)=>(b.report.report_date||'').localeCompare(a.report.report_date||''))
@@ -53,13 +54,13 @@ export function StockDetail({onBack,ticker,name,row,intraday,windowDays,asOf,cov
    {!postsLoading&&!postsError&&posts.length>2&&<MorePosts key={postOrder+postFeed} rows={posts.slice(2)} source={source} Posts={Posts}/>}
   </DetailSection>
 </div><aside className="stock-page-side">
- <DetailSection title="Signal Lab">{signal?<><SignalRadar axes={signal.axes}/><div className="stock-signal-values">{signal.axes.map(a=><div key={a.name}><span>{a.name}</span><strong>{a.score==null?'Building history':a.score+' / 100'}</strong></div>)}</div><small className="muted">Saved · {dualTime(signal.observed)}</small><a className="text-link" href={'/signal-lab?ticker='+ticker}>Explore the five indicators ↗</a></>:<p className="muted">Signal Lab coverage is being expanded. This stock has no saved scores yet.</p>}</DetailSection>
+ <DetailSection title="Signal Lab">{!user?.pro_access?<ProLock title="Individual stock signals"/>:signal?<><SignalRadar axes={signal.axes}/><div className="stock-signal-values">{signal.axes.map(a=><div key={a.name}><span>{a.name}</span><strong>{a.score==null?'Building history':a.score+' / 100'}</strong></div>)}</div><small className="muted">Saved · {dualTime(signal.observed)}</small><a className="text-link" href={'/signal-lab?ticker='+ticker}>Explore the five indicators ↗</a></>:<p className="muted">Signal Lab coverage is being expanded. This stock has no saved scores yet.</p>}</DetailSection>
   <DetailSection title="Attention metrics">
    {measured?<><div className="detail-stats"><div><small>Mentions · {intraday?'3 hours':windowDays===1?'24 hours':windowDays+' days'}</small><strong>{fmt(row.mentions)}</strong></div><div><small>Heat score</small><strong>{row.heat??'—'}</strong></div><div><small>{intraday?'Previous 3 hours':'Sample authors'}</small><strong>{intraday?(row.previous??'—'):(row.quality?.independent_authors??row.authors??'—')}</strong></div></div>{row.spark?.length>0&&<Spark values={row.spark} large/>}<p className="muted">{intraday?'Latest three completed hours compared with the preceding three.':`Selected ${windowDays===1?'24-hour':windowDays+'-day'} ranking snapshot.`}{!intraday&&coverageDays<windowDays?` Only ${coverageDays} days of history available.`:''}</p>{!intraday&&<Sentiment row={row}/>}</>:<p className="muted">No measured ranking row is available in the selected period. The latest shared check below may cover a different window.</p>}
 
   </DetailSection>
 </aside></div><div className="stock-page-bottom">
   <DetailSection title="SEC EDGAR filings" initialOpen={false}><Filings ticker={ticker} compact refresh={refresh}/></DetailSection>
-  {source==='x'&&<DetailSection title="Latest attention check" initialOpen={false}><LiveTicker ticker={ticker} premium={user?.plan==='premium'||staff} refresh={refresh}/></DetailSection>}
+  {source==='x'&&<DetailSection title="Latest attention check" initialOpen={false}><LiveTicker ticker={ticker} premium={['premium','pro'].includes(user?.plan)||staff} refresh={refresh}/></DetailSection>}
  </div></article>
 }

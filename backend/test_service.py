@@ -222,7 +222,7 @@ def test_public_gate_owner_invitation_and_admin_controls():
     assert guest.post('/api/auth/signup',json={'display_name':'Signup Trader 143','email':'wrong@example.com','password':'long-test-password','owner_code':code}).status_code==403
     with s.db() as conn: assert not conn.execute("SELECT 1 FROM accounts WHERE email='wrong@example.com'").fetchone()
     owner,o=make_account('OWNER@example.com',code)
-    assert o['role']=='owner' and o['plan']=='premium'
+    assert o['role']=='owner' and o['plan']=='pro'
     assert owner.post('/api/owner/claim',json={'code':code}).status_code==403
     member,m=make_account('member@example.com')
     assert m['role']=='member' and m['plan']=='free'
@@ -745,7 +745,7 @@ def test_billing_webhooks_canonical_state_replay_and_founder(monkeypatch):
     assert event('evt_3','checkout.session.completed',{'id':'cs_founder'}).status_code==200
     assert c.get('/api/me').json()['billing_tier']=='founder'
     assert event('evt_4','customer.subscription.deleted',{'id':'sub_1'}).status_code==200
-    assert c.get('/api/me').json()['plan']=='premium'
+    assert c.get('/api/me').json()['plan']=='pro'
     pi['latest_charge']['refunded']=True
     assert event('evt_5','charge.refunded',{'payment_intent':'pi_1'}).status_code==200
     assert c.get('/api/me').json()['plan']=='free'

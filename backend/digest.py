@@ -67,11 +67,11 @@ def get_preferences(request:Request):
 def save_preferences(payload:Preference,request:Request):
     u=core().account(request)
     if u['demo']:raise HTTPException(403,'Create a real account to save email preferences.')
-    if payload.frequency=='daily' and u['plan']!='premium' and u['role'] not in ('owner','admin'):raise HTTPException(403,'Daily briefings require Premium.')
+    if payload.frequency=='daily' and u['plan'] not in ('premium','pro') and u['role'] not in ('owner','admin'):raise HTTPException(403,'Daily briefings require Premium.')
     with core().db() as c:
         from .newsletter_schedule import choices,enabled,EDITION_NAMES
         editions=list(dict.fromkeys(payload.editions)) if payload.editions is not None else {'daily':['morning','final'],'weekly':['weekly'],'monthly':['monthly'],'all':list(EDITION_NAMES)}.get(payload.frequency,[])
-        if editions and u['plan']!='premium' and u['role'] not in ('owner','admin'):raise HTTPException(403,'Research emails require Premium or an active trial.')
+        if editions and u['plan'] not in ('premium','pro') and u['role'] not in ('owner','admin'):raise HTTPException(403,'Research emails require Premium or an active trial.')
         c.execute('INSERT INTO newsletter_preferences VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET editions=excluded.editions,trial_reminder=excluded.trial_reminder',(u['id'],json.dumps(editions),int(payload.trial_reminder)))
         c.execute('INSERT INTO digest_preferences VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET frequency=excluded.frequency,watchlist_only=excluded.watchlist_only,updated_at=excluded.updated_at',(u['id'],payload.frequency,int(payload.watchlist_only),time.time()))
         audit(c,u,'digest_preferences_updated',detail=json.dumps(payload.model_dump()))
@@ -79,7 +79,7 @@ def save_preferences(payload:Preference,request:Request):
 
 def personalized(report,u,now=None,preserve_ranking=False):
     if not report.get('ready'):return report
-    s=core();premium=u['plan']=='premium' or u['role'] in ('owner','admin')
+    s=core();premium=u['plan'] in ('premium','pro') or u['role'] in ('owner','admin')
     ranked=report['rows'] if preserve_ranking else [{**r,'heat':round(math.log1p(r['mentions'])*(1+max(0,math.log2((r['mentions']+5)/(r.get('previous',0)+5))))*10,1)} for r in report['rows']]
     ranked.sort(key=lambda r:(-r['heat'],r['ticker']))
     report={**report,'rows':ranked}

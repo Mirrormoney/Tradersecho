@@ -10,7 +10,7 @@ def migrate(c):
     c.execute('CREATE TABLE IF NOT EXISTS research_publications(document_id TEXT PRIMARY KEY REFERENCES research_documents(id), published REAL NOT NULL)')
 
 def premium(user):
-    return bool(user and not user.get('demo') and (user.get('plan')=='premium' or user.get('role') in ('owner','admin')))
+    return bool(user and not user.get('demo') and (user.get('plan') in ('premium','pro') or user.get('role') in ('owner','admin')))
 
 def clean_finding(doc,f):
     # Conservative migration for earlier summaries: reported external ratings must

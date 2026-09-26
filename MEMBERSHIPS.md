@@ -42,3 +42,14 @@ Hosting and persistent PostgreSQL are provisioned. X credentials/credits and aut
 - Collection uses the distinct union of curated handles and active real Premium/staff follows, with canonical lowercase handles. One global hourly planning marker and worker lease prevent duplicate per-user requests; a common post store feeds all readers.
 - Persistent per-account checkpoints survive regrouping. The oldest cursor group (up to five handles) is sampled each scheduled hour, with a 60-second overlap and post-ID deduplication. A completed retry makes no additional X call. The existing daily sampling allowance, cooldown and monthly ceiling remain unchanged. This is capped sampling: at most ten posts per group; larger registries refresh less often.
 - Removing a curated entry does not delete another member’s follow or stored posts. Suspended/free/demo-only follows do not cause collection. All member views and briefings combine curated and personal sources.
+
+
+## Pro membership — September 26, 2026
+- Premium remains $9/month or $99/year. Pro is $19/month or $190/year (two monthly payments saved). Founder remains $499 once, with the same features and allowances as Pro.
+- Pro/Founder: 50 saved stocks, 5 personal voices, 5 daily ticker refreshes. Premium: 25/3/3.
+- Full Signal Lab overview, per-stock history and AI Insights articles require server-verified Pro, Founder or staff access. Premium trials do not grant Pro. Public previews contain only approved tile scores or topic introductions, never hidden paid articles.
+- Member feature release: October 1, 2026 00:00 Europe/Berlin. Staff preview remains available. Sidebar and Home Soon badges disappear automatically.
+- Owner has Pro. Administration > Members includes Grant Pro; manual membership changes do not cancel Stripe subscriptions.
+- Production Pro price IDs are saved in meta billing_price_pro_monthly / billing_price_pro_yearly by the owner-only billing preparation action. Environment variables with matching names override these. No secrets are returned.
+- Stripe portal allows monthly/yearly Premium/Pro switching. Webhooks resolve the plan from the canonical price, including portal switches that retain old metadata.
+- Checkout verification stops before payment; no paid transaction was executed.

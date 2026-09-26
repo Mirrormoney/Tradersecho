@@ -321,7 +321,7 @@ def overview(request:Request):
 
 
 @router.get('/api/signal-lab')
-def public_signals(response:Response):
+def public_signals(response:Response,request:Request):
     """Owner approved public derived scores on 2026-09-25; never return provider records."""
     from .signal_lab import saved
     s=core();now=time.time()
@@ -329,17 +329,23 @@ def public_signals(response:Response):
     rows=[]
     for panel in panels:
         if panel['ticker'] not in ('NVDA','AMD','MU'):continue
-        axes=[{**{k:a.get(k) for k in ('name','score','strength','direction','state','reason')},'as_of':a.get('details',{}).get('as_of')} for a in panel['axes']]
+        axes=[{**{k:a.get(k) for k in ('name','score','strength','direction','state')},'as_of':a.get('details',{}).get('as_of')} for a in panel['axes']]
         rows.append(dict(ticker=panel['ticker'],name=s.CATALOG.get(panel['ticker'],(panel['ticker'],))[0],observed=panel['observed'],axes=axes,
             stale=now-panel['observed']>1200,activity=axes[3]['score']))
     rows.sort(key=lambda r:(-(r['activity'] if r['activity'] is not None else -1),r['ticker']))
-    response.headers['Cache-Control']='public, max-age=60, s-maxage=120'
-    return dict(stocks=rows,scope='3-stock preview',server_at=now)
+    u=s.account(request,False)
+    full_preview=bool(u and (u['plan'] in ('premium','pro') or u['role'] in ('owner','admin')))
+    rows=rows[:3 if full_preview else 1]
+    response.headers['Cache-Control']='private, no-store'
+    return dict(stocks=rows,scope='top-tile preview',server_at=now)
 
 
 @router.get('/api/admin/signal-lab-overview')
 def admin_signal_overview(request:Request,response:Response):
     staff(request,owner=True)
+    return signal_overview_data(response)
+
+def signal_overview_data(response):
     from .signal_lab import saved
     s=core();now=time.time()
     with s.db() as c:panels=saved(c)['stocks']
@@ -354,6 +360,9 @@ def admin_signal_overview(request:Request,response:Response):
 @router.get('/api/admin/signal-lab-detail/{ticker}')
 def admin_signal_detail(ticker:str,request:Request,response:Response):
     staff(request,owner=True)
+    return signal_detail_data(ticker,response)
+
+def signal_detail_data(ticker,response):
     s=core();ticker=ticker.upper()
     if ticker not in s.CATALOG:raise HTTPException(404,'Stock is not in the covered universe')
     from .signal_history import detail
@@ -361,3 +370,15 @@ def admin_signal_detail(ticker:str,request:Request,response:Response):
     if result is None:raise HTTPException(404,'No saved Signal Lab observations for this stock')
     response.headers['Cache-Control']='private, max-age=60'
     return {**result,'name':s.CATALOG[ticker][0]}
+
+@router.get('/api/signal-lab/overview')
+def member_signal_overview(request:Request,response:Response):
+ from .pro_access import require_pro
+ require_pro(request)
+ return signal_overview_data(response)
+
+@router.get('/api/signal-lab/detail/{ticker}')
+def member_signal_detail(ticker:str,request:Request,response:Response):
+ from .pro_access import require_pro
+ require_pro(request)
+ return signal_detail_data(ticker,response)

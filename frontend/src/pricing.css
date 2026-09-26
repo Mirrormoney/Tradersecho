@@ -2,3 +2,5 @@
 @media(max-width:850px){.header-actions .mobile-upgrade{display:inline-flex}.pricing-grid{grid-template-columns:1fr}.pricing-card h3,.pricing-description{min-height:0}.pricing-card-top{min-height:0}.pricing-card{padding:22px}.pricing-amount small{display:inline;margin-left:9px}.pricing-switch button{padding:10px 12px}.pricing-modal .section-head h2{font-size:1.2rem}.pricing-card h3{margin:12px 0}}
 
 .payment-sandbox-banner{padding:14px 18px;margin:0 0 20px;border:1px solid #b19555;background:#302b1c;color:#e9d9b0;border-radius:8px;font-size:.8rem;line-height:1.65}.payment-sandbox-banner strong{margin-right:8px;color:#f4dc9a}
+
+.pricing-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.pricing-card.pro{background:linear-gradient(145deg,#244536,#142b24);border-color:#addc8c}.pricing-card.pro .pricing-amount{color:#d0f5ac}.modal.pricing-modal{width:min(1400px,100%);max-width:1400px}@media(max-width:1200px){.pricing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.pricing-grid{grid-template-columns:1fr}}

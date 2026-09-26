@@ -313,5 +313,5 @@ def intraday_rows(now=None):
 @router.get('/api/intraday')
 def intraday(request:Request):
     s=core();u=s.account(request,False);now=time.time();rows=intraday_rows()
-    full=bool(u and (u['plan']=='premium' or u['role'] in ('owner','admin') or os.getenv('FREE_LAUNCH','false').lower()=='true') and not u['demo'])
+    full=bool(u and (u['plan'] in ('premium','pro') or u['role'] in ('owner','admin') or os.getenv('FREE_LAUNCH','false').lower()=='true') and not u['demo'])
     return {'rows':rows if full else rows[:5 if u else 2],'total':len(rows),'locked':not full,'as_of':now,'comparison_hours':3,'disclosure':'Latest three completed hours versus the preceding three. Selected hourly leaders and recent admin-voice discoveries; not a full-market scan. Fresh posts provide context, not proof of a catalyst.'}

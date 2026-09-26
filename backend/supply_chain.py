@@ -35,7 +35,7 @@ def supply_chain(request: Request, window: int = Query(1, ge=1, le=30)):
         raise HTTPException(422, 'Choose 1, 7 or 30 days.')
     if u['demo']:
         return {'groups': [], 'demo': True, 'as_of': None, 'locked': True, 'window': window}
-    full = u['plan'] == 'premium' or u['role'] in ('admin', 'owner') or os.getenv('FREE_LAUNCH', 'false').lower() == 'true'
+    full = u['plan'] in ('premium','pro') or u['role'] in ('admin', 'owner') or os.getenv('FREE_LAUNCH', 'false').lower() == 'true'
     if not full:
         groups = group_rows(s.CATALOG, [], window * 24)
         return {'groups': [{'sector': g['sector'], 'stocks': g['stocks']} for g in groups], 'locked': True, 'window': window, 'as_of': None}

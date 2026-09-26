@@ -146,6 +146,9 @@ def public_account(u):
     from .payments import account_details
     from .account_security import trial_account
     u=trial_account(u) if 'trial_active' not in dict(u) else dict(u)
+    if u['role']=='owner' and not u['demo'] and u['plan']!='pro':
+        with db() as c:c.execute("UPDATE accounts SET plan='pro' WHERE id=? AND role='owner'",(u['id'],))
+        u=dict(u);u['plan']='pro'
     return {k:u[k] for k in ['id','email','plan','role','status','display_name','email_verified']} | {'demo':bool(u['demo']),'trial_active':u['trial_active'],'trial_started_at':u.get('trial_started_at'),'trial_ends_at':u.get('trial_ends_at'),'referral_active':u.get('referral_active',False),'referral_ends_at':u.get('referral_ends_at')} | account_details(u)
 
 def session(response, uid, expected_password=None):
@@ -254,7 +257,7 @@ def me(request:Request):
     return public_account(u) if u else None
 
 def premium(u,source='demo'):
-    if not u or (u['plan']!='premium' and u['role'] not in ['owner','admin']) or (u['demo'] and source!='demo'): raise HTTPException(403,'Premium membership is required for this feature.')
+    if not u or (u['plan'] not in ('premium','pro') and u['role'] not in ['owner','admin']) or (u['demo'] and source!='demo'): raise HTTPException(403,'Premium membership is required for this feature.')
 
 def reference(source,c):
     if source=='demo':
@@ -308,7 +311,7 @@ def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('de
         comparison=all(r.get('comparison_complete',False) for r in rows)
         with db() as c:
             earliest=c.execute('SELECT MIN(start) FROM x_counts').fetchone()[0]
-    full=bool(u and (u['plan']=='premium' or u['role'] in ('owner','admin') or os.getenv('FREE_LAUNCH','false').lower()=='true') and (not u['demo'] or source=='demo'))
+    full=bool(u and (u['plan'] in ('premium','pro') or u['role'] in ('owner','admin') or os.getenv('FREE_LAUNCH','false').lower()=='true') and (not u['demo'] or source=='demo'))
     total_mentions=sum(r['mentions'] for r in rows)
     if scope=='watchlist':
         if not u:raise HTTPException(401,'Sign in to view your watchlist.')
@@ -455,7 +458,7 @@ def import_posts(payload:ImportPayload,request:Request):
 @app.post('/api/admin/plan')
 async def set_plan(request:Request):
     admin(request);payload=await request.json()
-    if payload.get('plan') not in ['free','premium']: raise HTTPException(422,'Invalid plan.')
+    if payload.get('plan') not in ['free','premium','pro']: raise HTTPException(422,'Invalid plan.')
     with db() as c:
         changed=c.execute("UPDATE accounts SET plan=? WHERE email=? AND demo=0 AND role='member'",(payload['plan'],payload.get('email','').lower())).rowcount
     if not changed: raise HTTPException(404,'Account not found.')

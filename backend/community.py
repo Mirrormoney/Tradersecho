@@ -62,7 +62,7 @@ def claim_owner(c,code,email,uid):
     invite=c.execute('SELECT * FROM owner_invites WHERE hash=?',(hashlib.sha256(code.encode()).hexdigest(),)).fetchone()
     if not invite or invite['used_by'] or invite['expires']<time.time() or (invite['email'] and invite['email']!=email): raise HTTPException(403,'Invalid or expired owner invitation.')
     if c.execute("SELECT 1 FROM accounts WHERE role='owner'").fetchone(): raise HTTPException(409,'The owner account has already been claimed.')
-    c.execute("UPDATE accounts SET role='owner',plan='premium' WHERE id=? AND demo=0",(uid,))
+    c.execute("UPDATE accounts SET role='owner',plan='pro' WHERE id=? AND demo=0",(uid,))
     c.execute('UPDATE owner_invites SET used_by=? WHERE hash=?',(uid,invite['hash']))
     audit(c,{'id':uid},'owner_claimed',uid)
 
@@ -129,7 +129,7 @@ def users(request:Request,q:str=Query('',max_length=100),page:int=Query(1,ge=1),
     return {'rows':[dict(r) for r in rows],'total':total,'page':page,'pages':max(1,(total+29)//30)}
 
 class UserUpdate(BaseModel):
-    plan:Literal['free','premium']|None=None
+    plan:Literal['free','premium','pro']|None=None
     status:Literal['active','suspended']|None=None
     role:Literal['member','admin']|None=None
 
@@ -173,7 +173,7 @@ def visit(payload:Visit,request:Request):
 def overview(request:Request):
     staff(request);now=time.time();today=datetime.now(timezone.utc).date().isoformat()
     with core().db() as c:
-        totals=dict(c.execute("SELECT COUNT(*) users,SUM(plan='premium') premium,SUM(status='suspended') suspended,SUM(created_at>?) new_users FROM accounts WHERE demo=0",(now-30*86400,)).fetchone())
+        totals=dict(c.execute("SELECT COUNT(*) users,SUM(CASE WHEN plan IN ('premium','pro') THEN 1 ELSE 0 END) premium,SUM(status='suspended') suspended,SUM(created_at>?) new_users FROM accounts WHERE demo=0",(now-30*86400,)).fetchone())
         traffic=[dict(r) for r in c.execute('SELECT day,COUNT(*) views,COUNT(DISTINCT visitor) visitors FROM traffic_events WHERE ts>? GROUP BY day ORDER BY day',(now-30*86400,))]
         pages=[dict(r) for r in c.execute('SELECT page,COUNT(*) views FROM traffic_events WHERE ts>? GROUP BY page ORDER BY views DESC',(now-30*86400,))]
         logs=[dict(r) for r in c.execute('SELECT action,target,detail,ts FROM audit_log ORDER BY id DESC LIMIT 15')]

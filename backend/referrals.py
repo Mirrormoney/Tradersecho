@@ -113,7 +113,7 @@ def reward_plan(c,r,now):
     ent=c.execute("SELECT * FROM billing_entitlements WHERE user_id=? AND active=1 AND tier IN ('monthly','yearly','founder') ORDER BY updated_at DESC",(u['id'],)).fetchall()
     if any(e['tier']=='founder' for e in ent) or u['role']!='member':return None,'already_premium'
     if not ent:
-        if u['plan']=='premium':return None,'already_premium'
+        if u['plan'] in ('premium','pro'):return None,'already_premium'
         latest=c.execute('SELECT MAX(ends) FROM referral_access WHERE user_id=? AND revoked=0',(u['id'],)).fetchone()[0] or 0
         start=max(now,latest,u['trial_ends_at'] or 0)
         return {'mode':'access','start':start,'end':start+30*DAY},None

@@ -25,7 +25,7 @@ def valid_recipient(c,u,kind='daily',now=None):
     u=trial_account(u,now);prefs=choices(c,u['id'])
     if u['status']!='active' or u['demo'] or not u['email_verified'] or c.execute('SELECT 1 FROM email_suppressions WHERE email_hash=?',(email_hash(u['email']),)).fetchone():return False
     if kind=='trial':return bool(u['trial_active'] and u['role']=='member' and 0<u['trial_ends_at']-now<=86400 and prefs['trial_reminder'])
-    return bool((u['plan']=='premium' or u['role'] in ('owner','admin')) and (('morning' in prefs['editions'] or 'final' in prefs['editions']) if kind=='daily' else kind in prefs['editions']))
+    return bool((u['plan'] in ('premium','pro') or u['role'] in ('owner','admin')) and (('morning' in prefs['editions'] or 'final' in prefs['editions']) if kind=='daily' else kind in prefs['editions']))
 
 def optout_token(c,u):
     token=secrets.token_urlsafe(32)

@@ -30,7 +30,7 @@ def migrate(c):
 
 def paid_member(c,uid):
     row=c.execute("SELECT plan,role,status,demo FROM accounts WHERE id=?",(uid,)).fetchone()
-    return bool(row and row['status']=='active' and not row['demo'] and (row['plan']=='premium' or row['role'] in ('owner','admin')))
+    return bool(row and row['status']=='active' and not row['demo'] and (row['plan'] in ('premium','pro') or row['role'] in ('owner','admin')))
 
 def subscribed(c,uid):
     return bool(c.execute('SELECT 1 FROM customer_api_subscriptions WHERE user_id=? AND active=1',(uid,)).fetchone())

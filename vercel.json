@@ -13,6 +13,10 @@
   },
   "rewrites": [
     {
+      "source": "/ai-insights",
+      "destination": "/ai-insights-preview.html"
+    },
+    {
       "source": "/api(/.*)?",
       "destination": {
         "type": "service",

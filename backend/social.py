@@ -197,7 +197,7 @@ def run(now=None,manual_promo=False,manual_research=False):
         if value(c,'social_paused',True) or not value(c,'social_label_confirmed',False):return {'state':'paused'}
         if c.execute("SELECT 1 FROM social_editions WHERE status IN ('uncertain','failed') LIMIT 1").fetchone():return {'state':'review_required'}
     result={'state':'ok','sent':0}
-    slots=due_slots(now)+social_promos.slots(now)+social_research.slots(now)+social_promos.signal_slots(now)
+    slots=due_slots(now)+social_promos.slots(now)+social_research.slots(now)+social_promos.signal_slots(now)+social_promos.insights_slots(now)
     if manual_research:
         slots=[{'edition':'research','at':now,'key':'research:'+datetime.fromtimestamp(now,NY).date().isoformat()}]
     if manual_promo:
@@ -214,6 +214,8 @@ def run(now=None,manual_promo=False,manual_research=False):
                 p=social_promos.prepare(n%len(social_promos.COPY));image=social_promos.artwork(p)
             elif slot['edition']=='signal_launch':
                 p=social_promos.prepare_signal(slot,now);image=social_promos.signal_artwork()
+            elif slot['edition']=='insights_launch':
+                p=social_promos.prepare_insights(slot,now);image=social_promos.insights_artwork()
             elif slot['edition']=='research':
                 p=social_research.prepare(now,approved=manual_research);image=social_research.artwork(p)
             else:p=prepare(slot['edition'],now);image=card(p)
@@ -223,7 +225,7 @@ def run(now=None,manual_promo=False,manual_research=False):
             if value(c,'social_paused',True) or c.execute('SELECT 1 FROM social_editions WHERE id=?',(key,)).fetchone():continue
             if c.execute("SELECT 1 FROM social_editions WHERE status IN ('sending','uncertain','failed') LIMIT 1").fetchone():continue
             # Suppress an identical data payload, even when the edition label changes.
-            fingerprint=hashlib.sha256((p['text'] if slot['edition'] in ('promo','research','signal_launch') else json.dumps([(r['ticker'],r['mentions'],r['as_of']) for r in p['rows']])).encode()).hexdigest()
+            fingerprint=hashlib.sha256((p['text'] if slot['edition'] in ('promo','research','signal_launch','insights_launch') else json.dumps([(r['ticker'],r['mentions'],r['as_of']) for r in p['rows']])).encode()).hexdigest()
             if value(c,'social_last_fingerprint')==fingerprint:continue
             month=datetime.fromtimestamp(now,timezone.utc).strftime('%Y-%m')
             from .community import data_settings

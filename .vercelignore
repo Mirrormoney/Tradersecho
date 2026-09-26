@@ -82,3 +82,5 @@ work/
 !backend/insights.py
 
 !backend/insight_updates.py
+
+!backend/insights_launch_promo.png

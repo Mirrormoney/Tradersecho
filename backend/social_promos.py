@@ -136,3 +136,18 @@ def prepare_signal(slot,now):
 
 def signal_artwork():
     return Path(__file__).with_name('signal_launch_promo.png').read_bytes()
+
+# Approved one-time announcement, separate from the evergreen two-day rotation.
+INSIGHTS_COPY="From HBM to 800 VDC: understand what’s changing in AI infrastructure.\n\nExplore key developments, expected milestones and potential beneficiaries—all in one place.\n\nAI Insights Lab arrives October 1.\n\nhttps://tradersecho.com/ai-insights"
+
+def insights_slots(now):
+    at=datetime(2026,9,26,12,0,tzinfo=NY).timestamp()
+    return [dict(edition='insights_launch',at=at,key='insights_launch:2026-09-26:1200')] if 0<=now-at<3600 else []
+
+def prepare_insights(slot,now):
+    if slot not in insights_slots(now):raise ValueError('AI Insights announcement is outside its approved slot')
+    if len(re.sub(r'https://\S+','x'*23,INSIGHTS_COPY))>280:raise ValueError('AI Insights caption exceeds X limit')
+    return dict(edition='insights_launch',title='AI Insights Lab arrives October 1',text=INSIGHTS_COPY,rows=[])
+
+def insights_artwork():
+    return Path(__file__).with_name('insights_launch_promo.png').read_bytes()

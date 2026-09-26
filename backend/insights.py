@@ -2,7 +2,159 @@
 from fastapi import APIRouter, Request, Response
 from .community import staff
 router=APIRouter()
-ARTICLE = {'slug': '800-vdc', 'title': '800 VDC: powering the next generation of AI datacenters', 'status': 'Private starter · admin only', 'reviewed': '2026-09-26', 'evidence_through': '2026-09-22', 'intro': '800 VDC means distributing electricity at 800 volts of direct current. It is an emerging approach to powering increasingly dense AI racks. Higher voltage delivers the same power with less current, helping manage cabling and electrical losses. Power still needs to be converted to the lower voltages used by processors.', 'distinction': 'An 800 VDC power rack is not the same as a fully redesigned datacenter. Early systems can convert 800 VDC to an intermediate 50 V inside the IT rack. Facility-wide distribution and solid-state transformers (SSTs) have separate qualification, safety and deployment timelines.', 'summary': 'Early deployments may precede broad adoption by several years. The collected notes point to safety, qualification and standards as important constraints. Their 2030 adoption expectations differ substantially.', 'sources': [{'id': 'edge', 'name': 'Edgewater Research', 'date': '2026-09-22', 'kind': 'Supplier and integrator channel checks', 'pages': '1 and 3', 'label': 'Datacenter power semiconductors: AWS 800 V ramp'}, {'id': 'gs', 'name': 'Goldman Sachs', 'date': '2026-09-15', 'kind': 'Industry expert call · Hervé Tardy', 'pages': '1–3', 'label': 'Expert perspective on 800 VDC electrical equipment'}, {'id': 'db', 'name': 'Deutsche Bank', 'date': '2026-09-22', 'kind': 'SolarEdge CEO fireside chat · management expectations', 'pages': '1–2', 'label': '800 VDC adoption, market opportunity and safety'}], 'timeline': [{'when': 'Late 2026', 'title': 'First AWS power-rack shipments', 'source': 'edge', 'page': '3, channel checks 27–28', 'expectation': 'A system integrator expects AWS samples by year-end. The lead power-rack vendor projects fewer than 100 racks in Q4 2026.', 'watch': 'Watch for actual shipments and customer qualification. These are channel forecasts, not confirmed deliveries.', 'scope': 'Power-rack deployment'}, {'when': 'Q1–H1 2027', 'title': 'An initial production ramp', 'source': 'edge', 'page': '3, channel checks 28–30', 'expectation': 'The lead vendor forecasts 500–1,000 AWS power racks per month from Q1 and 5,000–6,000 in the first half. The described design converts 800 V to 50 V inside the IT rack.', 'watch': 'Check whether monthly shipments reach the forecast and whether the intermediate-voltage architecture remains in place.', 'scope': 'AWS vendor forecast'}, {'when': '2027', 'title': 'Broader adoption remains limited', 'source': 'db', 'page': '1', 'expectation': 'SolarEdge management expects only a small proportion of new datacenters to use 800 VDC in 2027. It estimates the industry may need two to three years to become comfortable with the architecture.', 'watch': 'Electrical arcing, safety work and qualification remain key milestones.', 'scope': 'Management outlook'}, {'when': 'Q4 2027 / 2028 onward', 'title': 'Other programs may follow later', 'source': 'edge', 'page': '3, channel check 23', 'expectation': 'One power-IC supplier expects Nvidia’s 800 V architecture in Q4 2027 and does not expect SSTs before 2028. Integrators and IC suppliers give different ramp timings.', 'watch': 'Distinguish initial installations from meaningful component volumes; this is one supplier’s expectation.', 'scope': 'Supplier outlook'}, {'when': '2029 at the earliest', 'title': 'Mass SST deployment', 'source': 'gs', 'page': '2', 'expectation': 'Goldman’s hosted expert places the earliest mass-deployment window for SSTs in 2029, citing pilots followed by a further 12–18 months of evaluation and ordering after preferred products are selected.', 'watch': 'Product selection, qualification and order conversion matter more than requests for proposals alone.', 'scope': 'Mass deployment · expert forecast'}, {'when': '2030', 'title': 'A substantial adoption disagreement', 'source': 'gs', 'also_source': 'db', 'page': 'Goldman p. 1; Deutsche Bank p. 1', 'expectation': 'Goldman’s expert expects 800 VDC in 21% of new US datacenters and 17% of new European datacenters. SolarEdge management instead sees a majority of new datacenters potentially adopting it by 2030.', 'watch': 'Preserve both views. Geography and architecture definitions are not fully harmonized, and management has commercial exposure to adoption.', 'scope': 'Competing expectations'}, {'when': 'Around 2031 or later', 'title': 'Full 800 VDC architecture', 'source': 'gs', 'page': '1', 'expectation': 'The expert does not anticipate full 800 VDC architectures for at least five years from the September 2026 note. Near-term server power can change while networking, storage and other loads retain traditional architecture.', 'watch': 'This date is an interpretation of “at least five years,” not an announced launch date.', 'scope': 'Facility-wide transition'}], 'questions': ['When do samples become sustained production volumes?', 'Which safety and protection standards are satisfied before wider deployment?', 'Which suppliers win qualified designs, rather than having only thematic exposure?', 'Does the transition stop at power racks or extend across the facility?'], 'editorial': 'Starter assembled from three original notes checked on 26 September 2026. Expectations reflect each note’s publication date. No automatic topic updates are enabled yet. This draft is separate from public research publication.'}
+ARTICLE = {'slug': '800-vdc',
+ 'title': '800 VDC: powering the next generation of AI datacenters',
+ 'status': 'Private starter · admin only',
+ 'reviewed': '2026-09-26',
+ 'evidence_through': '2026-09-22',
+ 'intro': '800 VDC means distributing electricity at 800 volts of direct current. It is an emerging approach to '
+          'powering increasingly dense AI racks. Higher voltage delivers the same power with less current, '
+          'helping manage cabling and electrical losses. Power still needs to be converted to the lower voltages '
+          'used by processors.',
+ 'distinction': 'An 800 VDC power rack is not the same as a fully redesigned datacenter. Early systems can '
+                'convert 800 VDC to an intermediate 50 V inside the IT rack. Facility-wide distribution and '
+                'solid-state transformers (SSTs) have separate qualification, safety and deployment timelines.',
+ 'summary': 'Early deployments may precede broad adoption by several years. The collected notes point to safety, '
+            'qualification and standards as important constraints. Their 2030 adoption expectations differ '
+            'substantially.',
+ 'sources': [{'id': 'edge',
+              'name': 'Edgewater Research',
+              'date': '2026-09-22',
+              'kind': 'Supplier and integrator channel checks',
+              'pages': '1 and 3',
+              'label': 'Datacenter power semiconductors: AWS 800 V ramp'},
+             {'id': 'gs',
+              'name': 'Goldman Sachs',
+              'date': '2026-09-15',
+              'kind': 'Industry expert call · Hervé Tardy',
+              'pages': '1–3',
+              'label': 'Expert perspective on 800 VDC electrical equipment'},
+             {'id': 'db',
+              'name': 'Deutsche Bank',
+              'date': '2026-09-22',
+              'kind': 'SolarEdge CEO fireside chat · management expectations',
+              'pages': '1–2',
+              'label': '800 VDC adoption, market opportunity and safety'}],
+ 'timeline': [{'when': 'Late 2026',
+               'title': 'First AWS power-rack shipments',
+               'source': 'edge',
+               'page': '3, channel checks 27–28',
+               'expectation': 'A system integrator expects AWS samples by year-end. The lead power-rack vendor '
+                              'projects fewer than 100 racks in Q4 2026.',
+               'watch': 'Watch for actual shipments and customer qualification. These are channel forecasts, not '
+                        'confirmed deliveries.',
+               'scope': 'Power-rack deployment'},
+              {'when': 'Q1–H1 2027',
+               'title': 'An initial production ramp',
+               'source': 'edge',
+               'page': '3, channel checks 28–30',
+               'expectation': 'The lead vendor forecasts 500–1,000 AWS power racks per month from Q1 and '
+                              '5,000–6,000 in the first half. The described design converts 800 V to 50 V inside '
+                              'the IT rack.',
+               'watch': 'Check whether monthly shipments reach the forecast and whether the intermediate-voltage '
+                        'architecture remains in place.',
+               'scope': 'AWS vendor forecast'},
+              {'when': '2027',
+               'title': 'Broader adoption remains limited',
+               'source': 'db',
+               'page': '1',
+               'expectation': 'SolarEdge management expects only a small proportion of new datacenters to use 800 '
+                              'VDC in 2027. It estimates the industry may need two to three years to become '
+                              'comfortable with the architecture.',
+               'watch': 'Electrical arcing, safety work and qualification remain key milestones.',
+               'scope': 'Management outlook'},
+              {'when': 'Q4 2027 / 2028 onward',
+               'title': 'Other programs may follow later',
+               'source': 'edge',
+               'page': '3, channel check 23',
+               'expectation': 'One power-IC supplier expects Nvidia’s 800 V architecture in Q4 2027 and does not '
+                              'expect SSTs before 2028. Integrators and IC suppliers give different ramp timings.',
+               'watch': 'Distinguish initial installations from meaningful component volumes; this is one '
+                        'supplier’s expectation.',
+               'scope': 'Supplier outlook'},
+              {'when': '2029 at the earliest',
+               'title': 'Mass SST deployment',
+               'source': 'gs',
+               'page': '2',
+               'expectation': 'Goldman’s hosted expert places the earliest mass-deployment window for SSTs in '
+                              '2029, citing pilots followed by a further 12–18 months of evaluation and ordering '
+                              'after preferred products are selected.',
+               'watch': 'Product selection, qualification and order conversion matter more than requests for '
+                        'proposals alone.',
+               'scope': 'Mass deployment · expert forecast'},
+              {'when': '2030',
+               'title': 'A substantial adoption disagreement',
+               'source': 'gs',
+               'also_source': 'db',
+               'page': 'Goldman p. 1; Deutsche Bank p. 1',
+               'expectation': 'Goldman’s expert expects 800 VDC in 21% of new US datacenters and 17% of new '
+                              'European datacenters. SolarEdge management instead sees a majority of new '
+                              'datacenters potentially adopting it by 2030.',
+               'watch': 'Preserve both views. Geography and architecture definitions are not fully harmonized, '
+                        'and management has commercial exposure to adoption.',
+               'scope': 'Competing expectations'},
+              {'when': 'Around 2031 or later',
+               'title': 'Full 800 VDC architecture',
+               'source': 'gs',
+               'page': '1',
+               'expectation': 'The expert does not anticipate full 800 VDC architectures for at least five years '
+                              'from the September 2026 note. Near-term server power can change while networking, '
+                              'storage and other loads retain traditional architecture.',
+               'watch': 'This date is an interpretation of “at least five years,” not an announced launch date.',
+               'scope': 'Facility-wide transition'}],
+ 'questions': ['When do samples become sustained production volumes?',
+               'Which safety and protection standards are satisfied before wider deployment?',
+               'Which suppliers win qualified designs, rather than having only thematic exposure?',
+               'Does the transition stop at power racks or extend across the facility?'],
+ 'editorial': 'Starter assembled from three original notes checked on 26 September 2026. Expectations reflect '
+              'each note’s publication date. No automatic topic updates are enabled yet. This draft is separate '
+              'from public research publication.',
+ 'beneficiaries': [{'ticker': 'STM',
+                    'name': 'STMicroelectronics',
+                    'stage': 'Supplier evaluation',
+                    'source': 'edge',
+                    'page': '3 · channel check 31',
+                    'timing': 'Potential exposure to the AWS ramp from 2027; supplier award not confirmed.',
+                    'why': 'The AWS power-rack integrator is considering STM as a second source alongside '
+                           'Toshiba, seeking alternatives to its current SiC and silicon supplier.',
+                    'watch': 'Qualification and a confirmed sourcing award. Evaluation alone does not establish '
+                             'future revenue.'},
+                   {'ticker': 'ETN',
+                    'name': 'Eaton',
+                    'stage': 'SST development',
+                    'source': 'gs',
+                    'page': '2',
+                    'timing': 'Customer samples targeted by end-2026; industry mass deployment could be 2029 or '
+                              'later.',
+                    'why': 'Goldman’s expert describes Eaton preparing SST customer samples using capabilities '
+                           'from its Resilient Power acquisition.',
+                    'watch': 'Sample delivery, customer qualification and production orders. The 2029 window is '
+                             'an industry forecast, not Eaton guidance.'},
+                   {'ticker': 'VRT',
+                    'name': 'Vertiv',
+                    'stage': 'Transition equipment',
+                    'source': 'gs',
+                    'page': '2',
+                    'timing': 'Intermediate architecture before full SST adoption; no firm shipment date in this '
+                              'note.',
+                    'why': 'The expert identifies Vertiv’s medium-voltage UPS approach as an intermediate step '
+                           'that removes power-conversion stages while retaining traditional technology.',
+                    'watch': 'Customer adoption and orders for the intermediate design. It is not evidence of a '
+                             'confirmed full 800 VDC design win.'},
+                   {'ticker': 'SEDG',
+                    'name': 'SolarEdge',
+                    'stage': 'Longer-term opportunity',
+                    'source': 'db',
+                    'page': '1–2; Goldman p. 2',
+                    'timing': 'Management sees limited 2027 adoption and a broader opportunity toward 2030.',
+                    'why': 'SolarEdge is pursuing SST and 800 VDC applications using its DC power-electronics '
+                           'experience, initially targeting US datacenters.',
+                    'watch': 'Safety, datacenter qualification and commercial wins. Goldman’s expert also flags '
+                             'redundancy and field-service requirements as barriers to entry.',
+                    'also_source': 'gs'}],
+ 'beneficiary_context': 'Outside our covered universe: Edgewater identifies Infineon as the established '
+                        'SiC/CoolMOS supplier to the lead AWS power-rack integrator. The four covered names below '
+                        'represent different stages of opportunity, not confirmed winners or a return ranking.'}
 
 @router.get('/api/admin/insights/800-vdc')
 def starter(request: Request, response: Response):

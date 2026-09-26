@@ -23,3 +23,14 @@ def test_starter_evidence_references():
   assert event['source'] in sources and event['page']
   if event.get('also_source'):assert event['also_source'] in sources
  assert 'automatic topic updates are enabled yet' in a['editorial']
+
+def test_beneficiary_links_and_sources():
+ import json
+ from pathlib import Path
+ universe=json.loads(Path(__file__).with_name('stock_universe.json').read_text(encoding='utf-8'))
+ tickers={r['ticker'] for r in universe}
+ sources={s['id'] for s in insights.ARTICLE['sources']}
+ for b in insights.ARTICLE['beneficiaries']:
+  assert b['ticker'] in tickers
+  assert b['source'] in sources
+  assert b['why'] and b['watch'] and b['timing'] and b['page']

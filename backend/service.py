@@ -515,3 +515,6 @@ if DIST.exists():
 
 from .referrals import router as referrals_router
 app.include_router(referrals_router)
+
+from .insights import router as insights_router
+app.include_router(insights_router)

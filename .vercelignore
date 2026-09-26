@@ -78,3 +78,5 @@ work/
 !backend/signal_launch_promo.png
 
 !backend/referrals.py
+
+!backend/insights.py

@@ -3,4 +3,8 @@
 
 .payment-sandbox-banner{padding:14px 18px;margin:0 0 20px;border:1px solid #b19555;background:#302b1c;color:#e9d9b0;border-radius:8px;font-size:.8rem;line-height:1.65}.payment-sandbox-banner strong{margin-right:8px;color:#f4dc9a}
 
+/* Softer sage keeps Premium available while Pro retains the bright lime CTA. */
+.pricing-card.premium .button.primary{background:#abc1b0;border-color:#abc1b0;color:#17211b;font-weight:600}
+.pricing-card.premium .button.primary:hover{background:#c2d4c6;border-color:#c2d4c6}
+
 .pricing-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.pricing-card.pro{background:linear-gradient(145deg,#244536,#142b24);border-color:#addc8c}.pricing-card.pro .pricing-amount{color:#d0f5ac}.modal.pricing-modal{width:min(1400px,100%);max-width:1400px}@media(max-width:1200px){.pricing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.pricing-grid{grid-template-columns:1fr}}

@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react'
 
-export const pagePaths={home:'/home',signal:'/signal-lab',market:'/marketpulse',supply:'/ai-supply-chain',research:'/trending-research',briefing:'/daily-briefing',filings:'/sec-filings',watchlist:'/watchlist',voices:'/tracked-voices',data:'/data-sources',community:'/trading-room',account:'/account',admin:'/admin'}
+export const pagePaths={home:'/home',signal:'/signal-lab',insights:'/ai-insights',market:'/marketpulse',supply:'/ai-supply-chain',research:'/trending-research',briefing:'/daily-briefing',filings:'/sec-filings',watchlist:'/watchlist',voices:'/tracked-voices',data:'/data-sources',community:'/trading-room',account:'/account',admin:'/admin'}
 export const modalPaths={plans:'/plans',method:'/how-it-works',contact:'/contact',privacy:'/privacy',terms:'/terms',auth:'/login',forgot:'/forgot-password',owner:'/owner-setup',import:'/admin/import'}
 export function readRoute(path=location.pathname){
  const clean=path.replace(/\/+$/,'')||'/'

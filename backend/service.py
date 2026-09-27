@@ -483,6 +483,8 @@ def health():
     try:
         with db() as c:
             c.execute('SELECT 1').fetchone()
+            c.execute('SELECT id,email,password,status FROM accounts LIMIT 0')
+            c.execute('SELECT token,user_id,expires FROM sessions LIMIT 0')
             c.execute('SELECT id FROM billing_checkouts LIMIT 0')
             c.execute('SELECT id FROM billing_entitlements LIMIT 0')
         return {'ok':True,'storage':'postgres' if os.getenv('APP_DATABASE_URL') or os.getenv('DATABASE_URL') or os.getenv('POSTGRES_URL') else 'sqlite','universe':len(CATALOG)}
@@ -523,3 +525,6 @@ from .insights import router as insights_router
 app.include_router(insights_router)
 from .insight_worker import router as insight_worker_router
 app.include_router(insight_worker_router)
+
+from .availability import router as availability_router
+app.include_router(availability_router)

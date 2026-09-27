@@ -96,3 +96,5 @@ work/
 !backend/sec_3d_promo.png
 !backend/supply_chain_3d_promo.png
 !backend/research_3d_promo.png
+
+!backend/availability.py

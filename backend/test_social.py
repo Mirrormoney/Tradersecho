@@ -201,7 +201,7 @@ def test_promo_direct_destinations():
 def test_period_spotlight_keeps_three_graphic_rows(monkeypatch,edition,days,hook):
     from . import count_metrics
     import re
-    now=datetime(2026,10,1,16,tzinfo=timezone.utc).timestamp()
+    now=datetime(2026,10,1,14,tzinfo=timezone.utc).timestamp()
     monkeypatch.setattr(s,'reference',lambda source,c:now)
     seen=[]
     def rows(c,items,end,window):
@@ -266,7 +266,7 @@ def test_monthly_worker_publishes_once(monkeypatch):
         if req.url.path=='/2/media/upload':return httpx.Response(200,json={'data':{'id':'media'}})
         calls.append(req.url.path);return httpx.Response(201,json={'data':{'id':'monthly'}})
     monkeypatch.setattr(social,'client',lambda *a:httpx.Client(transport=httpx.MockTransport(transport)))
-    now=datetime(2026,10,1,16,tzinfo=timezone.utc).timestamp()
+    now=datetime(2026,10,1,14,tzinfo=timezone.utc).timestamp()
     assert social.run(now)['sent']==1
     assert social.run(now+300)['sent']==0
     with s.db() as c:assert c.execute("SELECT status FROM social_editions WHERE id='monthly:2026-10-01'").fetchone()[0]=='published'
@@ -283,3 +283,25 @@ def test_after_bell_disabled_without_changing_newsletter(monkeypatch):
     monkeypatch.setattr(social,'client',lambda *args:pytest.fail('No X request expected'))
     result=social.run(closing)
     assert result=={'state':'ok','sent':0}
+
+
+def test_x_market_slots_separate_weekly_monthly_and_newsletter():
+    from .newsletter_schedule import NY
+    # November 1 is both a Sunday and the first of the month (also DST change).
+    for edition,hour in [('monthly',10),('weekly',11)]:
+        now=datetime(2026,11,1,hour,tzinfo=NY).timestamp()
+        assert any(x['edition']==edition and x['at']==now for x in social.market_slots(now))
+    noon=datetime(2026,11,1,12,tzinfo=NY).timestamp()
+    assert {x['edition'] for x in social.due_slots(noon)}=={'weekly','monthly'}
+    assert not social.market_slots(datetime(2026,10,5,16,30,tzinfo=NY).timestamp())
+
+
+def test_automatic_posts_keep_45_minute_gap(monkeypatch):
+    now=setup(monkeypatch)
+    with s.db() as c:
+        c.execute('INSERT INTO social_editions VALUES(?,?,?,?,?,?,?)',
+                  ('previous',now-600,'{}','published','old',None,now-600))
+    monkeypatch.setattr(social,'client',lambda *a:pytest.fail('Must not contact X during spacing hold'))
+    assert social.run(now)['sent']==0
+    with s.db() as c:
+        assert c.execute('SELECT COUNT(*) FROM social_editions').fetchone()[0]==1

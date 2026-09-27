@@ -185,6 +185,21 @@ def preview(request:Request,edition:str):
     except ValueError as e:raise HTTPException(409,str(e))
     return {**p,'image':'data:image/png;base64,'+base64.b64encode(card(p)).decode()}
 
+def market_slots(now):
+    """X-only timing; subscriber newsletter delivery stays unchanged."""
+    local=datetime.fromtimestamp(now,NY)
+    candidates=[]
+    if local.weekday()<5:candidates.append(('morning',8))
+    if local.weekday()==6:candidates.append(('weekly',11))
+    if local.day==1:candidates.append(('monthly',10))
+    slots=[]
+    for edition,hour in candidates:
+        at=local.replace(hour=hour,minute=0,second=0,microsecond=0).timestamp()
+        if 0<=now-at<7200:
+            slots.append({'edition':edition,'at':at,'key':edition+':'+local.date().isoformat()})
+    return sorted(slots,key=lambda slot:slot['at'])
+
+
 def run(now=None,manual_promo=False,manual_research=False):
     now=time.time() if now is None else now;s=core()
     if os.getenv('VERCEL_ENV')!='production':return {'state':'preview_disabled'}
@@ -197,7 +212,7 @@ def run(now=None,manual_promo=False,manual_research=False):
         if value(c,'social_paused',True) or not value(c,'social_label_confirmed',False):return {'state':'paused'}
         if c.execute("SELECT 1 FROM social_editions WHERE status IN ('uncertain','failed') LIMIT 1").fetchone():return {'state':'review_required'}
     result={'state':'ok','sent':0}
-    slots=[slot for slot in due_slots(now) if slot['edition']!='final']+social_promos.slots(now)+social_research.slots(now)+social_promos.signal_slots(now)+social_promos.insights_slots(now)
+    slots=market_slots(now)+social_promos.slots(now)+social_research.slots(now)+social_promos.signal_slots(now)+social_promos.insights_slots(now)
     if manual_research:
         slots=[{'edition':'research','at':now,'key':'research:'+datetime.fromtimestamp(now,NY).date().isoformat()}]
     if manual_promo:
@@ -224,6 +239,12 @@ def run(now=None,manual_promo=False,manual_research=False):
             c.execute('BEGIN IMMEDIATE')
             if value(c,'social_paused',True) or c.execute('SELECT 1 FROM social_editions WHERE id=?',(key,)).fetchone():continue
             if c.execute("SELECT 1 FROM social_editions WHERE status IN ('sending','uncertain','failed') LIMIT 1").fetchone():continue
+            # Hold automatic editions for a later tick if another post just went out.
+            # Check inside the claim transaction so concurrent workers cannot bunch posts.
+            if not (manual_promo or manual_research) and c.execute(
+                "SELECT 1 FROM social_editions WHERE status='published' AND updated>? LIMIT 1",
+                (now-45*60,),
+            ).fetchone():continue
             # Suppress an identical data payload, even when the edition label changes.
             fingerprint=hashlib.sha256((p['text'] if slot['edition'] in ('promo','research','signal_launch','insights_launch') else json.dumps([(r['ticker'],r['mentions'],r['as_of']) for r in p['rows']])).encode()).hexdigest()
             if value(c,'social_last_fingerprint')==fingerprint:continue

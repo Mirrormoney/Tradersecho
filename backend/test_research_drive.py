@@ -73,7 +73,8 @@ def test_only_recent_dated_findings_publish(monkeypatch,tmp_path):
  with db() as c:assert [r[0] for r in c.execute('SELECT document_id FROM research_publications')]==['recent']
 
 
-def test_parser_typeerror_does_not_block_next_pdf(monkeypatch,tmp_path):
+@pytest.mark.parametrize('failure',['parser','database'])
+def test_parser_typeerror_does_not_block_next_pdf(monkeypatch,tmp_path,failure):
  import sqlite3,time
  from contextlib import contextmanager
  from types import SimpleNamespace
@@ -91,10 +92,13 @@ def test_parser_typeerror_does_not_block_next_pdf(monkeypatch,tmp_path):
  with db() as c:c.execute('UPDATE research_drive_files SET modified_at=?',(time.time(),))
  monkeypatch.setattr(d,'under_root',lambda *a:True)
  def extract(raw):
-  if raw==b'a':raise RuntimeError('unexpected malformed font parser failure')
-  return ('[Page 1] valid body.',1)
+  if raw==b'a' and failure=='parser':raise RuntimeError('unexpected malformed font parser failure')
+  return ('[Page 1] valid body. '+raw.decode(),1)
  monkeypatch.setattr(d.research,'extract_pdf',extract)
- monkeypatch.setattr(d.research,'prescreen',lambda *a:{'skip':False})
+ def prescreen(name,text,catalog):
+  if failure=='database' and text.endswith(' a'):raise d.DataError('invalid text data')
+  return {'skip':False}
+ monkeypatch.setattr(d.research,'prescreen',prescreen)
  with httpx.Client(transport=httpx.MockTransport(lambda req:httpx.Response(200,content=req.url.path.rsplit('/',1)[-1].encode()))) as c:d.import_files(c,time.monotonic()+30)
  with db() as c:
   rows=c.execute('SELECT id,status FROM research_drive_files ORDER BY id').fetchall()

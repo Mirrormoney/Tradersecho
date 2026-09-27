@@ -50,7 +50,8 @@ def research_excerpt(read_page,page_count):
     """Read at most four pages; strip a clearly headed legal section before AI."""
     chunks=[];last_page=0;remaining=MAX_EXCERPT_BYTES
     for index in range(min(page_count,MAX_RESEARCH_PAGES)):
-        page=clean_page_edges(read_page(index))
+        # PDF font separators may be NUL bytes, which PostgreSQL text rejects.
+        page=clean_page_edges(read_page(index).replace('\x00',' '))
         lines=page.splitlines();stop=None
         for n,line in enumerate(lines):
             if DISCLAIMER_HEADING.fullmatch(' '.join(line.split())):

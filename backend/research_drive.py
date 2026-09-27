@@ -3,6 +3,7 @@ import base64,hashlib,hmac,json,os,re,secrets,time
 from datetime import date,datetime,timezone,timedelta
 from urllib.parse import urlencode
 import httpx
+from psycopg import DataError
 from pypdf.errors import PdfReadError
 from cryptography.fernet import Fernet
 from fastapi import APIRouter,Request,HTTPException
@@ -221,7 +222,8 @@ def import_files(client,deadline):
     except Exception as exc:
      # Malformed PDF internals must not poison every later batch. No source text in diagnostics.
      with core().db() as c:
-      c.execute("UPDATE research_drive_files SET status='needs_review',error='PDF parsing failed; manual extraction review required' WHERE id=?",(f['id'],))
+      reason=str(exc)[:240] if isinstance(exc,ValueError) else 'PDF parsing failed; manual extraction review required'
+      c.execute("UPDATE research_drive_files SET status='needs_review',error=? WHERE id=?",(reason,f['id']))
       if recovering:research.save_recovered(c,did,'',0,'needs_review',str(exc) if isinstance(exc,ValueError) else 'PDF parsing failed; manual review required')
      continue
     with core().db() as c:catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}
@@ -233,6 +235,10 @@ def import_files(client,deadline):
      c.execute('INSERT OR IGNORE INTO research_documents(id,filename,sender,received,text,pages,status,error,updated) VALUES(?,?,?,?,?,?,?,?,?)',(did,f['name'],'Google Drive research',time.time(),text,pages,state,reason,time.time()))
      if recovering:research.save_recovered(c,did,text,pages,state,reason)
    with core().db() as c:c.execute("UPDATE research_drive_files SET status=?,document_id=? WHERE id=?",('duplicate' if exists else 'imported',did,f['id']))
+  except DataError:
+   # The failed document transaction has rolled back. Quarantine only this file;
+   # connection/infrastructure errors still bubble up for a worker alert.
+   with core().db() as c:c.execute("UPDATE research_drive_files SET status='needs_review',error='Invalid document data; skipped without blocking later files' WHERE id=?",(f['id'],))
   except httpx.HTTPStatusError as e:
    if e.response.status_code in (429,500,502,503,504):raise
    with core().db() as c:c.execute("UPDATE research_drive_files SET status='needs_review',error='Download unavailable; check permissions' WHERE id=?",(f['id'],))

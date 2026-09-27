@@ -106,6 +106,10 @@ class ResearchTests(unittest.TestCase):
   text,pages=r.research_excerpt(read,10)
   self.assertEqual(pages,4);self.assertEqual(read.call_count,4)
   self.assertIn('[Page 4]',text);self.assertNotIn('[Page 5]',text)
+ def test_pdf_null_separators_safe_for_postgres(self):
+  text,pages=r.research_excerpt(lambda i:('NVIDIA\x00expects improving demand. ')*10,1)
+  self.assertNotIn('\x00',text)
+  self.assertIn('NVIDIA expects improving demand.',text)
  def test_disclaimer_stops_before_later_pages(self):
   content=['Demand is improving. '*12,'More useful context. '*12+'\nIMPORTANT DISCLOSURES\nDo not send this legal section.','Must not read.']
   read=MagicMock(side_effect=lambda i:content[i])

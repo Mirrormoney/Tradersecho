@@ -1,7 +1,9 @@
-"""Private topic starter. No public publication route or scheduled processing."""
+"""Source-dated topic roadmaps behind the existing staff/Pro access gates."""
+import time,copy
 from fastapi import APIRouter, Request, Response, HTTPException
 from .community import staff, core
 router=APIRouter()
+_article_cache={}
 ARTICLE = {'slug': '800-vdc',
  'title': '800 VDC: powering the next generation of AI datacenters',
  'status': 'Private starter · admin only',
@@ -636,10 +638,19 @@ def starter(slug: str, request: Request, response: Response):
 def insight_data(slug):
     if slug not in ARTICLES:
         raise HTTPException(404, 'Topic not found')
+    cached=_article_cache.get(slug)
+    if cached and time.monotonic()-cached[0]<300:
+        return copy.deepcopy(cached[1])
     from .insight_updates import merge_updates
     with core().db() as c:
         rows=c.execute("SELECT result FROM research_documents WHERE status IN ('draft','published','no_match') AND result LIKE ? ORDER BY updated DESC LIMIT 100", ('%"topic": "'+slug+'"%',)).fetchall()
-    return merge_updates(ARTICLES[slug],rows)
+        from .insight_worker import migrate
+        migrate(c)
+        rows=list(rows)+list(c.execute("SELECT result FROM insight_analysis WHERE status='complete' AND result LIKE ? ORDER BY updated DESC LIMIT 150",('%"topic": "'+slug+'"%',)).fetchall())
+    from .insight_roadmaps import enrich,organize
+    result=organize(merge_updates(enrich(ARTICLES[slug]),rows))
+    _article_cache[slug]=(time.monotonic(),result)
+    return copy.deepcopy(result)
 
 @router.get('/api/insights')
 def insight_previews(response:Response):

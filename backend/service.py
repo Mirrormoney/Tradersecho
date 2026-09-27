@@ -521,3 +521,5 @@ app.include_router(referrals_router)
 
 from .insights import router as insights_router
 app.include_router(insights_router)
+from .insight_worker import router as insight_worker_router
+app.include_router(insight_worker_router)

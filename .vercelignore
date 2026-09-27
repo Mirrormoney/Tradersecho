@@ -89,3 +89,5 @@ work/
 !backend/insights_evergreen_promo.png
 !backend/signal_history.py
 !backend/pro_access.py
+!backend/insight_roadmaps.py
+!backend/insight_worker.py

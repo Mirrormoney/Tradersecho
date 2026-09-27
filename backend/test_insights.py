@@ -23,7 +23,7 @@ def test_topic_requires_staff_and_never_caches(monkeypatch):
   r=client.get('/api/admin/insights/800-vdc',headers={'test-role':role});assert r.status_code==200
   assert r.headers['cache-control']=='private, no-store'
   assert len(r.json()['timeline'])==7
- assert client.get('/api/insights/800-vdc').status_code==404
+ assert client.get('/api/insights/800-vdc').status_code==401
 
 def test_starter_evidence_references():
  a=insights.ARTICLE;sources={s['id'] for s in a['sources']}
@@ -60,7 +60,7 @@ def test_all_topics_private_and_complete(monkeypatch):
   path='/api/admin/insights/'+slug
   assert client.get(path).status_code==403
   assert client.get(path,headers={'test-role':'admin'}).status_code==200
-  assert client.get('/api/insights/'+slug).status_code==404
+  assert client.get('/api/insights/'+slug).status_code==401
   refs={s['id'] for s in a['sources']}
   assert len(a['timeline'])>=2 and a['intro'] and a['questions']
   for b in a['beneficiaries']:

@@ -20,6 +20,11 @@ def test_extended_memory_generation_is_recognised():
  d=dict(EVENT,summary='HBM4E qualification is expected in 2027.',evidence='HBM4E qualification is expected in 2027.')
  assert validate_updates([d],TEXT.replace('HBM4','HBM4E'),page_quote)==[d]
 
+def test_liquid_to_liquid_architecture_is_recognised():
+ quote='Liquid-to-liquid cooling is expected to gain traction in 2027.'
+ d=dict(EVENT,topic='liquid-cooling',summary=quote,evidence=quote)
+ assert validate_updates([d],'[Page 1]\n'+quote,page_quote)==[d]
+
 def test_merge_deduplicates_preserves_old_forecasts_and_private_evidence():
  base={'slug':'hbm','sources':[],'timeline':[{'title':'Starter'}],'evidence_through':'2026-01-01'}
  row={'result':json.dumps({'firm':'Broker','report_date':'2026-09-26','topic_developments':[EVENT]})}

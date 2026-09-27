@@ -122,8 +122,9 @@ def analyze_one(token=None):
  s=core();now=time.time();month=datetime.now(timezone.utc).strftime('%Y-%m');rid=secrets.token_hex(16)
  with s.db() as c:
   migrate(c);c.execute('BEGIN IMMEDIATE')
-  # Alternate public and imported research so a deep archive cannot starve news.
-  public=c.execute("SELECT * FROM insight_sources WHERE status='queued' ORDER BY updated LIMIT 1").fetchone() if int(now//3600)%2==0 else None
+  # News discovery adds at most two items per hourly run, leaving archive capacity
+  # in the three-item batch while current public developments are processed first.
+  public=c.execute("SELECT * FROM insight_sources WHERE status='queued' ORDER BY updated LIMIT 1").fetchone()
   if public:
    public=dict(public);identity='public:'+public['url'];text='[Page 1]\n'+public['text'];firm=public['firm'];day=public['day']
   else:

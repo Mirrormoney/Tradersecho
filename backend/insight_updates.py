@@ -6,10 +6,10 @@ from pydantic import BaseModel,ConfigDict,Field
 
 PATTERNS={
  '800-vdc':r'800\s*V|solid.state transformer|\bSST\b',
- 'hbm':r'\bHBM\d*\b|high.bandwidth memory',
+ 'hbm':r'\bHBM(?:\d+[A-Z]?)?\b|high.bandwidth memory',
  'advanced-packaging':r'CoWoS|SoIC|advanced packaging|chiplet|3D.stack|XDSiP',
  'optical-networking':r'photonics|optical|co.packaged optics|\bCPO\b|800G|1\.6T',
- 'liquid-cooling':r'liquid.cool|cold.plate|coolant|cooling distribution',
+ 'liquid-cooling':r'liquid.cool|cold.plate|coolant|cooling distribution|\bCDUs?\b|direct.to.chip cooling',
  'ai-power':r'data.?cent|grid|gas turbine|power generation|energiz',
  'ai-inference':r'inference|custom accelerator|Trainium|\bXPU\b|\bTPU\b',
 }

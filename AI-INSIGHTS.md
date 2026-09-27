@@ -44,6 +44,6 @@ retained. Existing research imports, stock summaries and original documents are 
 
 ## Validation
 
-September 27: 50 focused tests passed, frontend build passed, PostgreSQL article assembly
+September 27: 52 focused tests passed, frontend build passed, PostgreSQL article assembly
 checked for all seven topics. Unauthenticated topic detail returns 401; production is
 public and preview/generated deployment URLs retain Vercel protection.

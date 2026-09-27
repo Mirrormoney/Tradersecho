@@ -67,3 +67,18 @@ def test_staff_run_cooldown_prevents_repeat_paid_work(db,monkeypatch):
  assert len(w.run(request)['analysis'])==3
  assert w.run(request)=={'state':'cooldown'}
  assert len(calls)==3
+
+def test_public_development_is_validated_saved_once_and_raw_text_discarded(db,monkeypatch):
+ from .test_insight_updates import EVENT
+ with db() as c:c.execute('INSERT INTO insight_sources VALUES(?,?,?,?,?,?)',('https://example.com/news','Source','2026-01-01',EVENT['evidence'],'queued',1))
+ calls=[]
+ def post(*a,**k):
+  calls.append(1)
+  return SimpleNamespace(raise_for_status=lambda:None,json=lambda:{'choices':[{'finish_reason':'stop','message':{'content':json.dumps({'topic_developments':[EVENT],'exposures':[]})}}],'usage':{'cost':0.003}})
+ monkeypatch.setattr(w.httpx,'post',post)
+ assert w.analyze_one('test')=={'state':'complete','developments':1}
+ with db() as c:
+  assert c.execute('SELECT text FROM insight_sources').fetchone()[0]==''
+  result=json.loads(c.execute("SELECT result FROM insight_analysis WHERE id LIKE 'public:%'").fetchone()[0])
+  assert result['source_url']=='https://example.com/news'
+  assert result['topic_developments']==[EVENT]

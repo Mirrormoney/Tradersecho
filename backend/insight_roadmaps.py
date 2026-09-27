@@ -110,6 +110,7 @@ def enrich(article):
  for sid,end,when,title,summary,kind,watch in extra:
   result['timeline'].append({'source':sid,'when':when,'target_end':end,'title':title,'expectation':summary,'kind':kind,'watch':watch,'scope':'Industry estimate' if sid.startswith('tf-') else ('Company outlook' if kind=='forecast' else 'Reported development'),'page':'Public source','report_date':SOURCES[sid][1]})
  if result['slug']=='optical-networking':
+  result['timeline']=[e for e in result['timeline'] if e['title']!='Photonics switch availability window']
   direct=[('LITE','Lumentum','lite-2026','Optical components and lasers; NVIDIA optics agreement.','Capacity readiness, optical product mix and shipment conversion.'),('COHR','Coherent','cohr-2026','Optical components and connectivity for AI datacenters.','Customer qualification and volume adoption of newer optical products.'),('AXTI','AXT','axt-2026','InP substrates upstream of optical devices; Lumentum supply agreement.','Shipment execution, permits, usable capacity and margins.')]
   result['beneficiaries']=[{'ticker':t,'name':n,'source':sid,'short_reason':reason,'why':reason,'timing':'Follow the source-dated milestones below; no inferred quarterly revenue date.','watch':watch,'stage':'Direct supply-chain exposure','page':'Public source'} for t,n,sid,reason,watch in direct]+result['beneficiaries']
  return result

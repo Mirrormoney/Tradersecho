@@ -67,6 +67,19 @@ def merge_updates(article,rows,today=None):
      result.setdefault('beneficiaries',[]).append({'ticker':e['ticker'],'name':e.get('name') or e['ticker'],'source':sid,'short_reason':e['reason'],'why':e['reason'],'timing':'Source dated '+published.isoformat()+'; no inferred delivery date.','watch':'Look for subsequent qualification, orders and revenue disclosures.','stage':'Source-supported exposure','page':''})
    for d in report.get('topic_developments',[]):
     if d['topic']!=article['slug']:continue
+    # The archive pass also sees articles already used in curated milestones.
+    # Collapse only close paraphrases from that exact source and milestone kind.
+    if report.get('source_url'):
+     source_ids={s['id'] for s in article.get('sources',[]) if s.get('url')==report['source_url']}
+     words=lambda text:set(re.findall(r'[a-z0-9]+',text.casefold()))-{'the','a','an','of','to','in','and','for','its','is','are','with','on','by','as','at'}
+     incoming=words(d['summary'])
+     duplicate=False
+     for old in article.get('timeline',[]):
+      previous=words(old.get('expectation',''))
+      if old.get('source') in source_ids and old.get('kind')==d['kind'] and incoming and previous:
+       same_numbers=set(re.findall(r'\d+(?:[.,]\d+)*',d['summary']))==set(re.findall(r'\d+(?:[.,]\d+)*',old.get('expectation','')))
+       if same_numbers and len(incoming&previous)/min(len(incoming),len(previous))>=.75:duplicate=True;break
+     if duplicate:continue
     # Collapse repeated source passages even across forwarded/renamed documents.
     key=hashlib.sha256(re.sub(r'\W+','',d['evidence'].casefold()).encode()).hexdigest()
     if key in seen:continue

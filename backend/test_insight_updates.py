@@ -25,6 +25,11 @@ def test_liquid_to_liquid_architecture_is_recognised():
  d=dict(EVENT,topic='liquid-cooling',summary=quote,evidence=quote)
  assert validate_updates([d],'[Page 1]\n'+quote,page_quote)==[d]
 
+def test_curated_source_reanalysis_does_not_duplicate_same_milestone():
+ base={'slug':'hbm','sources':[{'id':'source','url':'https://example.com/note'}],'timeline':[{'source':'source','kind':'forecast','expectation':EVENT['summary']}]}
+ row={'result':json.dumps({'firm':'Broker','report_date':'2026-01-01','source_url':'https://example.com/note','topic_developments':[EVENT]})}
+ assert merge_updates(base,[row])['automatic_updates']==0
+
 def test_merge_deduplicates_preserves_old_forecasts_and_private_evidence():
  base={'slug':'hbm','sources':[],'timeline':[{'title':'Starter'}],'evidence_through':'2026-01-01'}
  row={'result':json.dumps({'firm':'Broker','report_date':'2026-09-26','topic_developments':[EVENT]})}

@@ -26,3 +26,19 @@ def test_old_queue_with_progress_is_not_an_outage():
  assert snapshot(c,now)['operational_issues']==[]
  c.execute("UPDATE research_documents SET updated=? WHERE id='done'",(now-3600,))
  assert any('two hours' in x for x in snapshot(c,now)['operational_issues'])
+
+
+def test_drive_pending_watchdog_tracks_progress_not_heartbeat():
+ c=connection();now=100000
+ c.execute('CREATE TABLE research_drive_files(id TEXT,status TEXT)')
+ c.execute("INSERT INTO research_drive_files VALUES('waiting','pending')")
+ for key in ['worker','drive_worker']:r.put(c,key,{'at':now,'state':'ok'})
+ assert snapshot(c,now)['operational_issues']==[]
+ later=now+3700
+ for key in ['worker','drive_worker']:r.put(c,key,{'at':later,'state':'ok'})
+ assert any('no import progress' in x for x in snapshot(c,later)['operational_issues'])
+ r.put(c,'drive_last_progress',later)
+ assert snapshot(c,later)['operational_issues']==[]
+ c.execute('DELETE FROM research_drive_files')
+ snapshot(c,later)
+ assert r.meta(c,'drive_pending_observed')==0

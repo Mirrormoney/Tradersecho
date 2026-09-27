@@ -244,6 +244,10 @@ def import_files(client,deadline):
    with core().db() as c:c.execute("UPDATE research_drive_files SET status='needs_review',error='Download unavailable; check permissions' WHERE id=?",(f['id'],))
   except (ValueError,PdfReadError,NotImplementedError):
    with core().db() as c:c.execute("UPDATE research_drive_files SET status='needs_review',error='PDF extraction or size requires review' WHERE id=?",(f['id'],))
+  finally:
+   with core().db() as c:
+    state=c.execute('SELECT status FROM research_drive_files WHERE id=?',(f['id'],)).fetchone()
+    if state and state[0]!='pending':put(c,'last_progress',time.time())
 def publish_validated():
  from .research_feed import migrate as pub_migrate
  cutoff=(datetime.now(timezone.utc).date()-timedelta(days=30)).isoformat()

@@ -7,7 +7,9 @@ def snapshot(c,now):
   row=c.execute('SELECT value FROM meta WHERE key=?',(key,)).fetchone()
   worker=json.loads(row[0]) if row else {}
   if not worker.get('at') or now-worker['at']>max_age:issues.append(label+' heartbeat is overdue.')
-  elif worker.get('state') not in ('ok','batch_yielded'):issues.append(label+' reports '+str(worker.get('state','unknown'))+'.')
+  elif worker.get('state') not in ('ok','batch_yielded'):
+   detail=' / '.join(str(worker[k]) for k in ('stage','error_type','reason') if worker.get(k))
+   issues.append(label+' reports '+str(worker.get('state','unknown'))+(' ('+detail+')' if detail else '')+'.')
   if worker.get('analysis',{}).get('state') in ('budget_paused','ai_credentials_required','worker_error'):issues.append('Research analysis reports '+worker['analysis']['state']+'.')
   if worker.get('image_state'):issues.append(worker['image_state']+'.')
  rows=c.execute('SELECT status,COUNT(*) n,MIN(updated) oldest FROM research_documents GROUP BY status').fetchall()
@@ -16,6 +18,17 @@ def snapshot(c,now):
  for r in rows:
   if r['status'] in ('queued','awaiting_analysis') and now-r['oldest']>2*3600 and (not last_completed or now-last_completed>30*60 or now-r['oldest']>86400):issues.append(f"{r['n']} notes are {r['status'].replace('_',' ')}; the oldest has waited over two hours.")
   if r['status']=='analyzing' and now-r['oldest']>15*60:issues.append('An analysis has not finished after 15 minutes.')
+ # Observe the Drive queue separately: it exists before research_documents.
+ from . import research
+ tables=[r['name'] for r in c.execute('PRAGMA table_info(research_drive_files)')]
+ if 'status' in tables:
+  pending=c.execute("SELECT COUNT(*) FROM research_drive_files WHERE status='pending'").fetchone()[0]
+  observed=research.meta(c,'drive_pending_observed',0)
+  if pending:
+   if not observed:observed=now;research.put(c,'drive_pending_observed',now)
+   progressed=research.meta(c,'drive_last_progress',0)
+   if now-max(observed,progressed)>3600:issues.append('Google Drive pending PDFs have made no import progress for over one hour.')
+  elif observed:research.put(c,'drive_pending_observed',0)
  operational_issues=list(issues)
  review=c.execute("SELECT COUNT(*) FROM research_documents WHERE status='needs_review' AND updated>?",(now-86400,)).fetchone()[0]
  if review:issues.append(f'{review} notes entered manual review in the past 24 hours. They have not been automatically published.')

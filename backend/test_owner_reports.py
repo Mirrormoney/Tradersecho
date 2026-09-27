@@ -89,3 +89,15 @@ def test_research_review_notice_does_not_claim_outage(monkeypatch):
         assert o.run(client=mail)['sent']==0
         assert o.run(client=mail)['sent']==0
     assert captured==[]
+
+
+def test_distinct_failure_alert_not_hidden_by_earlier_alert(monkeypatch):
+    configured(monkeypatch);monkeypatch.setenv('RESEARCH_DRIVE_ENABLED','true')
+    state={'issues':['Drive reports reconnect_required.'],'operational_issues':['Drive reports reconnect_required.']}
+    monkeypatch.setattr('backend.research_health.snapshot',lambda c,now:state)
+    with httpx.Client(transport=httpx.MockTransport(lambda req:httpx.Response(200,json={'id':'health'}))) as mail:
+        assert o.run(client=mail)['sent']==1
+        assert o.run(client=mail)['sent']==0
+        state['issues']=state['operational_issues']=['Drive reports needs_review (import / DataError).']
+        assert o.run(client=mail)['sent']==1
+        assert o.run(client=mail)['sent']==0

@@ -1,5 +1,6 @@
 """Durable owner-only operational emails, driven by the hosted email cron."""
 import hashlib
+import re
 import json
 import os
 import time
@@ -106,7 +107,8 @@ def run(now=None, client=None):
         from .research_health import snapshot as research_health
         health=research_health(c,now) if os.getenv('RESEARCH_DRIVE_ENABLED')=='true' or os.getenv('RESEARCH_IMAP_PASSWORD') else {'issues':[],'checked_at':now}
         save(c,'research_health',health)
-        alert_key=PREFIX+'research:'+datetime.fromtimestamp(now,BERLIN).date().isoformat()+(':failure' if health.get('operational_issues') else ':review')
+        signature=hashlib.sha256(re.sub(r'\d+','#','|'.join(sorted(health.get('operational_issues',[])))).encode()).hexdigest()[:16]
+        alert_key=PREFIX+'research:'+str(int(now//(6*3600)))+':'+signature
         if health.get('operational_issues') and not get(c,alert_key):
             save(c,alert_key,{'kind':'research','issues':health['operational_issues'],'health':health,'created':now,'status':'pending','next':0})
         queue = [(r['key'],json.loads(r['value'])) for r in c.execute('SELECT key,value FROM meta WHERE key LIKE ?',(PREFIX+'%',))]

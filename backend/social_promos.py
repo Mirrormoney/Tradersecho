@@ -77,33 +77,12 @@ def illustration(d,x,y,kind):
         d.polygon([(x+152,y+62),(x+160,y+68),(x+152,y+74)],fill=GREEN)
 
 
+PROMO_ARTWORK = ('general_3d_promo.png','supply_chain_3d_promo.png',
+                 'general_3d_promo.png','sec_3d_promo.png',
+                 'supply_chain_3d_promo.png','research_3d_promo.png')
+
 def artwork(report):
-    if report['variant']==5:
-        with Image.open(Path(__file__).with_name('trending_research_promo.png')) as screenshot:
-            return png(screenshot.convert('RGB'))
-    im=Image.new('RGB',(1200,675),BG);d=ImageDraw.Draw(im)
-    pulse(d,42,25,80);d.text((140,40),'tradersecho',font=font(36),fill=WHITE)
-    d.text((142,87),'ATTENTION / PERSPECTIVE / COMMUNITY',font=font(15),fill=MUTED)
-    d.text((50,151),report['title'],font=font(46),fill=GREEN)
-    index=report['variant']
-    scenes=[
-        [('AI-stock rankings','chart','Find the active names'),('Tracked X voices','chat','Explore collected takes'),('Context in one place','document','Go beyond the headline')],
-        [('Chips + memory','compute','Start at the core'),('Cloud + networks','network','Follow the connections'),('Power + cooling','power','Explore the infrastructure')],
-        [('Check attention','chart','Follow the conversation heat'),('Explore the conversation','chat','Read collected X takes'),('Build your watchlist','watch','Keep your research in view')],
-        [('Find active names','chart','Start with market attention'),('Check SEC filings','document','Explore company disclosures'),('Read the source','source','Open the original filing')],
-        [('Chips + memory','compute','Beyond the biggest names'),('Networks + power','network_power','Connect the AI economy'),('Software + AI tools','software','Find your next research idea')],
-    ][index]
-    for i,(label,kind,detail) in enumerate(scenes):
-        x=50+i*370
-        d.rounded_rectangle((x,239,x+350,530),radius=20,fill=PANEL,outline='#38543d',width=2)
-        d.text((x+24,260),f'0{i+1}',font=font(18),fill=GREEN)
-        illustration(d,x+30,296,kind)
-        d.text((x+24,460),label,font=font(22),fill=WHITE)
-        d.text((x+24,495),detail,font=font(17),fill=MUTED)
-    d.text((50,558),'Find the conversation. Form your own conviction.',font=font(25),fill=WHITE)
-    d.text((50,610),'7 days of Premium free. No card required.',font=font(20),fill=MUTED)
-    d.text((915,609),'tradersecho.com',font=font(25),fill=GREEN)
-    return png(im)
+    return Path(__file__).with_name(PROMO_ARTWORK[report['variant']]).read_bytes()
 
 
 # Owner-approved launch countdown. Closed interval: never advertise "coming" after launch.

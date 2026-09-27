@@ -91,3 +91,8 @@ work/
 !backend/pro_access.py
 !backend/insight_roadmaps.py
 !backend/insight_worker.py
+
+!backend/general_3d_promo.png
+!backend/sec_3d_promo.png
+!backend/supply_chain_3d_promo.png
+!backend/research_3d_promo.png

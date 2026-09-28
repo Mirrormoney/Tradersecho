@@ -131,6 +131,9 @@ def analyze_one(token=None):
    row=c.execute("SELECT d.id,d.text,d.result FROM research_documents d WHERE d.status IN ('draft','no_match','published') AND d.result IS NOT NULL AND NOT EXISTS (SELECT 1 FROM insight_analysis a WHERE a.id=? || d.id) ORDER BY d.received DESC LIMIT 1",(VERSION+':',)).fetchone()
    if not row:return {'state':'idle'}
    identity=VERSION+':'+row['id'];text=row['text'];report=json.loads(row['result']);firm=report.get('firm');day=report.get('report_date')
+   if report.get('analysis_version')=='research-context-v2':
+    c.execute('INSERT OR IGNORE INTO insight_analysis VALUES(?,?,?,?)',(identity,'shared',None,now))
+    return {'state':'shared_research_analysis','ai_cost':0}
   try:valid_date=date.fromisoformat(day)<=date.today()
   except (ValueError,TypeError):valid_date=False
   if not firm or not valid_date or not any(re.search(p,text,re.I) for p in PATTERNS.values()):

@@ -82,3 +82,11 @@ def test_public_development_is_validated_saved_once_and_raw_text_discarded(db,mo
   result=json.loads(c.execute("SELECT result FROM insight_analysis WHERE id LIKE 'public:%'").fetchone()[0])
   assert result['source_url']=='https://example.com/news'
   assert result['topic_developments']==[EVENT]
+
+def test_shared_analysis_avoids_second_paid_request(db,monkeypatch):
+ with db() as c:
+  c.execute('UPDATE research_documents SET result=?',(json.dumps({'firm':'Broker','report_date':'2026-01-01','analysis_version':'research-context-v2','topic_developments':[]}),))
+ monkeypatch.setattr(w.httpx,'post',lambda *a,**k:pytest.fail('Do not analyze the same note twice'))
+ assert w.analyze_one('test')['state']=='shared_research_analysis'
+ assert w.analyze_one('test')['state']=='idle'
+ with db() as c:assert c.execute('SELECT COUNT(*) FROM ai_sentiment_spend').fetchone()[0]==0

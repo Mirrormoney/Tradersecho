@@ -101,11 +101,11 @@ class ResearchTests(unittest.TestCase):
   from pypdf import PdfWriter
   w=PdfWriter();w.add_blank_page(width=300,height=300);b=io.BytesIO();w.write(b)
   with self.assertRaisesRegex(ValueError,'OCR'):r.extract_pdf(b.getvalue())
- def test_four_page_limit_and_context(self):
-  read=MagicMock(side_effect=lambda i:('NVIDIA expects growth on page '+str(i+1)+'. ')*8)
+ def test_relevant_context_extends_to_eight_pages(self):
+  read=MagicMock(side_effect=lambda i:('NVIDIA demand forecast on page '+str(i+1)+'. ')*8)
   text,pages=r.research_excerpt(read,10)
-  self.assertEqual(pages,4);self.assertEqual(read.call_count,4)
-  self.assertIn('[Page 4]',text);self.assertNotIn('[Page 5]',text)
+  self.assertEqual(pages,8);self.assertEqual(read.call_count,8)
+  self.assertIn('[Page 8]',text);self.assertNotIn('[Page 9]',text)
  def test_pdf_null_separators_safe_for_postgres(self):
   text,pages=r.research_excerpt(lambda i:('NVIDIA\x00expects improving demand. ')*10,1)
   self.assertNotIn('\x00',text)
@@ -122,9 +122,9 @@ class ResearchTests(unittest.TestCase):
  def test_incomplete_page_does_not_poison_remaining_context(self):
   text,pages=r.research_excerpt(lambda i:('Growth continues. '*12+'the next catalyst is') if i==0 else ('a new product. '*12),2)
   self.assertEqual(pages,2);self.assertIn('a new product',text)
- def test_stored_report_stops_at_four(self):
+ def test_stored_report_retains_available_context(self):
   text=r.limit_stored_excerpt(''.join('\n[Page '+str(i)+']\n'+('Demand is improving. '*12) for i in range(1,7)))
-  self.assertIn('[Page 4]',text);self.assertNotIn('[Page 5]',text)
+  self.assertIn('[Page 6]',text);self.assertNotIn('[Page 7]',text)
  def test_excerpt_byte_cap(self):
   text,pages=r.research_excerpt(lambda i:('Demand is improving.\n'*2000),4)
   self.assertLessEqual(len(text.encode()),r.MAX_EXCERPT_BYTES)

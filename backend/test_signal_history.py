@@ -54,3 +54,26 @@ def test_x_missing_counts_does_not_save_a_fake_zero(monkeypatch):
  monkeypatch.setattr(lab,'read_attention_counts',lambda *args:{'error':'No fresh counts'})
  assert not lab.record_x(c,'MARA',123)
  assert c.execute('SELECT count(*) FROM signal_x_history').fetchone()[0]==0
+
+def test_last_valid_axes_survive_missing_update_without_polluting_history():
+ c=sqlite3.connect(':memory:');c.row_factory=sqlite3.Row;lab.migrate(c)
+ now=datetime(2026,9,29,13,tzinfo=lab.NY).timestamp()
+ old=[lab.axis(n,60) for n in lab.TITLES];old[0]=lab.axis(lab.TITLES[0],0)
+ new=[lab.axis(n) for n in lab.TITLES];new[4]=lab.axis(lab.TITLES[4],0)
+ for at,axes in [(now-3600,old),(now,new)]:
+  c.execute('INSERT INTO signal_lab_snapshots(ticker,slot,version,observed,payload) VALUES(?,?,?,?,?)',('ETN',int(at//600),lab.VERSION,at,json.dumps({'ticker':'ETN','axes':axes})))
+ before=c.execute('SELECT payload FROM signal_lab_snapshots ORDER BY observed DESC LIMIT 1').fetchone()[0]
+ detail=h.detail(c,'ETN',now+10)
+ assert detail['axes'][0]['score']==0 and detail['axes'][0]['stale']
+ assert detail['axes'][1]['score']==60
+ assert detail['axes'][4]['score']==0 and not detail['axes'][4]['stale']
+ assert detail['axes'][1]['points'][-1]['samples']==1
+ assert c.execute('SELECT payload FROM signal_lab_snapshots ORDER BY observed DESC LIMIT 1').fetchone()[0]==before
+
+def test_fallback_does_not_use_future_or_other_version():
+ c=sqlite3.connect(':memory:');c.row_factory=sqlite3.Row;lab.migrate(c)
+ for ts,version in [(3000,lab.VERSION),(1000,'old')]:
+  c.execute('INSERT INTO signal_lab_snapshots(ticker,slot,version,observed,payload) VALUES(?,?,?,?,?)',('ETN',int(ts//600),version,ts,json.dumps({'axes':[lab.axis(n,90) for n in lab.TITLES]})))
+ panel={'ticker':'ETN','axes':[lab.axis(n) for n in lab.TITLES]}
+ lab.retain_valid_axes(c,[panel],2000)
+ assert all(a['score'] is None for a in panel['axes'])

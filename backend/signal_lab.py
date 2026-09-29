@@ -348,4 +348,25 @@ def overlay_x(c,panels,now=None):
             panel['axes'][3]=json.loads(row['payload'])
             panel['axes'][3]['stale']=now-row['source_end']>7200
             panel['candidate']=candidate(panel['axes'])
+    return retain_valid_axes(c,panels,now)
+
+
+def retain_valid_axes(c,panels,now):
+    """Display-only fallback: never write carried scores into measured history."""
+    from .database import Postgres
+    for i in range(len(TITLES)):
+        missing={p['ticker']:p for p in panels if len(p.get('axes',[]))>i and p['axes'][i].get('score') is None}
+        if not missing:continue
+        expression=(f"payload::jsonb->'axes'->{i}" if isinstance(c,Postgres)
+                    else f"json_extract(payload,'$.axes[{i}]')")
+        score=(f"payload::jsonb->'axes'->{i}->>'score'" if isinstance(c,Postgres)
+               else f"json_extract(payload,'$.axes[{i}].score')")
+        placeholders=','.join('?' for _ in missing)
+        rows=c.execute(f"SELECT ticker,observed,axis FROM (SELECT ticker,observed,{expression} AS axis,ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY observed DESC) AS position FROM signal_lab_snapshots WHERE version=? AND observed<=? AND ticker IN ({placeholders}) AND {score} IS NOT NULL) ranked WHERE position=1",(VERSION,now,*missing)).fetchall()
+        for row in rows:
+            axis_value=json.loads(row['axis']) if isinstance(row['axis'],str) else dict(row['axis'])
+            axis_value['as_of']=axis_value.get('as_of') or axis_value.get('details',{}).get('as_of') or row['observed']
+            axis_value['stale']=True
+            axis_value['carried_forward']=True
+            missing[row['ticker']]['axes'][i]=axis_value
     return panels

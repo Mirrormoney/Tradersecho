@@ -41,7 +41,7 @@ def extract(raw,did,token=None):
             raise ValueError('Screenshot OCR interrupted or failed; other attachments continue')
         spent=c.execute('SELECT COALESCE(SUM(COALESCE(actual,reserved)),0) FROM ai_sentiment_spend WHERE month=?',(month,)).fetchone()[0]
         research=c.execute("SELECT COALESCE(SUM(COALESCE(actual,reserved)),0) FROM ai_sentiment_spend WHERE month=? AND cache_key LIKE 'research:%'",(month,)).fetchone()[0]
-        if spent+r.RESERVE>min(20,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','10'))) or research+r.RESERVE>min(15,float(os.getenv('RESEARCH_AI_MONTHLY_USD','2'))):raise DeferredImage('Screenshot OCR paused at AI budget limit')
+        if spent+r.RESERVE>min(30,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','30'))) or research+r.RESERVE>min(25,float(os.getenv('RESEARCH_AI_MONTHLY_USD','25'))):raise DeferredImage('Screenshot OCR paused at AI budget limit')
         rid=secrets.token_hex(16)
         c.execute('INSERT INTO ai_sentiment_spend(id,cache_key,month,reserved,ts,status) VALUES(?,?,?,?,?,?)',(rid,key,month,r.RESERVE,now,'reserved'))
     try:

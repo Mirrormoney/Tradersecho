@@ -14,7 +14,7 @@ def check(worker,token=None,client=None):
         if previous and now-float(previous[0])<3600:return {'state':'cached'}
         c.execute("INSERT INTO meta VALUES('ai_monitor_checked',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(now),))
         spent=c.execute('SELECT COALESCE(SUM(COALESCE(actual,reserved)),0) FROM ai_sentiment_spend WHERE month=?',(month,)).fetchone()[0]
-    budget=min(20,max(0,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','10'))))
+    budget=min(30,max(0,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','30'))))
     alerts=[];snapshot={'checked_at':now,'spent':spent,'budget':budget,'balance':None,'email_status':'no_alert_needed'}
     if spent+.03>=budget:alerts.append(('budget100:'+month,'AI monthly allowance reached. New analysis pauses until the next month or a reviewed budget change.'))
     elif spent>=budget*.8:alerts.append(('budget80:'+month,'AI analysis has used 80% of its monthly allowance.'))

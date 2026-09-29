@@ -76,7 +76,7 @@ def weekly_content(start, end):
     rows += [('X estimated usage',f"${data['x_cost']:.2f}"),('AI usage / outstanding reservations',f"${data['ai_cost']:.2f}"),('Total metered estimate',f"${data['estimated_total']:.2f}"),('Vercel base plan · allocated estimate',f'${hosting:.2f} ($20/month assumption)'),('Known-cost subtotal · estimate',f"${data['estimated_total']+hosting:.2f}")]
     notes = ('Costs are application-ledger estimates, not invoices. Missing final charges retain conservative reservations. X ledger entries are not a count of tweets. '
              'The Vercel base allocation assumes the owner’s $20/month plan, before tax; additional seats or usage are excluded. Database, email, domain and Stripe charges are not included: their invoices are not connected. '
-             'Budget ceilings remain $250/month for X and $20/month for AI; these are limits, not subscription charges. '
+             'Budget ceilings remain $250/month for X and $30/month for AI; these are limits, not subscription charges. '
              'Page views exclude administrators and visitors who opt out. Visitor identifiers rotate daily. '
              'Account totals are current; activity covers the seven-day reporting window. Retained job states and X editions do not represent every retry or follow-up reply.')
     health = 'Collection job states: ' + (', '.join(f"{r['status']}: {r['n']}" for r in data['jobs']) or 'none recorded')

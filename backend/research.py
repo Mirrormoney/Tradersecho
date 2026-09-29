@@ -473,7 +473,7 @@ def analyze_one(token=None):
             return {'state':'screened_out','ai_cost':0}
         spent=c.execute('SELECT COALESCE(SUM(COALESCE(actual,reserved)),0) FROM ai_sentiment_spend WHERE month=?',(month,)).fetchone()[0]
         pilot=c.execute("SELECT COALESCE(SUM(COALESCE(actual,reserved)),0) FROM ai_sentiment_spend WHERE month=? AND cache_key LIKE 'research:%'",(month,)).fetchone()[0]
-        if spent+RESERVE>min(20,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','10'))) or pilot+RESERVE>min(15,float(os.getenv('RESEARCH_AI_MONTHLY_USD','2'))):return {'state':'budget_paused'}
+        if spent+RESERVE>min(30,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','30'))) or pilot+RESERVE>min(25,float(os.getenv('RESEARCH_AI_MONTHLY_USD','25'))):return {'state':'budget_paused'}
         c.execute('INSERT INTO ai_sentiment_spend(id,cache_key,month,reserved,ts,status) VALUES(?,?,?,?,?,?)',(rid,'research:'+row['id'],month,RESERVE,now,'reserved'))
         c.execute("UPDATE research_documents SET status='analyzing',model=?,updated=? WHERE id=?",(MODEL,now,row['id']))
         catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}

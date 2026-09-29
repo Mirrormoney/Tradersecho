@@ -142,7 +142,7 @@ def analyze_one(token=None):
    return {'state':'irrelevant'}
   spent=c.execute('SELECT COALESCE(SUM(COALESCE(actual,reserved)),0) FROM ai_sentiment_spend WHERE month=?',(month,)).fetchone()[0]
   research=c.execute("SELECT COALESCE(SUM(COALESCE(actual,reserved)),0) FROM ai_sentiment_spend WHERE month=? AND cache_key LIKE 'research:%'",(month,)).fetchone()[0]
-  if spent+RESERVE>min(20,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','10'))) or research+RESERVE>min(15,float(os.getenv('RESEARCH_AI_MONTHLY_USD','2'))):return {'state':'budget_paused'}
+  if spent+RESERVE>min(30,float(os.getenv('SENTIMENT_AI_MONTHLY_USD','30'))) or research+RESERVE>min(25,float(os.getenv('RESEARCH_AI_MONTHLY_USD','25'))):return {'state':'budget_paused'}
   # Keep the same reservation on an uncertain failure. Never repeat a paid call automatically.
   claimed=c.execute('INSERT OR IGNORE INTO insight_analysis VALUES(?,?,?,?)',(identity,'processing',None,now)).rowcount
   if not claimed:return {'state':'already_claimed'}

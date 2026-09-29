@@ -163,7 +163,7 @@ class ResearchTests(unittest.TestCase):
     c.execute('CREATE TABLE stocks(ticker TEXT,name TEXT,active INTEGER)')
     c.execute("CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT)")
     c.execute('CREATE TABLE ai_sentiment_spend(month TEXT,actual REAL,reserved REAL,cache_key TEXT)')
-    c.execute('INSERT INTO ai_sentiment_spend VALUES(?,10,0,?)',(r.datetime.now(r.timezone.utc).strftime('%Y-%m'),'post'))
+    c.execute('INSERT INTO ai_sentiment_spend VALUES(?,30,0,?)',(r.datetime.now(r.timezone.utc).strftime('%Y-%m'),'post'))
     c.execute("INSERT INTO research_documents(id,filename,sender,received,text,pages,status,updated) VALUES('x','x.pdf','test',0,?,1,'queued',0)",('[Page 1]\n'+'NVIDIA expects demand to improve. '*6,))
    with patch.object(r,'core',return_value=SimpleNamespace(db=db)),patch.dict(os.environ,{'AI_GATEWAY_API_KEY':'test'}),patch.object(r.httpx,'post') as post:
     self.assertEqual(r.analyze_one()['state'],'budget_paused');post.assert_not_called()

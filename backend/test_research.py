@@ -20,7 +20,7 @@ class ResearchTests(unittest.TestCase):
    with db() as c:c.execute('CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT)')
    with patch.object(r,'core',return_value=SimpleNamespace(db=db)),patch.object(r,'import_mail',side_effect=RuntimeError('offline')),patch.object(r,'analyze_one',return_value={'state':'draft_ready'}) as analyze:
     result=r.run('test-token')
-    self.assertEqual(result['state'],'mailbox_connection_failed')
+    self.assertEqual(result['state'],'email_import_failed')
     self.assertEqual(result['analysis']['state'],'draft_ready')
     analyze.assert_called_once_with('test-token')
     with db() as c:self.assertEqual(r.meta(c,'lease'),{})

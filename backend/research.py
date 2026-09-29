@@ -3,7 +3,7 @@
 Completed originals may be deleted after seven days; unresolved mail is retained. Only staff can read
 drafts; validated recent notes can publish through the approved automatic pipeline.
 """
-import email,hashlib,hmac,imaplib,io,json,os,re,secrets,ssl,time
+import email,hashlib,hmac,imaplib,io,json,os,re,secrets,ssl,time,logging,traceback
 from datetime import datetime,timedelta,timezone,date
 from email import policy
 import httpx
@@ -169,16 +169,37 @@ def cleanup_mail(mailbox,validity):
     return {'state':'ok','deleted':deleted}
 
 
+class MailboxConnectionError(Exception):
+    def __init__(self,stage,error_type):
+        self.stage=stage;self.error_type=error_type
+        super().__init__('Mailbox connection failed')
+
+def connect_mailbox(password,sleep=time.sleep):
+    # Retry only setup, before attachments or paid analysis can be processed.
+    for attempt in range(2):
+        mailbox=None;stage='connect'
+        try:
+            mailbox=imaplib.IMAP4_SSL('imaps.udag.de',993,ssl_context=ssl.create_default_context(),timeout=25)
+            stage='login';mailbox.login('tradersecho-com-0003',password)
+            stage='select';status,_=mailbox.select('INBOX',readonly=True)
+            if status!='OK':raise imaplib.IMAP4.error('Mailbox unavailable')
+            return mailbox
+        except (OSError,imaplib.IMAP4.error) as exc:
+            logging.warning('Research mailbox setup: stage=%s error_type=%s attempt=%s',stage,type(exc).__name__,attempt+1)
+            if mailbox:
+                try:mailbox.shutdown()
+                except Exception:pass
+            transient=isinstance(exc,(OSError,imaplib.IMAP4.abort)) and not isinstance(exc,ssl.SSLCertVerificationError)
+            if transient and attempt==0:sleep(2);continue
+            raise MailboxConnectionError(stage,type(exc).__name__) from None
+
 def import_mail(token=None):
     from . import research_images
     password=os.getenv('RESEARCH_IMAP_PASSWORD')
     if not password:return {'state':'mailbox_password_required','imported':0}
-    mailbox=imaplib.IMAP4_SSL('imaps.udag.de',993,ssl_context=ssl.create_default_context(),timeout=25)
+    mailbox=connect_mailbox(password)
     imported=0;image_calls=0;deferred=0;image_state=None
     try:
-        mailbox.login('tradersecho-com-0003',password)
-        status,_=mailbox.select('INBOX',readonly=True)
-        if status!='OK':raise RuntimeError('Mailbox unavailable')
         validity=mailbox.response('UIDVALIDITY')[1][0].decode()
         since=(datetime.now(timezone.utc)-timedelta(days=30)).strftime('%d-%b-%Y')
         status,data=mailbox.uid('search',None,'SINCE',since)
@@ -534,8 +555,15 @@ def run(token=None):
     try:
         try:
             result=import_mail(token)
-        except Exception:
-            result={'state':'mailbox_connection_failed','detail':'Check mailbox password and provider availability'}
+        except MailboxConnectionError as exc:
+            result={'state':'mailbox_connection_failed','stage':exc.stage,'error_type':exc.error_type}
+            with s.db() as c:put(c,'mail_last_failure',dict(result,at=time.time()))
+        except Exception as exc:
+            # Do not label database, attachment or parsing failures as bad credentials.
+            frames=[{'function':f.name,'line':f.lineno} for f in traceback.extract_tb(exc.__traceback__)[-5:]]
+            logging.error('Research email import: error_type=%s frames=%s',type(exc).__name__,json.dumps(frames))
+            result={'state':'email_import_failed','stage':'processing','error_type':type(exc).__name__}
+            with s.db() as c:put(c,'mail_last_failure',dict(result,at=time.time()))
         if os.getenv('RESEARCH_DRIVE_PUBLISH_ENABLED')=='true':
             queue_email_backlog()
         with s.db() as c:

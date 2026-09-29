@@ -87,7 +87,7 @@ class ResearchTests(unittest.TestCase):
   with self.assertRaises(ValueError):r.validate_report(REPORT,TEXT,{'MU'})
  def test_wrong_page(self):
   value=copy.deepcopy(REPORT);value['findings'][0]['page']=2
-  with self.assertRaises(ValueError):r.validate_report(value,TEXT,{'NVDA'})
+  self.assertEqual(r.validate_report(value,TEXT,{'NVDA'})['findings'][0]['page'],1)
  def test_pdf_separator_still_requires_exact_words(self):
   value=copy.deepcopy(REPORT);value['findings'][0]['evidence']='NVIDIA'+chr(0)+'expects improving demand.'
   self.assertEqual(r.validate_report(value,TEXT,{'NVDA'})['findings'][0]['evidence'],'NVIDIA expects improving demand.')
@@ -198,7 +198,7 @@ def test_real_estate_prescreen_preserves_universe_readthrough():
 
 def test_truncated_analysis_retry_gets_more_output_space():
  from .research import analysis_generation_limits
- assert analysis_generation_limits({}) == {'max_tokens':6000,'reasoning_effort':'medium'}
+ assert analysis_generation_limits({}) == {'max_tokens':6000,'reasoning_effort':'low'}
  assert analysis_generation_limits({'reason':'Incomplete analysis'}) == {'max_tokens':12000,'reasoning_effort':'low'}
  assert analysis_generation_limits({'reason':'Evidence not present in source'})['max_tokens'] == 6000
 

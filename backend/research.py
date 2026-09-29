@@ -396,6 +396,34 @@ def page_quote(quote,text,page_number):
     if not page:raise ValueError('Evidence page mismatch')
     return pdf_quote(quote.replace('\x00',' '),page[1])
 
+def located_quote(quote,text,page_number):
+    """Correct a model page number only for a unique, unchanged source quote."""
+    try:return page_quote(quote,text,page_number),page_number
+    except ValueError:pass
+    matches=[]
+    for number in re.findall(r'\[Page (\d+)\]\n',text):
+        try:matches.append((page_quote(quote,text,int(number)),int(number)))
+        except ValueError:pass
+    if len(matches)!=1:raise ValueError('Evidence not present in source')
+    return matches[0]
+
+
+def analysis_failure(exc):
+    if isinstance(exc,httpx.TimeoutException):return 'AI request timed out'
+    if isinstance(exc,httpx.TransportError):return 'AI connection failed'
+    if isinstance(exc,json.JSONDecodeError):return 'AI response was not valid JSON'
+    # No source text, provider response, credentials or exception messages in logs.
+    if hasattr(exc,'errors'):
+        fields=[{'field':'.'.join(map(str,e['loc'])),'type':e['type']} for e in exc.errors(include_input=False)[:8]]
+        logging.warning('Research schema validation: %s',json.dumps(fields))
+        return 'AI response schema validation failed'
+    known={'Evidence not present in source','Evidence page mismatch','Event attribution lacks source evidence','Incomplete analysis','Ambiguous filename date','Future report date','Missing report date evidence','Invalid or duplicate ticker'}
+    if str(exc) in known:return str(exc)
+    if isinstance(exc,RuntimeError) and re.fullmatch(r'AI provider HTTP \d{3}',str(exc)):return str(exc)
+    logging.warning('Research analysis failure: %s',type(exc).__name__)
+    return 'Analysis needs manual review; response failed validation'
+
+
 def validate_report(value,text,catalog,filename=''):
     from .research_drive import date_candidates
     value=dict(value)
@@ -428,7 +456,7 @@ def validate_report(value,text,catalog,filename=''):
         seen.add(finding.ticker)
         # Some provider responses render PDF nonbreaking spaces as NUL characters.
         # Normalize that separator only; the entire quote must still match source.
-        finding.evidence=page_quote(finding.evidence,text,finding.page)
+        finding.evidence,finding.page=located_quote(finding.evidence,text,finding.page)
         if finding.event:
             date.fromisoformat(finding.event.date)
             finding.event.evidence=pdf_quote(finding.event.evidence,text)
@@ -451,7 +479,7 @@ def validate_report(value,text,catalog,filename=''):
                 # A failed optional target must not block an otherwise supported summary.
             except ValueError:finding.price_target=None
     for finding in report.sector_findings:
-        finding.evidence=page_quote(finding.evidence,text,finding.page)
+        finding.evidence,finding.page=located_quote(finding.evidence,text,finding.page)
     from .research_readthrough import attach_readthroughs
     result=attach_readthroughs(report.model_dump(),catalog)
     result['analysis_version']='research-context-v2'
@@ -507,7 +535,7 @@ def analysis_generation_limits(retry):
     # The existing reservation and monthly ceilings still gate every attempt.
     if retry.get('reason') == 'Incomplete analysis':
         return {'max_tokens':12000,'reasoning_effort':'low'}
-    return {'max_tokens':6000,'reasoning_effort':'medium'}
+    return {'max_tokens':6000,'reasoning_effort':'low'}
 
 
 def analyze_one(token=None):
@@ -537,7 +565,7 @@ def analyze_one(token=None):
         catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}
         put(c,'excerpt_'+row['id'],{'policy':'first_four_before_disclaimer_v1','pages':len(re.findall(r'\[Page \d+\]',row['text'])),'bytes':len(row['text'].encode()),'at':now})
     try:
-        response=httpx.post('https://ai-gateway.vercel.sh/v1/chat/completions',headers={'Authorization':'Bearer '+token},json={'model':MODEL,**analysis_generation_limits(analysis_retry),'response_format':response_format(catalog),'messages':[{'role':'system','content':PROMPT+INSIGHTS_PROMPT+' First assess each primary_candidates company named in the filename against the source. Include its substantive product launches, business developments and broker analysis, not just rating changes. Do not substitute a peer comparison for the main covered company. Then check each mentioned_candidates entry against the source. Omit a candidate only when it lacks substantive supported discussion. Include explicit company rating changes even if they are brief, including upgrades/downgrades listed in Street Actions. These count as substantive news. A price move alone, an event calendar listing, or sector commentary without substantive company discussion is not a stock finding. Never imply that the report author issued a rating when they are reporting a rating from another firm. Empty findings is valid when no covered company has meaningful news.'},{'role':'user','content':json.dumps({'universe':catalog,'primary_candidates':mentioned_candidates(row['filename'],catalog),'mentioned_candidates':mentioned_candidates(row['text'],catalog),'review_instruction':('A prior pass returned no findings despite repeated covered ticker references. Recheck company product announcements, broker analysis, ratings and targets carefully. Return supported findings if present; an empty result is still valid if none are substantive.' if empty_retry else ''),'validation_recheck':('Previous analysis failed: '+analysis_retry['reason']+'. Copy supporting evidence verbatim including intervening words; do not paraphrase or combine separate passages. Set event to null when an explicit dated rating action is not evidenced.' if analysis_retry else ''),'filename':row['filename'],'report':row['text']})}]},timeout=55)
+        response=httpx.post('https://ai-gateway.vercel.sh/v1/chat/completions',headers={'Authorization':'Bearer '+token},json={'model':MODEL,**analysis_generation_limits(analysis_retry),'response_format':response_format(catalog),'messages':[{'role':'system','content':PROMPT+INSIGHTS_PROMPT+' First assess each primary_candidates company named in the filename against the source. Include its substantive product launches, business developments and broker analysis, not just rating changes. Do not substitute a peer comparison for the main covered company. Then check each mentioned_candidates entry against the source. Omit a candidate only when it lacks substantive supported discussion. Include explicit company rating changes even if they are brief, including upgrades/downgrades listed in Street Actions. These count as substantive news. A price move alone, an event calendar listing, or sector commentary without substantive company discussion is not a stock finding. Never imply that the report author issued a rating when they are reporting a rating from another firm. Empty findings is valid when no covered company has meaningful news.'},{'role':'user','content':json.dumps({'universe':catalog,'primary_candidates':mentioned_candidates(row['filename'],catalog),'mentioned_candidates':mentioned_candidates(row['text'],catalog),'review_instruction':('A prior pass returned no findings despite repeated covered ticker references. Recheck company product announcements, broker analysis, ratings and targets carefully. Return supported findings if present; an empty result is still valid if none are substantive.' if empty_retry else ''),'validation_recheck':('Previous analysis failed: '+analysis_retry['reason']+'. Copy supporting evidence verbatim including intervening words; do not paraphrase or combine separate passages. Set event to null when an explicit dated rating action is not evidenced.' if analysis_retry else ''),'filename':row['filename'],'report':row['text']})}]},timeout=90)
         if response.status_code!=200:raise RuntimeError('AI provider HTTP '+str(response.status_code))
         payload=response.json();usage=payload.get('usage',{});cost=usage.get('cost')
         if not isinstance(cost,(int,float)) or not 0<=cost<=RESERVE:cost=None
@@ -557,14 +585,13 @@ def analyze_one(token=None):
             for finding in result['findings']:c.execute('INSERT OR IGNORE INTO research_links VALUES(?,?)',(row['id'],finding['ticker']))
         return {'state':'draft_ready','matches':len(result['findings'])}
     except Exception as exc:
-        known={'Evidence not present in source','Event attribution lacks source evidence','Incomplete analysis','Ambiguous filename date','Future report date','Missing report date evidence','Invalid or duplicate ticker'}
-        error=str(exc) if isinstance(exc,RuntimeError) or str(exc) in known else 'Analysis needs manual review; response failed validation'
+        error=analysis_failure(exc)
         with s.db() as c:c.execute("UPDATE research_documents SET status='needs_review',error=?,updated=? WHERE id=?",(error,time.time(),row['id']))
         return {'state':'needs_review'}
 
 def retry_failed_analyses(c,now):
     """One bounded retry for recoverable AI failures; bad source files stay isolated."""
-    reasons={'Evidence not present in source','Event attribution lacks source evidence','Incomplete analysis','Interrupted analysis; review before retrying'}
+    reasons={'Evidence not present in source','Event attribution lacks source evidence','Incomplete analysis','Interrupted analysis; review before retrying','AI request timed out','AI connection failed','AI response was not valid JSON','AI response schema validation failed'}
     rows=c.execute("SELECT id,error FROM research_documents WHERE status='needs_review' AND updated>? AND LENGTH(text)>=120",(now-86400,)).fetchall()
     for row in rows:
         if row['error'] not in reasons and not str(row['error']).startswith('AI provider HTTP 5'):continue

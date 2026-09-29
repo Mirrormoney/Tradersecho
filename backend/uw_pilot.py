@@ -360,19 +360,40 @@ def overview(request:Request):
                 'tickers':sorted(s.CATALOG),'collection_scope':get(c,'collection_scope',{'eligible_count':len(s.CATALOG),'fast_seconds':600,'background_seconds':3600}),'local_daily_cap':32000,'scores_ready':False}
 
 
+def home_preview_tickers(c,panels,now):
+    from .pro_access import launched
+    fallback=list(FOCUS)
+    if not launched(now):return fallback
+    known={p['ticker']:p for p in panels if p['ticker'] in core().CATALOG}
+    previous=get(c,'home_preview_selection',[])
+    previous=[t for t in previous if t in known]
+    # Preserve the last selected session overnight; no paid fetch on page views.
+    if len(previous)==3 and not session_open(now):return previous
+    def eligible(p):
+        axes=p.get('axes',[])
+        return len(axes)==5 and axes[3].get('score') is not None and sum(a.get('score') is not None for a in axes)>=3
+    candidates=sorted((p for p in known.values() if eligible(p)),key=lambda p:(-p['axes'][3]['score'],p['ticker']))
+    if len(candidates)<3:return previous if len(previous)==3 else fallback
+    chosen=[p['ticker'] for p in candidates[:3]]
+    if chosen!=previous:put(c,'home_preview_selection',chosen)
+    return chosen
+
+
 @router.get('/api/signal-lab')
-def public_signals(response:Response,request:Request):
+def public_signals(response:Response,request:Request,home:bool=False):
     """Owner approved public derived scores on 2026-09-25; never return provider records."""
     from .signal_lab import saved
     s=core();now=time.time()
-    with s.db() as c:panels=saved(c)['stocks']
+    with s.db() as c:
+        panels=saved(c)['stocks']
+        selected=home_preview_tickers(c,panels,now) if home else list(FOCUS)
     rows=[]
     for panel in panels:
-        if panel['ticker'] not in ('NVDA','AMD','MU'):continue
+        if panel['ticker'] not in selected:continue
         axes=[{**{k:a.get(k) for k in ('name','score','strength','direction','state')},'as_of':a.get('details',{}).get('as_of')} for a in panel['axes']]
         rows.append(dict(ticker=panel['ticker'],name=s.CATALOG.get(panel['ticker'],(panel['ticker'],))[0],observed=panel['observed'],axes=axes,
             stale=now-panel['observed']>1200,activity=axes[3]['score']))
-    rows.sort(key=lambda r:(-(r['activity'] if r['activity'] is not None else -1),r['ticker']))
+    rows.sort(key=lambda r:selected.index(r['ticker']) if home else (-(r['activity'] if r['activity'] is not None else -1),r['ticker']))
     u=s.account(request,False)
     full_preview=bool(u and (u['plan'] in ('premium','pro') or u['role'] in ('owner','admin')))
     rows=rows[:3 if full_preview else 1]

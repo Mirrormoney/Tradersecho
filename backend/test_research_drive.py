@@ -167,3 +167,24 @@ def test_server_query_filters_only_pdf_modified_time():
 
 def test_second_approved_root_descendant_allowed():
  with client({'pdf':{'parents':['second']},'second':{'parents':[d.ROOTS[1]]}}) as c:assert d.under_root(c,'pdf')
+
+def test_folder_access_failure_does_not_block_next_folder(monkeypatch):
+ import sqlite3,time
+ from contextlib import contextmanager
+ from types import SimpleNamespace
+ c=sqlite3.connect(':memory:');c.row_factory=sqlite3.Row
+ c.executescript('CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT); CREATE TABLE research_drive_folders(id TEXT PRIMARY KEY,parent TEXT,page TEXT,checked REAL);')
+ for name in ('a-denied','b-good'):c.execute('INSERT INTO research_drive_folders VALUES(?,?,NULL,0)',(name,''))
+ @contextmanager
+ def db():yield c
+ monkeypatch.setattr(d,'core',lambda:SimpleNamespace(db=db))
+ seen=[]
+ def ancestry(client,fid,deadline):
+  seen.append(fid)
+  if fid=='a-denied':raise httpx.HTTPStatusError('denied',request=httpx.Request('GET','https://example.com'),response=httpx.Response(403))
+  return True
+ monkeypatch.setattr(d,'under_root',ancestry)
+ with httpx.Client(transport=httpx.MockTransport(lambda request:httpx.Response(200,json={'files':[]}))) as h:d.scan(h,time.monotonic()+5)
+ assert seen==['a-denied','b-good']
+ assert all(row[0]>0 for row in c.execute('SELECT checked FROM research_drive_folders'))
+ assert d.get(c,'last_folder_failure')['status']==403

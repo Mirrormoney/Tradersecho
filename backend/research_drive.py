@@ -143,44 +143,53 @@ def discovery_query(folder_id,now=None):
 
 def scan(client,deadline):
  with core().db() as c:
-  folders=[dict(r) for r in c.execute('SELECT * FROM research_drive_folders WHERE checked<? ORDER BY checked,id LIMIT 20',(time.time()-900,))]
+  folders=[dict(r) for r in c.execute('SELECT * FROM research_drive_folders WHERE checked<? ORDER BY checked,id LIMIT 80',(time.time()-900,))]
  for folder in folders:
   if time.monotonic()>deadline:break
-  if not under_root(client,folder['id'],deadline):
-   with core().db() as c:c.execute('UPDATE research_drive_folders SET checked=? WHERE id=?',(time.time(),folder['id']))
-   continue
-  params={'q':discovery_query(folder['id']),'fields':'nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum)','pageSize':100,'orderBy':'modifiedTime desc','supportsAllDrives':'true','includeItemsFromAllDrives':'true'}
-  if folder['page']:params['pageToken']=folder['page']
-  r=client.get(API,params=params)
-  if folder['id'] in ROOTS:
+  try:
+   if not under_root(client,folder['id'],deadline):
+    with core().db() as c:c.execute('UPDATE research_drive_folders SET checked=? WHERE id=?',(time.time(),folder['id']))
+    continue
+   params={'q':discovery_query(folder['id']),'fields':'nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum)','pageSize':100,'orderBy':'modifiedTime desc','supportsAllDrives':'true','includeItemsFromAllDrives':'true'}
+   if folder['page']:params['pageToken']=folder['page']
+   r=client.get(API,params=params)
+   if folder['id'] in ROOTS:
+    with core().db() as c:
+     access=get(c,'folder_access',{});access[folder['id']]={'status':r.status_code,'at':time.time()};put(c,'folder_access',access)
+   if r.status_code in (403,404):
+    with core().db() as c:c.execute('UPDATE research_drive_folders SET checked=? WHERE id=?',(time.time(),folder['id']))
+    continue
+   if r.status_code==400 and folder['page']:
+    # Expired/invalid listing cursors must not block the other folders.
+    with core().db() as c:c.execute('UPDATE research_drive_folders SET page=NULL,checked=? WHERE id=?',(time.time(),folder['id']))
+    continue
+   r.raise_for_status();payload=r.json()
    with core().db() as c:
-    access=get(c,'folder_access',{});access[folder['id']]={'status':r.status_code,'at':time.time()};put(c,'folder_access',access)
-  if r.status_code in (403,404):
-   with core().db() as c:c.execute('UPDATE research_drive_folders SET checked=? WHERE id=?',(time.time(),folder['id']))
-   continue
-  if r.status_code==400 and folder['page']:
-   # Expired/invalid listing cursors must not block the other folders.
-   with core().db() as c:c.execute('UPDATE research_drive_folders SET page=NULL,checked=? WHERE id=?',(time.time(),folder['id']))
-   continue
-  r.raise_for_status();payload=r.json()
-  with core().db() as c:
-   for f in payload.get('files',[]):
-    if f['mimeType']==FOLDER:
-     c.execute('INSERT OR IGNORE INTO research_drive_folders(id,parent,checked) VALUES(?,?,?)',(f['id'],folder['id'],0));continue
-    version=f.get('md5Checksum') or f.get('modifiedTime','')
-    modified=file_modified_at(f.get('modifiedTime'))
-    old=c.execute('SELECT version,status,document_id,error FROM research_drive_files WHERE id=?',(f['id'],)).fetchone()
-    size=int(f.get('size') or 0)
-    same=bool(old and old['version']==version)
-    retained=same and old['status'] not in ('pending','awaiting_metadata','archived_discovery','outside_modified_window')
-    if retained:state=old['status']
-    elif modified is None:state='needs_review'
-    elif modified<time.time()-7*86400:state='outside_modified_window'
-    else:state='pending' if 0<size<=12*1024*1024 else 'needs_review'
-    reason=(old['error'] if retained else 'Missing or invalid PDF modifiedTime' if modified is None else 'PDF size requires review' if state=='needs_review' else None)
-    c.execute('INSERT INTO research_drive_files(id,parent,version,name,size,status,seen,modified_at,document_id,error) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET parent=excluded.parent,version=excluded.version,name=excluded.name,size=excluded.size,status=excluded.status,document_id=excluded.document_id,error=excluded.error,seen=excluded.seen,modified_at=excluded.modified_at',(f['id'],folder['id'],version,f['name'][:200],size,state,time.time(),modified,old['document_id'] if retained else None,reason))
-   page=payload.get('nextPageToken')
-   c.execute('UPDATE research_drive_folders SET page=?,checked=? WHERE id=?',(page,0 if page else time.time(),folder['id']))
+    for f in payload.get('files',[]):
+     if f['mimeType']==FOLDER:
+      c.execute('INSERT OR IGNORE INTO research_drive_folders(id,parent,checked) VALUES(?,?,?)',(f['id'],folder['id'],0));continue
+     version=f.get('md5Checksum') or f.get('modifiedTime','')
+     modified=file_modified_at(f.get('modifiedTime'))
+     old=c.execute('SELECT version,status,document_id,error FROM research_drive_files WHERE id=?',(f['id'],)).fetchone()
+     size=int(f.get('size') or 0)
+     same=bool(old and old['version']==version)
+     retained=same and old['status'] not in ('pending','awaiting_metadata','archived_discovery','outside_modified_window')
+     if retained:state=old['status']
+     elif modified is None:state='needs_review'
+     elif modified<time.time()-7*86400:state='outside_modified_window'
+     else:state='pending' if 0<size<=12*1024*1024 else 'needs_review'
+     reason=(old['error'] if retained else 'Missing or invalid PDF modifiedTime' if modified is None else 'PDF size requires review' if state=='needs_review' else None)
+     c.execute('INSERT INTO research_drive_files(id,parent,version,name,size,status,seen,modified_at,document_id,error) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET parent=excluded.parent,version=excluded.version,name=excluded.name,size=excluded.size,status=excluded.status,document_id=excluded.document_id,error=excluded.error,seen=excluded.seen,modified_at=excluded.modified_at',(f['id'],folder['id'],version,f['name'][:200],size,state,time.time(),modified,old['document_id'] if retained else None,reason))
+    page=payload.get('nextPageToken')
+    c.execute('UPDATE research_drive_folders SET page=?,checked=? WHERE id=?',(page,0 if page else time.time(),folder['id']))
+  except TimeoutError:break
+  except (httpx.HTTPStatusError,httpx.TransportError) as exc:
+   if isinstance(exc,httpx.HTTPStatusError) and exc.response.status_code==401:raise
+   # Defer only this folder; oldest-first ordering gives the others a turn.
+   with core().db() as c:
+    c.execute('UPDATE research_drive_folders SET checked=? WHERE id=?',(time.time(),folder['id']))
+    put(c,'last_folder_failure',{'at':time.time(),'error_type':type(exc).__name__,'status':exc.response.status_code if isinstance(exc,httpx.HTTPStatusError) else None})
+
 def file_modified_at(value):
  try:
   stamp=datetime.fromisoformat(value.replace('Z','+00:00'))

@@ -219,3 +219,16 @@ def test_pdf_empty_layout_uses_plain_text():
  with patch('pypdf.PdfReader',return_value=SimpleNamespace(is_encrypted=False,pages=[page])):
   text,pages=r._extract_pdf(b'pdf')
  assert 'Accenture' in text
+
+
+def test_pdf_independent_reader_on_parser_failure():
+ with patch.object(r,'_extract_pdf_primary',side_effect=TypeError('invalid font')),patch.object(r,'_extract_pdf_alternate',return_value=(TEXT,2)) as alternate:
+  assert r._extract_pdf(b'pdf')==(TEXT,2)
+  alternate.assert_called_once_with(b'pdf')
+
+def test_pdf_password_does_not_use_fallback():
+ with patch.object(r,'_extract_pdf_primary',side_effect=ValueError('Password-protected PDF needs manual review')),patch.object(r,'_extract_pdf_alternate') as alternate:
+  try:r._extract_pdf(b'pdf')
+  except ValueError:pass
+  else:assert False
+  alternate.assert_not_called()

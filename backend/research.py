@@ -87,7 +87,7 @@ def limit_stored_excerpt(text):
     return research_excerpt(lambda i:pages.get(i+1,''),max(pages))[0]
 
 
-def _extract_pdf(raw):
+def _extract_pdf_primary(raw):
     from pypdf import PdfReader
     if len(raw)>12*1024*1024:raise ValueError('PDF exceeds 12 MB pilot limit')
     reader=PdfReader(io.BytesIO(raw))
@@ -104,6 +104,28 @@ def _extract_pdf(raw):
         # Some broker fonts/layouts fail in layout mode but decode in plain mode.
         return page.extract_text(extraction_mode='plain') or '' 
     return research_excerpt(read_page,len(reader.pages))
+
+def _extract_pdf_alternate(raw):
+    import pypdfium2 as pdfium
+    with pdfium.PdfDocument(raw) as doc:
+        def read_page(index):
+            page=doc[index]
+            try:
+                textpage=page.get_textpage()
+                try:return textpage.get_text_bounded()
+                finally:textpage.close()
+            finally:page.close()
+        return research_excerpt(read_page,len(doc))
+
+
+def _extract_pdf(raw):
+    if len(raw)>12*1024*1024:raise ValueError('PDF exceeds 12 MB pilot limit')
+    try:return _extract_pdf_primary(raw)
+    except Exception as exc:
+        if isinstance(exc,ValueError) and str(exc).startswith('Password-protected'):raise
+        logging.warning('Research PDF alternate reader: error_type=%s',type(exc).__name__)
+        return _extract_pdf_alternate(raw)
+
 
 def extract_pdf(raw):
     # Isolate parser crashes and hangs from the mailbox/Drive batch.

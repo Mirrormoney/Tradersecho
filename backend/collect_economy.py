@@ -117,6 +117,8 @@ def collect(client=None):
                     start=datetime.fromisoformat(b['start'].replace('Z','+00:00')).timestamp();finish=datetime.fromisoformat(b['end'].replace('Z','+00:00')).timestamp()
                     c.execute('INSERT INTO x_counts VALUES(?,?,?,?,?,?) ON CONFLICT(ticker,start) DO UPDATE SET n=excluded.n,end=excluded.end,query=excluded.query,fetched_at=excluded.fetched_at',(ticker,start,finish,b['tweet_count'],query,time.time()))
                 c.execute('INSERT OR REPLACE INTO meta VALUES(?,?)',(key,str(end)))
+            from .signal_lab import refresh_x
+            refresh_x(ticker)
         with db() as c:
             # Freeze today's targets so reruns do not silently purchase additional samples.
             key='economy-targets:'+day

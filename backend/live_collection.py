@@ -98,6 +98,8 @@ def perform(job,client):
         parsed=[(int(datetime.fromisoformat(b['start'].replace('Z','+00:00')).timestamp()),int(datetime.fromisoformat(b['end'].replace('Z','+00:00')).timestamp()),int(b['tweet_count'])) for b in result.get('data',[])]
         if result.get('meta',{}).get('next_token') or sorted(a for a,b,n in parsed)!=list(range(start,end,3600)) or any(b-a!=3600 or n<0 for a,b,n in parsed):raise RuntimeError('Incomplete hourly counts; previous values retained.')
         with s.db() as c:c.executemany('INSERT INTO x_counts VALUES(?,?,?,?,?,?) ON CONFLICT(ticker,start) DO UPDATE SET n=excluded.n,end=excluded.end,query=excluded.query,fetched_at=excluded.fetched_at',[(ticker,a,b,n,query,time.time()) for a,b,n in parsed])
+        from .signal_lab import refresh_x
+        refresh_x(ticker)
     else:
         # Resolve tracked handles as a bounded shared lookup, then match every
         # returned post by stable author ID (even without a cashtag).

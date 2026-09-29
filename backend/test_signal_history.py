@@ -25,3 +25,32 @@ def test_empty_indicators_do_not_become_zero():
  d=h.detail(c,'MU',now)
  assert d['axes'][0]['windows']['30']['average'] is None
  assert d['axes'][0]['points'][0]['value'] is None
+
+
+def test_x_ingestion_scores_without_options_and_merges_history(monkeypatch):
+ c=sqlite3.connect(':memory:');c.row_factory=sqlite3.Row;lab.migrate(c)
+ now=datetime(2026,9,26,13,tzinfo=lab.NY).timestamp()
+ axes=[lab.axis(n,10) for n in lab.TITLES];axes[3]=lab.axis(lab.TITLES[3])
+ panel=dict(ticker='MARA',axes=axes,observed=now-3600)
+ c.execute('INSERT INTO signal_lab_snapshots(ticker,slot,version,observed,payload) VALUES(?,?,?,?,?)',('MARA',int((now-3600)//600),lab.VERSION,now-3600,json.dumps(panel)))
+ monkeypatch.setattr(lab,'read_attention_counts',lambda *args:dict(end=now,current=100,previous=50,baseline=50,baseline_days=12))
+ monkeypatch.setattr(lab,'read_posts',lambda *args:[])
+ assert lab.record_x(c,'MARA',now)
+ assert lab.record_x(c,'MARA',now+1)
+ assert c.execute('SELECT count(*) FROM signal_x_history').fetchone()[0]==1
+ d=h.detail(c,'MARA',now+2)
+ assert d['axes'][3]['score']==100
+ assert d['axes'][3]['points'][-1]['value']==100
+ assert d['axes'][3]['as_of']==now
+ assert d['axes'][0]['score']==10
+ # A later market snapshot with missing X must not erase valid saved X.
+ panel['observed']=now+300
+ lab.overlay_x(c,[panel],now+8000)
+ assert panel['axes'][3]['score']==100 and panel['axes'][3]['stale']
+
+
+def test_x_missing_counts_does_not_save_a_fake_zero(monkeypatch):
+ c=sqlite3.connect(':memory:');c.row_factory=sqlite3.Row
+ monkeypatch.setattr(lab,'read_attention_counts',lambda *args:{'error':'No fresh counts'})
+ assert not lab.record_x(c,'MARA',123)
+ assert c.execute('SELECT count(*) FROM signal_x_history').fetchone()[0]==0

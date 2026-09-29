@@ -307,4 +307,45 @@ def saved(c):
     newest=[dict(r) for r in c.execute('SELECT ticker,payload FROM (SELECT ticker,payload,ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY observed DESC) AS position FROM signal_lab_snapshots WHERE version=?) ranked WHERE position=1',(VERSION,))]
     latest={}
     for r in newest:latest[r['ticker']]=json.loads(r['payload'])
-    return dict(version=VERSION,stocks=list(latest.values()),history=[dict(ticker=r['ticker'],observed=r['observed'],setup=json.loads(r['payload'])['setup'],baseline=json.loads(r['payload']).get('price_volume_baseline','watch'),outcome=json.loads(r['outcome']) if r['outcome'] else None) for r in rows[:30]])
+    return dict(version=VERSION,stocks=overlay_x(c,list(latest.values())),history=[dict(ticker=r['ticker'],observed=r['observed'],setup=json.loads(r['payload'])['setup'],baseline=json.loads(r['payload']).get('price_volume_baseline','watch'),outcome=json.loads(r['outcome']) if r['outcome'] else None) for r in rows[:30]])
+
+
+# X observations follow X ingestion, including outside the options session.
+def migrate_x(c):
+    c.execute("CREATE TABLE IF NOT EXISTS signal_x_history(ticker TEXT,version TEXT,source_end REAL,observed REAL,score REAL,payload TEXT,PRIMARY KEY(ticker,version,source_end))")
+
+
+def record_x(c,ticker,now):
+    migrate_x(c)
+    counts=read_attention_counts(c,ticker,now)
+    if counts.get('error'):return False
+    result=x_axis(read_posts(c,ticker,now),ticker,now,counts)
+    result['as_of']=counts['end']
+    c.execute('INSERT OR IGNORE INTO signal_x_history VALUES(?,?,?,?,?,?)',(ticker,VERSION,counts['end'],now,result['score'],json.dumps(result)))
+    return True
+
+
+def refresh_x(ticker):
+    # A scoring failure must not roll back successful paid count collection.
+    from .community import core
+    s=core()
+    try:
+        with s.db() as c:record_x(c,ticker,time.time())
+    except Exception as exc:
+        from .uw_pilot import put
+        with s.db() as c:put(c,'x_scoring',{'at':time.time(),'state':'error','error_type':type(exc).__name__})
+
+
+def overlay_x(c,panels,now=None):
+    migrate_x(c);now=now or time.time()
+    if not panels:return panels
+    tickers=[p['ticker'] for p in panels]
+    rows=c.execute('SELECT ticker,source_end,observed,payload FROM (SELECT ticker,source_end,observed,payload,ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY source_end DESC) AS position FROM signal_x_history WHERE version=? AND observed<=? AND ticker IN ('+','.join('?' for _ in tickers)+')) ranked WHERE position=1',(VERSION,now,*tickers)).fetchall()
+    updates={r['ticker']:r for r in rows}
+    for panel in panels:
+        row=updates.get(panel['ticker'])
+        if row and row['source_end']>=panel['axes'][3].get('details',{}).get('window_end',0):
+            panel['axes'][3]=json.loads(row['payload'])
+            panel['axes'][3]['stale']=now-row['source_end']>7200
+            panel['candidate']=candidate(panel['axes'])
+    return panels

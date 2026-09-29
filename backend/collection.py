@@ -78,6 +78,8 @@ def run_batch(max_jobs=10,client=None):
                     if len(parsed)!=expected or sorted(a for a,b,n in parsed)!=list(range(int(start),end,3600)) or any(b-a!=3600 or n<0 for a,b,n in parsed):raise RuntimeError('Incomplete hourly counts; snapshot withheld.')
                     with s.db() as c:
                         c.executemany('INSERT INTO x_counts VALUES(?,?,?,?,?,?) ON CONFLICT(ticker,start) DO UPDATE SET n=excluded.n,end=excluded.end,query=excluded.query,fetched_at=excluded.fetched_at',[(ticker,a,b,n,query,time.time()) for a,b,n in parsed])
+                    from .signal_lab import refresh_x
+                    refresh_x(ticker)
                 elif job['kind']=='profiles':
                     with s.db() as c:
                         ids=[r[0] for r in c.execute('SELECT DISTINCT i.author_id FROM post_identity i JOIN posts p ON p.source=i.source AND p.id=i.post_id LEFT JOIN post_authors a ON a.id=i.author_id WHERE p.ts>? AND (a.id IS NULL OR a.fetched_at<?) ORDER BY i.author_id LIMIT ?',(end-86400,end-30*86400,settings['daily_profile_limit']))]

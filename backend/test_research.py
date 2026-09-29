@@ -194,3 +194,10 @@ def test_real_estate_prescreen_preserves_universe_readthrough():
  assert not r.prescreen('US Real Estate.pdf',text+' Data centres face new power constraints.',catalog)['skip']
  assert not r.prescreen('US Real Estate.pdf',text+' Equinix sees stronger demand.',catalog)['skip']
  assert not r.prescreen('US Real Estate.pdf','unreadable',catalog)['skip']
+
+
+def test_truncated_analysis_retry_gets_more_output_space():
+ from .research import analysis_generation_limits
+ assert analysis_generation_limits({}) == {'max_tokens':6000,'reasoning_effort':'medium'}
+ assert analysis_generation_limits({'reason':'Incomplete analysis'}) == {'max_tokens':12000,'reasoning_effort':'low'}
+ assert analysis_generation_limits({'reason':'Evidence not present in source'})['max_tokens'] == 6000

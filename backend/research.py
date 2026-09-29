@@ -95,7 +95,14 @@ def _extract_pdf(raw):
     if not reader.pages:raise ValueError('Empty PDF; OCR review required')
     def read_page(index):
         page=reader.pages[index]
-        return (page.extract_text(extraction_mode='layout') or '') if '/Contents' in page else ''
+        if '/Contents' not in page:return ''
+        try:
+            text=page.extract_text(extraction_mode='layout') or ''
+            if len(re.sub(r'\s','',text))>=40:return text
+        except Exception as exc:
+            logging.warning('Research PDF layout fallback: page=%s error_type=%s',index+1,type(exc).__name__)
+        # Some broker fonts/layouts fail in layout mode but decode in plain mode.
+        return page.extract_text(extraction_mode='plain') or '' 
     return research_excerpt(read_page,len(reader.pages))
 
 def extract_pdf(raw):
@@ -109,7 +116,7 @@ try:
  text,pages=_extract_pdf(sys.stdin.buffer.read())
  print(json.dumps({'text':text,'pages':pages}))
 except Exception as exc:
- print(json.dumps({'error':str(exc)[:240] if isinstance(exc,ValueError) else 'PDF parsing failed; manual review required'}))
+ print(json.dumps({'error':str(exc)[:240] if isinstance(exc,ValueError) else 'PDF parsing failed ('+type(exc).__name__+'); alternate extraction required'}))
 """
     try:
         result=subprocess.run([sys.executable,'-c',code],input=raw,capture_output=True,timeout=20,cwd=str(Path(__file__).resolve().parents[1]))

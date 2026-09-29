@@ -201,3 +201,21 @@ def test_truncated_analysis_retry_gets_more_output_space():
  assert analysis_generation_limits({}) == {'max_tokens':6000,'reasoning_effort':'medium'}
  assert analysis_generation_limits({'reason':'Incomplete analysis'}) == {'max_tokens':12000,'reasoning_effort':'low'}
  assert analysis_generation_limits({'reason':'Evidence not present in source'})['max_tokens'] == 6000
+
+
+def test_pdf_layout_failure_uses_plain_text():
+ page=MagicMock()
+ page.__contains__.return_value=True
+ page.extract_text.side_effect=[RuntimeError('bad font layout'),'September 29, 2026. Accenture maintains a positive outlook. '*5]
+ reader=SimpleNamespace(is_encrypted=False,pages=[page])
+ with patch('pypdf.PdfReader',return_value=reader):
+  text,pages=r._extract_pdf(b'pdf')
+ assert 'Accenture' in text and pages==1
+ assert page.extract_text.call_args_list[1].kwargs['extraction_mode']=='plain'
+
+def test_pdf_empty_layout_uses_plain_text():
+ page=MagicMock();page.__contains__.return_value=True
+ page.extract_text.side_effect=['','September 29, 2026. Accenture research with substantive commentary. '*5]
+ with patch('pypdf.PdfReader',return_value=SimpleNamespace(is_encrypted=False,pages=[page])):
+  text,pages=r._extract_pdf(b'pdf')
+ assert 'Accenture' in text

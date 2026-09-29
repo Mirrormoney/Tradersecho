@@ -279,7 +279,7 @@ def run(client=None,now=None):
             if error:failures+=1
             else:
                 done+=1
-                if values and kind=='filtered_options':updated.add(ticker)
+                if values and kind in ('candles','history','filtered_options'):updated.add(ticker)
             if state=='provider_paused':break
             time.sleep(1.05) # At most about 57 calls/min, below the documented client default.
         with s.db() as c:

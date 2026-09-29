@@ -194,3 +194,20 @@ def test_provider_lower_allowance_is_respected(pilot,monkeypatch):
     with pilot.db() as c:c.execute('INSERT INTO uw_pilot_usage VALUES(?,?,?,?)',(u.quota_day(NOW),30000,30000,30000))
     with httpx.Client(transport=httpx.MockTransport(lambda r:pytest.fail('provider cap bypass'))) as client:
         assert u.run(client,NOW)['state']=='daily_limit'
+
+
+@pytest.mark.parametrize("kind", ["candles", "history"])
+def test_price_updates_record_scores_without_waiting_for_options(pilot,monkeypatch,kind):
+    from . import signal_lab
+    enable(monkeypatch)
+    monkeypatch.setattr(u,'collection_due',lambda *args:[('NVDA',kind)])
+    value={'at':NOW,'close':100,'volume':100}
+    monkeypatch.setattr(u,'normalize',lambda *args:[value])
+    monkeypatch.setattr(u,'history_values',lambda *args:[value])
+    recorded=[]
+    monkeypatch.setattr(signal_lab,'record',lambda c,samples,catalog,focus,now:recorded.append((samples,focus)))
+    with httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,json={'data':[]}))) as client:
+        assert u.run(client,NOW)['failed']==0
+    assert len(recorded)==1
+    assert recorded[0][1]==['NVDA']
+    assert recorded[0][0]['NVDA'][kind]==[value]

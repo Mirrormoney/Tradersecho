@@ -22,6 +22,8 @@ CATALOG=Catalog()
 app = FastAPI(title='Tradersecho', version='2.0.0')
 from .uw_pilot import router as uw_pilot_router, migrate as migrate_uw_pilot
 app.include_router(uw_pilot_router)
+from .options_activity import router as options_activity_router
+app.include_router(options_activity_router)
 from .engagement import router as engagement_router, migrate as migrate_engagement
 app.include_router(engagement_router)
 from .research_feed import router as research_feed_router

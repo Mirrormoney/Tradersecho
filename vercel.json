@@ -139,6 +139,7 @@
     "fra1"
   ],
   "crons": [
+    {"path": "/api/cron/options-activity", "schedule": "1-59/10 * * * 1-5"},
     {
       "path": "/api/cron/collect",
       "schedule": "*/5 * * * *"

@@ -1,5 +1,4 @@
 """Read-only attention map. No upstream or model calls on page views."""
-import os
 import time
 from fastapi import APIRouter, Request, Query
 from .community import core
@@ -35,12 +34,8 @@ def supply_chain(request: Request, window: int = Query(1, ge=1, le=30)):
         raise HTTPException(422, 'Choose 1, 7 or 30 days.')
     if u['demo']:
         return {'groups': [], 'demo': True, 'as_of': None, 'locked': True, 'window': window}
-    full = u['plan'] in ('premium','pro') or u['role'] in ('admin', 'owner') or os.getenv('FREE_LAUNCH', 'false').lower() == 'true'
-    if not full:
-        groups = group_rows(s.CATALOG, [], window * 24)
-        return {'groups': [{'sector': g['sector'], 'stocks': g['stocks']} for g in groups], 'locked': True, 'window': window, 'as_of': None}
     with s.db() as c:
         now = s.reference('x', c)
         rows = enrich(c, [], now, window)
     groups = group_rows(s.CATALOG, rows, window * 24)
-    return {'groups': groups, 'as_of': now, 'stale': time.time() - now > 36 * 3600, 'locked': not full, 'window': window}
+    return {'groups': groups, 'as_of': now, 'stale': time.time() - now > 36 * 3600, 'locked': False, 'window': window}

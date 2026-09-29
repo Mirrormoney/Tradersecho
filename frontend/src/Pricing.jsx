@@ -12,7 +12,7 @@ const features=[
  ['Saved stocks','5 stocks','25 stocks','50 stocks'],
  ['Shared tracked voices','Included','Included'],
  ['Personal tracked voices','Up to 3 accounts','Up to 3 accounts','Up to 5 accounts'],
- ['AI Supply Chain','Sector preview only','Full heatmap & sector rankings'],
+ ['AI Supply Chain','Full heatmap & sector rankings','Full heatmap & sector rankings'],
  ['Trending Research','Preview only','Full broker research summaries'],
  ['Scheduled research emails','Not included','Four opt-in editions'],
  ['Trading room','Included','Included'],

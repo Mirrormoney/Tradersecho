@@ -21,13 +21,16 @@ def test_auth_and_free_drilldown_limits(monkeypatch):
     tickers=list(s.CATALOG)
     from . import count_metrics
     monkeypatch.setattr(count_metrics,'enrich',lambda *args:[{'ticker':t,'mentions':i+1,'heat':i,'coverage_hours':24} for i,t in enumerate(tickers)])
-    data=client.get('/api/supply-chain').json()
-    assert data['locked'] is True
-    assert all(set(g)=={'sector','stocks'} for g in data['groups'])
-    assert sum(g['stocks'] for g in data['groups'])==len(tickers)
+    for plan in ('free','premium','pro'):
+        monkeypatch.setattr(s,'account',lambda request, plan=plan: {'plan':plan,'role':'member','demo':False})
+        for window in (1,7,30):
+            response=client.get(f'/api/supply-chain?window={window}')
+            assert response.status_code==200
+            data=response.json()
+            assert data['locked'] is False
+            assert sum(len(g['rows']) for g in data['groups'])==len(tickers)
     assert client.get('/api/supply-chain?window=2').status_code==422
-    monkeypatch.setattr(s,'account',lambda request: {'plan':'premium','role':'member','demo':False})
-    assert sum(len(g['rows']) for g in client.get('/api/supply-chain').json()['groups'])==len(tickers)
+
 
 
 def test_personal_voice_feed_is_private_and_premium(monkeypatch):

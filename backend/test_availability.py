@@ -36,3 +36,26 @@ def test_failure_alert_does_not_require_database(monkeypatch):
         assert a.run(36001,c,sleep=lambda _:None)['alert']=='sent'
         assert a.run(36301,c,sleep=lambda _:None)['alert']=='sent'
     assert alerts[0]==alerts[1]
+
+
+def test_third_attempt_recovers_without_alert(monkeypatch):
+    monkeypatch.setenv('VERCEL_ENV','production');calls=[];delays=[]
+    def transport(r):
+        calls.append(r.url.path)
+        if len(calls)<=6:raise httpx.ConnectTimeout('test')
+        if r.url.path=='/login':return httpx.Response(200,text='<div id="root"></div>')
+        if r.url.path=='/api/health':return httpx.Response(200,json={'ok':True})
+        return httpx.Response(422,json={'detail':[]})
+    with httpx.Client(transport=httpx.MockTransport(transport)) as c:
+        assert a.run(client=c,sleep=delays.append)['state']=='recovered'
+    assert len(calls)==9 and delays==[2,8]
+
+
+def test_probe_records_safe_error_details_and_handles_invalid_json_shape(caplog):
+    def transport(r):
+        if r.url.path=='/login':raise httpx.ConnectError('secret must not be logged')
+        return httpx.Response(200,json=[])
+    with httpx.Client(transport=httpx.MockTransport(transport)) as c:
+        assert a.probe(c)==['/login','/api/health','/api/auth/login']
+    assert 'ConnectError' in caplog.text and 'elapsed_ms' in caplog.text
+    assert 'secret must not be logged' not in caplog.text

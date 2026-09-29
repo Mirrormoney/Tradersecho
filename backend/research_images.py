@@ -58,6 +58,8 @@ def extract(raw,did,token=None):
     except Exception as exc:
         if isinstance(exc,ValueError) and str(exc).startswith('Screenshot'):raise
         raise ValueError('Screenshot OCR failed; other attachments continue') from None
+    finally:
+        with r.core().db() as c:r.release_research_reservations(c,time.time(),rid)
 
 def decode(payload):
     from .research import research_excerpt

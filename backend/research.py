@@ -3,6 +3,7 @@
 Completed originals may be deleted after seven days; unresolved mail is retained. Only staff can read
 drafts; validated recent notes can publish through the approved automatic pipeline.
 """
+import math
 import email,hashlib,hmac,imaplib,io,json,os,re,secrets,ssl,time,logging,traceback
 from datetime import datetime,timedelta,timezone,date
 from email import policy
@@ -568,18 +569,13 @@ def analyze_one(token=None):
         response=httpx.post('https://ai-gateway.vercel.sh/v1/chat/completions',headers={'Authorization':'Bearer '+token},json={'model':MODEL,**analysis_generation_limits(analysis_retry),'response_format':response_format(catalog),'messages':[{'role':'system','content':PROMPT+INSIGHTS_PROMPT+' First assess each primary_candidates company named in the filename against the source. Include its substantive product launches, business developments and broker analysis, not just rating changes. Do not substitute a peer comparison for the main covered company. Then check each mentioned_candidates entry against the source. Omit a candidate only when it lacks substantive supported discussion. Include explicit company rating changes even if they are brief, including upgrades/downgrades listed in Street Actions. These count as substantive news. A price move alone, an event calendar listing, or sector commentary without substantive company discussion is not a stock finding. Never imply that the report author issued a rating when they are reporting a rating from another firm. Empty findings is valid when no covered company has meaningful news.'},{'role':'user','content':json.dumps({'universe':catalog,'primary_candidates':mentioned_candidates(row['filename'],catalog),'mentioned_candidates':mentioned_candidates(row['text'],catalog),'review_instruction':('A prior pass returned no findings despite repeated covered ticker references. Recheck company product announcements, broker analysis, ratings and targets carefully. Return supported findings if present; an empty result is still valid if none are substantive.' if empty_retry else ''),'validation_recheck':('Previous analysis failed: '+analysis_retry['reason']+'. Copy supporting evidence verbatim including intervening words; do not paraphrase or combine separate passages. Set event to null when an explicit dated rating action is not evidenced.' if analysis_retry else ''),'filename':row['filename'],'report':row['text']})}]},timeout=90)
         if response.status_code!=200:raise RuntimeError('AI provider HTTP '+str(response.status_code))
         payload=response.json();usage=payload.get('usage',{});cost=usage.get('cost')
-        if not isinstance(cost,(int,float)) or not 0<=cost<=RESERVE:cost=None
+        if not isinstance(cost,(int,float)) or not math.isfinite(cost) or cost<0:cost=None
         with s.db() as c:c.execute('UPDATE ai_sentiment_spend SET actual=?,usage=?,raw_response=?,status=? WHERE id=?',(cost,json.dumps(usage),json.dumps(payload),'received',rid))
         choice=payload['choices'][0]
         if choice.get('finish_reason')!='stop':raise ValueError('Incomplete analysis')
         raw=choice['message']['content'].strip()
         if raw.startswith('```'):raw=raw.split('\n',1)[1].rsplit('```',1)[0].strip()
         result=validate_report(json.loads(raw),row['text'],catalog,row['filename'])
-        if not result['findings'] and not empty_retry and empty_result_candidates(row['text'],catalog):
-            with s.db() as c:
-                put(c,'empty_retry:'+row['id'],True)
-                c.execute("UPDATE research_documents SET status='queued',error=NULL,updated=? WHERE id=?",(time.time(),row['id']))
-            return {'state':'empty_result_recheck_queued'}
         with s.db() as c:
             c.execute('UPDATE research_documents SET status=?,result=?,error=NULL,updated=? WHERE id=?',('draft' if result['findings'] else 'no_match',json.dumps(result),time.time(),row['id']))
             for finding in result['findings']:c.execute('INSERT OR IGNORE INTO research_links VALUES(?,?)',(row['id'],finding['ticker']))
@@ -588,17 +584,28 @@ def analyze_one(token=None):
         error=analysis_failure(exc)
         with s.db() as c:c.execute("UPDATE research_documents SET status='needs_review',error=?,updated=? WHERE id=?",(error,time.time(),row['id']))
         return {'state':'needs_review'}
+    finally:
+        with s.db() as c:release_research_reservations(c,time.time(),rid)
+
+def release_research_reservations(c,now,rid=None):
+    """Release finished/abandoned holds; unknown provider charges stay unknown."""
+    if not c.execute('PRAGMA table_info(ai_sentiment_spend)').fetchall():return 0
+    if rid:
+        rows=c.execute("SELECT id,reserved,actual,status FROM ai_sentiment_spend WHERE id=? AND cache_key LIKE 'research:%' AND reserved>0",(rid,)).fetchall()
+    else:
+        rows=c.execute("SELECT id,reserved,actual,status FROM ai_sentiment_spend WHERE cache_key LIKE 'research:%' AND reserved>0 AND ts<?",(now-900,)).fetchall()
+    for row in rows:
+        if row['actual'] is None:
+            put(c,'unreconciled_cost:'+row['id'],{'released_hold':row['reserved'],'at':now,'provider_charge':'unknown'})
+        # Preserve actual charges and response status (OCR deduplication uses it).
+        c.execute('UPDATE ai_sentiment_spend SET reserved=0 WHERE id=?',(row['id'],))
+    return len(rows)
+
 
 def retry_failed_analyses(c,now):
-    """One bounded retry for recoverable AI failures; bad source files stay isolated."""
-    reasons={'Evidence not present in source','Event attribution lacks source evidence','Incomplete analysis','Interrupted analysis; review before retrying','AI request timed out','AI connection failed','AI response was not valid JSON','AI response schema validation failed'}
-    rows=c.execute("SELECT id,error FROM research_documents WHERE status='needs_review' AND updated>? AND LENGTH(text)>=120",(now-86400,)).fetchall()
-    for row in rows:
-        if row['error'] not in reasons and not str(row['error']).startswith('AI provider HTTP 5'):continue
-        key='analysis_retry:'+row['id']
-        if meta(c,key):continue
-        put(c,key,{'at':now,'reason':row['error']})
-        c.execute("UPDATE research_documents SET status='queued',updated=? WHERE id=? AND status='needs_review'",(now,row['id']))
+    # Owner policy: skip failed notes, do not automatically buy another attempt.
+    release_research_reservations(c,now)
+
 
 def queue_email_backlog():
     from .research_drive import date_screen

@@ -643,10 +643,10 @@ def insight_data(slug):
         return copy.deepcopy(cached[1])
     from .insight_updates import merge_updates
     with core().db() as c:
-        rows=c.execute("SELECT result FROM research_documents WHERE status IN ('draft','published','no_match') AND result LIKE ? ORDER BY updated DESC LIMIT 100", ('%"topic": "'+slug+'"%',)).fetchall()
+        rows=c.execute("SELECT result FROM research_documents WHERE status IN ('draft','published','no_match') AND result LIKE ? ORDER BY updated DESC", ('%"topic": "'+slug+'"%',)).fetchall()
         from .insight_worker import migrate
         migrate(c)
-        rows=list(rows)+list(c.execute("SELECT result FROM insight_analysis WHERE status='complete' AND result LIKE ? ORDER BY updated DESC LIMIT 150",('%"topic": "'+slug+'"%',)).fetchall())
+        rows=list(rows)+list(c.execute("SELECT result FROM insight_analysis WHERE status='complete' AND result LIKE ? ORDER BY updated DESC",('%"topic": "'+slug+'"%',)).fetchall())
     from .insight_roadmaps import enrich,organize
     result=organize(merge_updates(enrich(ARTICLES[slug]),rows))
     _article_cache[slug]=(time.monotonic(),result)

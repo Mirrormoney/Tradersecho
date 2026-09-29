@@ -47,3 +47,7 @@ retained. Existing research imports, stock summaries and original documents are 
 September 27: 52 focused tests passed, frontend build passed, PostgreSQL article assembly
 checked for all seven topics. Unauthenticated topic detail returns 401; production is
 public and preview/generated deployment URLs retain Vercel protection.
+
+
+## Current-expectation policy (September 29, 2026)
+No 100-document/150-analysis cutoff. Retain independent expectations regardless of count or age. New validated developments carry an optional source-supported subject/measure/period identity. Newer same-source forecasts or revisions replace matching older expectations; a reported completion of the same one-time milestone can replace an older forecast/rumour. Different brokers and measurement periods remain separate. Ambiguous or legacy unmatched claims remain visible. Source records are retained privately; passing a target date does not establish completion.

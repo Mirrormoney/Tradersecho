@@ -41,3 +41,31 @@ def test_merge_deduplicates_preserves_old_forecasts_and_private_evidence():
  assert base['sources']==[]
  future={'result':json.dumps({'firm':'Broker','report_date':'2026-09-27','topic_developments':[EVENT]})}
  assert merge_updates(base,[future,{'result':'bad json'}],date(2026,9,26))['automatic_updates']==0
+
+
+def test_replaces_only_same_claim_and_keeps_conflicting_forecasts():
+ from .insight_updates import current_expectations
+ identity={'subject':'HBM4','measure':'volume production','period':None}
+ old={'_identity':identity,'_firm':'Broker A','kind':'forecast','report_date':'2026-09-01'}
+ revision={**old,'kind':'revision','report_date':'2026-09-20'}
+ conflict={**old,'_firm':'Broker B'}
+ distinct={**old,'_identity':{**identity,'subject':'HBM4E'}}
+ assert current_expectations([old,revision,conflict,distinct])==[revision,conflict,distinct]
+ confirmation={**revision,'_firm':'Manufacturer','kind':'reported_milestone','report_date':'2026-09-21'}
+ assert old not in current_expectations([old,confirmation])
+ assert current_expectations([old,{**revision,'report_date':old['report_date']}])[0]==old
+
+
+def test_distinct_periods_and_legacy_entries_are_not_evicted():
+ from .insight_updates import current_expectations
+ old={'_identity':{'subject':'HBM','measure':'wafer allocation','period':'2027'},'_firm':'A','kind':'forecast','report_date':'2026-01-01'}
+ new={**old,'_identity':{**old['_identity'],'period':'2028'},'report_date':'2026-09-29'}
+ events=[{'title':str(i)} for i in range(300)]+[old,new]
+ assert current_expectations(events)==events
+
+
+def test_identity_requires_verbatim_source_support():
+ d={**EVENT,'identity':{'subject':'HBM4','measure':'qualification','period':None}}
+ assert validate_updates([d],TEXT,page_quote)[0]['identity']==d['identity']
+ d['identity']['subject']='Micron HBM4E'
+ assert 'identity' not in validate_updates([d],TEXT,page_quote)[0]

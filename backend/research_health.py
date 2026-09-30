@@ -1,5 +1,6 @@
 """Research pipeline health checks; aggregate diagnostics only."""
-import json
+import json,os
+from datetime import datetime,timezone,timedelta
 
 def snapshot(c,now):
  issues=[]
@@ -29,6 +30,18 @@ def snapshot(c,now):
    progressed=research.meta(c,'drive_last_progress',0)
    if now-max(observed,progressed)>3600:issues.append('Google Drive pending PDFs have made no import progress for over one hour.')
   elif observed:research.put(c,'drive_pending_observed',0)
+ # A healthy heartbeat is insufficient when analyses fail or publication stalls.
+ recent_failures=c.execute("SELECT COUNT(*) FROM research_documents WHERE status='needs_review' AND updated>? AND (error LIKE '%Evidence%' OR error LIKE '%AI response%' OR error LIKE '%Incomplete analysis%' OR error='Invalid publication record')",(now-3600,)).fetchone()[0]
+ if recent_failures>=3:issues.append('Repeated research validation failures: '+str(recent_failures)+' notes held in the past hour; automatic source validation could not recover them.')
+ if os.getenv('RESEARCH_DRIVE_PUBLISH_ENABLED')=='true' and c.execute('PRAGMA table_info(research_publications)').fetchall():
+  cutoff=(datetime.fromtimestamp(now,timezone.utc).date()-timedelta(days=30)).isoformat()
+  waiting=0
+  for r in c.execute("SELECT d.result FROM research_documents d WHERE d.status='draft' AND d.updated<? AND NOT EXISTS (SELECT 1 FROM research_publications p WHERE p.document_id=d.id)",(now-1800,)):
+   try:
+    v=json.loads(r['result'])
+    if isinstance(v,dict) and isinstance(v.get('report_date'),str) and cutoff<=v['report_date']<=datetime.fromtimestamp(now,timezone.utc).date().isoformat() and v.get('findings') and v.get('date_evidence'):waiting+=1
+   except (ValueError,TypeError):waiting+=1
+  if waiting:issues.append(str(waiting)+' validated research notes have not reached publication after 30 minutes.')
  operational_issues=list(issues)
  review=c.execute("SELECT COUNT(*) FROM research_documents WHERE status='needs_review' AND updated>?",(now-86400,)).fetchone()[0]
  if review:issues.append(f'{review} notes entered manual review in the past 24 hours. They have not been automatically published.')

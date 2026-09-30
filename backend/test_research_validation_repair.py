@@ -31,3 +31,22 @@ def test_company_names_anywhere_are_candidates_not_automatic_findings():
  assert not r.mentioned_candidates('No covered company here.',cat)
  assert r.coverage_gaps({'findings':[{'ticker':'MU','attribution':'readthrough'}]},'FormFactor initiation',cat)==['FORM']
  assert r.coverage_gaps({'findings':[{'ticker':'FORM','attribution':'original'}]},'FormFactor initiation',cat)==[]
+
+def test_separate_complete_sentences_all_require_exact_same_page_evidence():
+ text='[Page 1]\nWe initiate APH with an Outperform rating.\nOther intervening discussion.\nAI demand is increasing rapidly.'
+ quote='We initiate APH with an Outperform rating. AI demand is increasing rapidly.'
+ verified,page=r.located_quote(quote,text,1)
+ assert '[…]' in verified and page==1
+ assert r.page_quote(verified,text,1)==verified
+ for bad in ['We initiate APH with a Buy rating. AI demand is increasing rapidly.', 'We initiate APH with an Outperform rating. AI demand is increasing rapid']:
+  with pytest.raises(ValueError):r.page_quote(bad,text,1)
+ with pytest.raises(ValueError):r.page_quote(quote,text.replace('AI demand','[Page 2]\nAI demand'),1)
+
+def test_bad_company_does_not_withhold_independent_valid_company():
+ v=copy.deepcopy(REPORT)
+ v['findings'].append({**v['findings'][0],'ticker':'MU','evidence':'Micron raised guidance unexpectedly.'})
+ result=r.validate_report(v,TEXT,{'NVDA':'NVIDIA','MU':'Micron'})
+ assert [f['ticker'] for f in result['findings']]==['NVDA']
+ assert result['validation_warnings']=={'held_tickers':['MU']}
+ v['findings'][0]['evidence']='NVIDIA raised guidance unexpectedly.'
+ with pytest.raises(ValueError):r.validate_report(v,TEXT,{'NVDA':'NVIDIA','MU':'Micron'})

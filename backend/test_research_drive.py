@@ -69,8 +69,12 @@ def test_only_recent_dated_findings_publish(monkeypatch,tmp_path):
    result=json.dumps(dict(report_date=report_date,date_evidence=evidence,findings=findings))
    c.execute('INSERT INTO research_documents(id,filename,sender,received,text,pages,status,result,updated) VALUES(?,?,?,?,?,?,?,?,?)',(identifier,'private.pdf','test',time.time(),'source',1,'draft',result,time.time()))
    c.execute('INSERT INTO research_drive_files(id,version,name,size,status,document_id,seen) VALUES(?,?,?,?,?,?,?)',(identifier,'1','private.pdf',100,'imported',identifier,time.time()))
+  c.execute("INSERT INTO research_documents(id,filename,sender,received,text,pages,status,result,updated) VALUES('broken','x','test',0,'x',1,'draft','not json',0)")
  d.publish_validated();d.publish_validated()
- with db() as c:assert [r[0] for r in c.execute('SELECT document_id FROM research_publications')]==['recent']
+ with db() as c:
+  assert [r[0] for r in c.execute('SELECT document_id FROM research_publications')]==['recent']
+  assert c.execute("SELECT status FROM research_documents WHERE id='broken'").fetchone()[0]=='needs_review'
+  assert c.execute("SELECT ticker FROM research_links WHERE document_id='recent'").fetchone()[0]=='NVDA'
 
 
 @pytest.mark.parametrize('failure',['parser','database'])

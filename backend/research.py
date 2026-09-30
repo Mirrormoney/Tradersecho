@@ -223,6 +223,12 @@ def connect_mailbox(password,sleep=time.sleep):
             if transient and attempt==0:sleep(2);continue
             raise MailboxConnectionError(stage,type(exc).__name__) from None
 
+def record_mail_failure(c,mid,state,permanent=False):
+    """Bound free mailbox retries so unreadable messages cannot occupy every slot."""
+    now=time.time();attempts=meta(c,'mail_retry:'+mid,{}).get('attempts',0)+1
+    put(c,'mail_retry:'+mid,{'attempts':attempts,'next':None if permanent or attempts>=3 else now+(300 if attempts==1 else 1800)})
+    c.execute('INSERT INTO research_messages VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,updated=excluded.updated',(mid,state,now))
+
 def import_mail(token=None):
     from . import research_images
     password=os.getenv('RESEARCH_IMAP_PASSWORD')
@@ -241,6 +247,9 @@ def import_mail(token=None):
             mid=validity+':'+uid.decode()
             with core().db() as c:
                 seen=c.execute('SELECT status FROM research_messages WHERE id=?',(mid,)).fetchone()
+                retry=meta(c,'mail_retry:'+mid,{})
+                if seen and seen['status'] in ('oversize_or_unavailable','fetch_needs_review','parse_needs_review') and retry:
+                    if retry.get('next') is None or retry['next']>time.time():continue
                 recheck=meta(c,'four_page_retry_enabled',False) and not meta(c,'four_page_mail:'+mid,False)
                 image_recheck=(uid in recent or (seen and seen['status']=='images_pending')) and not c.execute('SELECT 1 FROM research_image_messages WHERE id=?',(mid,)).fetchone()
                 cleanup_recheck=not meta(c,'mail_documents:'+mid,None)
@@ -250,21 +259,21 @@ def import_mail(token=None):
             if recheck:
                 with core().db() as c:put(c,'four_page_mail:'+mid,True)
             status,size=mailbox.uid('fetch',uid,'(RFC822.SIZE)')
-            match=re.search(rb'RFC822.SIZE (\d+)',b' '.join(x for x in size if isinstance(x,bytes)))
+            match=re.search(rb'RFC822.SIZE (\d+)',b' '.join(x for x in (size or []) if isinstance(x,bytes)))
             if not match or int(match[1])>40*1024*1024:
-                with core().db() as c:c.execute('INSERT OR IGNORE INTO research_messages VALUES(?,?,?)',(mid,'oversize_or_unavailable',time.time()))
+                with core().db() as c:record_mail_failure(c,mid,'oversize_or_unavailable',permanent=bool(match and int(match[1])>40*1024*1024))
                 continue
             status,parts=mailbox.uid('fetch',uid,'(BODY.PEEK[])')
             raw=next((v[1] for v in (parts or []) if isinstance(v,tuple)),None)
             if status!='OK' or not isinstance(raw,bytes):
-                with core().db() as c:c.execute('INSERT OR IGNORE INTO research_messages VALUES(?,?,?)',(mid,'fetch_needs_review',time.time()))
+                with core().db() as c:record_mail_failure(c,mid,'fetch_needs_review')
                 continue
             try:
                 msg=email.message_from_bytes(raw,policy=policy.default)
                 sender=email.utils.parseaddr(str(msg.get('From','')))[1].lower()
                 attachments=list(msg.walk())
             except Exception:
-                with core().db() as c:c.execute('INSERT OR IGNORE INTO research_messages VALUES(?,?,?)',(mid,'parse_needs_review',time.time()))
+                with core().db() as c:record_mail_failure(c,mid,'parse_needs_review',permanent=True)
                 continue
             pending_images=False;supported=0;unsupported=0;document_ids=[];attachment_failure=False
             for index,part in enumerate(attachments):
@@ -385,6 +394,8 @@ PROMPT += " Prioritize the economic mechanism, quantified scenarios, changed exp
 
 PROMPT += " Also return price_target: null unless the excerpt explicitly identifies this covered company's broker price target. Otherwise return {broker: actual originating broker, currency: explicit three-letter currency code (USD for an unambiguous US-dollar target), current: number, previous: number or null, evidence: one exact source quote containing the price-target context and both values if changed, page: source page}. Do not infer a prior target, compute target upside versus share price, or transfer another firm's or company's target. If currency or the company attribution is ambiguous, return null. An unchanged target may have equal values; when only the current target is stated previous must be null. Use the net investment stance of the substantive company analysis, not a rating keyword in isolation; mixed for genuinely conflicting positives/negatives, unclear if insufficient context. Never infer a stock-specific stance from an industry readthrough."
 
+PROMPT += ' For each finding, prefer one short, complete, verbatim sentence supporting the main action (especially an initiation or rating change). Do not fill the evidence limit, end mid-word, paraphrase, or combine separate paragraphs into one quotation. Put explicit initiations and rating changes in event as well as the summary, and explicit broker targets in price_target. Keep summaries concise so the structured response completes within its output allowance.'
+
 def pdf_quote(quote,text):
     """Match unchanged words in the original layout or its left text column."""
     try:return source_quote(quote,text)
@@ -395,7 +406,15 @@ def pdf_quote(quote,text):
 def page_quote(quote,text,page_number):
     page=re.search(r'\[Page '+str(page_number)+r'\]\n(.*?)(?=\n\[Page \d+\]|\Z)',text,re.S)
     if not page:raise ValueError('Evidence page mismatch')
-    return pdf_quote(quote.replace('\x00',' '),page[1])
+    quote=quote.replace('\x00',' ')
+    try:return pdf_quote(quote,page[1])
+    except ValueError:
+        # Models sometimes concatenate complete sentences from separate paragraphs.
+        # Verify EVERY sentence on this same page; never fuzzy-match or discard one.
+        parts=re.split(r'\s*\[…\]\s*|(?<=[.!?])\s+(?=[A-Z])',quote.strip())
+        if not 2<=len(parts)<=4 or any(len(p)<15 or p[-1] not in '.!?' for p in parts):raise
+        verified=[pdf_quote(p,page[1]) for p in parts]
+        return ' […] '.join(verified)
 
 def located_quote(quote,text,page_number):
     """Correct a model page number only for a unique, unchanged source quote."""
@@ -426,6 +445,28 @@ def analysis_failure(exc):
 
 
 def validate_report(value,text,catalog,filename=''):
+    """Keep independently verified companies when another finding is malformed."""
+    try:return _validate_report(value,text,catalog,filename)
+    except ValueError as original:
+        findings=value.get('findings',[]) if isinstance(value,dict) else []
+        if not isinstance(findings,list) or len(findings)<2:raise
+        tickers=[f.get('ticker') for f in findings if isinstance(f,dict)]
+        if len(tickers)!=len(findings) or len(set(tickers))!=len(tickers):raise
+        valid=[];held=[];base=None
+        for finding in findings:
+            try:
+                one=_validate_report({**value,'findings':[finding]},text,catalog,filename)
+                base=one
+                valid.extend(f for f in one['findings'] if f['ticker']==finding['ticker'])
+            except ValueError:held.append(finding.get('ticker'))
+        if not valid:raise original
+        from .research_readthrough import attach_readthroughs
+        base['findings']=valid
+        result=attach_readthroughs(base,catalog)
+        result['validation_warnings']={'held_tickers':held}
+        return result
+
+def _validate_report(value,text,catalog,filename=''):
     from .research_drive import date_candidates
     value=dict(value)
     value['topic_developments']=validate_updates(value.get('topic_developments',[]),text,page_quote)
@@ -625,6 +666,35 @@ def retry_failed_analyses(c,now):
     release_research_reservations(c,now)
 
 
+def recover_cached_analyses(c,now,limit=5):
+    """One bounded local validation pass per policy version, never a paid retry."""
+    if not c.execute('PRAGMA table_info(ai_sentiment_spend)').fetchall():return 0
+    rows=c.execute("""SELECT d.id,d.filename,d.text FROM research_documents d
+        WHERE d.status='needs_review' AND d.received>? AND NOT EXISTS
+        (SELECT 1 FROM meta m WHERE m.key='research_cached_recovery_v1:' || d.id)
+        AND EXISTS (SELECT 1 FROM ai_sentiment_spend s WHERE s.cache_key='research:' || d.id AND s.raw_response IS NOT NULL)
+        ORDER BY d.received DESC LIMIT ?""",(now-30*86400,limit)).fetchall()
+    if not rows:return 0
+    catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}
+    recovered=0
+    for row in rows:
+        outcome='unresolved'
+        for saved in c.execute("SELECT raw_response FROM ai_sentiment_spend WHERE cache_key=? AND raw_response IS NOT NULL ORDER BY ts DESC LIMIT 2",('research:'+row['id'],)).fetchall():
+            try:
+                choice=json.loads(saved['raw_response'])['choices'][0]
+                if choice.get('finish_reason')!='stop':continue
+                raw=choice['message']['content'].strip()
+                if raw.startswith('```'):raw=raw.split('\n',1)[1].rsplit('```',1)[0].strip()
+                result=validate_report(json.loads(raw),limit_stored_excerpt(row['text']),catalog,row['filename'])
+                if not result['findings']:continue
+            except (ValueError,KeyError,TypeError,IndexError):continue
+            c.execute("UPDATE research_documents SET status='draft',result=?,error=NULL,updated=? WHERE id=? AND status='needs_review'",(json.dumps(result),now,row['id']))
+            for f in result['findings']:c.execute('INSERT OR IGNORE INTO research_links VALUES(?,?)',(row['id'],f['ticker']))
+            outcome='recovered';recovered+=1;break
+        put(c,'cached_recovery_v1:'+row['id'],{'state':outcome,'at':now})
+    return recovered
+
+
 def queue_email_backlog():
     from .research_drive import date_screen
     with core().db() as c:
@@ -657,6 +727,7 @@ def run(token=None):
             queue_email_backlog()
         with s.db() as c:
             c.execute('BEGIN IMMEDIATE');retry_failed_analyses(c,time.time())
+            result['cached_recovered']=recover_cached_analyses(c,time.time())
         # Drive and email share this queue; an inbox outage must not block it.
         try:
             batch=[]

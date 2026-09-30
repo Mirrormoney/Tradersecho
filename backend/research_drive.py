@@ -262,10 +262,19 @@ def publish_validated():
  cutoff=(datetime.now(timezone.utc).date()-timedelta(days=30)).isoformat()
  with core().db() as c:
   pub_migrate(c)
-  rows=c.execute("SELECT d.id,d.result FROM research_documents d WHERE d.status='draft'").fetchall()
+  rows=c.execute("SELECT d.id,d.result FROM research_documents d WHERE d.status='draft' AND NOT EXISTS (SELECT 1 FROM research_publications p WHERE p.document_id=d.id) ORDER BY d.updated").fetchall()
   for row in rows:
-   result=json.loads(row['result'])
+   try:
+    result=json.loads(row['result'])
+    if not isinstance(result,dict):raise ValueError('Invalid publication record')
+    if not isinstance(result.get('findings'),list):raise ValueError('Invalid findings')
+    if result.get('report_date') is not None and not isinstance(result['report_date'],str):raise ValueError('Invalid report date')
+    if any(not isinstance(f,dict) or not isinstance(f.get('ticker'),str) for f in result['findings']):raise ValueError('Invalid ticker link')
+   except (ValueError,TypeError):
+    c.execute("UPDATE research_documents SET status='needs_review',error='Invalid publication record',updated=? WHERE id=?",(time.time(),row['id']))
+    continue
    if result.get('report_date') and cutoff<=result['report_date']<=date.today().isoformat() and result.get('date_evidence') and result.get('findings'):
+    for f in result['findings']:c.execute('INSERT OR IGNORE INTO research_links VALUES(?,?)',(row['id'],f['ticker']))
     c.execute('INSERT OR IGNORE INTO research_publications VALUES(?,?)',(row['id'],time.time()))
 def run():
  if os.getenv('VERCEL_ENV')!='production' or os.getenv('RESEARCH_DRIVE_ENABLED')!='true':return {'state':'disabled'}

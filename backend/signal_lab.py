@@ -354,12 +354,16 @@ def overlay_x(c,panels,now=None):
 def retain_valid_axes(c,panels,now):
     """Display-only fallback: never write carried scores into measured history."""
     from .database import Postgres
+    # PostgreSQL JSONB rejects escaped NUL anywhere in a document, even in
+    # unrelated research text. Normalize that escape only for this read; retain
+    # original stored evidence and all numeric scores unchanged.
+    pg_payload="replace(payload,chr(92)||'u0000',chr(92)||'ufffd')::jsonb"
     for i in range(len(TITLES)):
         missing={p['ticker']:p for p in panels if len(p.get('axes',[]))>i and p['axes'][i].get('score') is None}
         if not missing:continue
-        expression=(f"payload::jsonb->'axes'->{i}" if isinstance(c,Postgres)
+        expression=(f"{pg_payload}->'axes'->{i}" if isinstance(c,Postgres)
                     else f"json_extract(payload,'$.axes[{i}]')")
-        score=(f"payload::jsonb->'axes'->{i}->>'score'" if isinstance(c,Postgres)
+        score=(f"{pg_payload}->'axes'->{i}->>'score'" if isinstance(c,Postgres)
                else f"json_extract(payload,'$.axes[{i}].score')")
         placeholders=','.join('?' for _ in missing)
         rows=c.execute(f"SELECT ticker,observed,axis FROM (SELECT ticker,observed,{expression} AS axis,ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY observed DESC) AS position FROM signal_lab_snapshots WHERE version=? AND observed<=? AND ticker IN ({placeholders}) AND {score} IS NOT NULL) ranked WHERE position=1",(VERSION,now,*missing)).fetchall()

@@ -21,3 +21,13 @@ def test_timeout_error_does_not_expose_request_or_secret():
 
 def test_normal_analysis_uses_low_reasoning_and_bounded_output():
  assert r.analysis_generation_limits({})=={'max_tokens':6000,'reasoning_effort':'low'}
+
+def test_company_names_anywhere_are_candidates_not_automatic_findings():
+ cat={'FORM':'FormFactor, Inc.','MU':'Micron Technology, Inc.','ON':'ON Semiconductor Corporation'}
+ assert 'FORM' in r.mentioned_candidates('FormFactor On good form - initiate with Buy.pdf',cat)
+ assert 'FORM' in r.mentioned_candidates('Body text: formfactor expects higher demand.',cat)
+ assert 'MU' in r.mentioned_candidates('Body text mentions Micron Technology.',cat)
+ assert 'FORM' not in r.mentioned_candidates('A different form factor is needed.',cat)
+ assert not r.mentioned_candidates('No covered company here.',cat)
+ assert r.coverage_gaps({'findings':[{'ticker':'MU','attribution':'readthrough'}]},'FormFactor initiation',cat)==['FORM']
+ assert r.coverage_gaps({'findings':[{'ticker':'FORM','attribution':'original'}]},'FormFactor initiation',cat)==[]

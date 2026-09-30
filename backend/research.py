@@ -496,9 +496,26 @@ def response_format(catalog):
     return {'type':'json_schema','json_schema':{'name':'research_report','strict':True,'schema':schema}}
 
 def mentioned_candidates(text,catalog):
-    # Hints only: keep the full document and universe in the request so company-name
-    # references are not excluded. A string match is never enough to create a link.
-    return {ticker:name for ticker,name in catalog.items() if re.search(r'(?<![A-Za-z0-9])'+re.escape(ticker)+r'(?![A-Za-z0-9])',text)}
+    """Candidate hints from symbols and distinctive names anywhere in the excerpt.
+
+    Never a publication decision: source evidence and the universe still gate findings.
+    """
+    folded=' '+re.sub(r'[^a-z0-9]+',' ',text.casefold()).strip()+' '
+    found={}
+    for ticker,name in catalog.items():
+        symbol=bool(re.search(r'(?<![A-Za-z0-9])'+re.escape(ticker)+r'(?![A-Za-z0-9])',text))
+        stem=re.split(r'\b(?:incorporated|corporation|corp|inc|limited|ltd|plc|class|common|holdings)\b',name,flags=re.I)[0].strip(' ,.')
+        normalized=re.sub(r'[^a-z0-9]+',' ',stem.casefold()).strip()
+        named=len(normalized)>=4 and ' '+normalized+' ' in folded
+        if symbol or named:found[ticker]=name
+    return found
+
+
+def coverage_gaps(result,filename,catalog):
+    primary=mentioned_candidates(filename,catalog)
+    direct={f['ticker'] for f in result.get('findings',[]) if f.get('attribution')!='readthrough' and f.get('link_type')!='sector_readthrough'}
+    return sorted(set(primary)-direct)
+
 
 def prescreen(filename,text,catalog):
     """Conservative, token-free screen. No filename-only exclusions."""
@@ -566,7 +583,7 @@ def analyze_one(token=None):
         catalog={r['ticker']:r['name'] for r in c.execute('SELECT ticker,name FROM stocks WHERE active=1')}
         put(c,'excerpt_'+row['id'],{'policy':'first_four_before_disclaimer_v1','pages':len(re.findall(r'\[Page \d+\]',row['text'])),'bytes':len(row['text'].encode()),'at':now})
     try:
-        response=httpx.post('https://ai-gateway.vercel.sh/v1/chat/completions',headers={'Authorization':'Bearer '+token},json={'model':MODEL,**analysis_generation_limits(analysis_retry),'response_format':response_format(catalog),'messages':[{'role':'system','content':PROMPT+INSIGHTS_PROMPT+' First assess each primary_candidates company named in the filename against the source. Include its substantive product launches, business developments and broker analysis, not just rating changes. Do not substitute a peer comparison for the main covered company. Then check each mentioned_candidates entry against the source. Omit a candidate only when it lacks substantive supported discussion. Include explicit company rating changes even if they are brief, including upgrades/downgrades listed in Street Actions. These count as substantive news. A price move alone, an event calendar listing, or sector commentary without substantive company discussion is not a stock finding. Never imply that the report author issued a rating when they are reporting a rating from another firm. Empty findings is valid when no covered company has meaningful news.'},{'role':'user','content':json.dumps({'universe':catalog,'primary_candidates':mentioned_candidates(row['filename'],catalog),'mentioned_candidates':mentioned_candidates(row['text'],catalog),'review_instruction':('A prior pass returned no findings despite repeated covered ticker references. Recheck company product announcements, broker analysis, ratings and targets carefully. Return supported findings if present; an empty result is still valid if none are substantive.' if empty_retry else ''),'validation_recheck':('Previous analysis failed: '+analysis_retry['reason']+'. Copy supporting evidence verbatim including intervening words; do not paraphrase or combine separate passages. Set event to null when an explicit dated rating action is not evidenced.' if analysis_retry else ''),'filename':row['filename'],'report':row['text']})}]},timeout=90)
+        response=httpx.post('https://ai-gateway.vercel.sh/v1/chat/completions',headers={'Authorization':'Bearer '+token},json={'model':MODEL,**analysis_generation_limits(analysis_retry),'response_format':response_format(catalog),'messages':[{'role':'system','content':PROMPT+INSIGHTS_PROMPT+' Review the entire supplied excerpt for direct coverage, including companies identified by full name without a ticker. Before submitting, cross-check every primary_candidates and mentioned_candidates company: do not omit explicit initiations, ratings, price targets or substantive company analysis in favour of sector commentary. Sector findings are additional context, never a replacement for direct company coverage. A mere mention still does not qualify. First assess each primary_candidates company named in the filename against the source. Include its substantive product launches, business developments and broker analysis, not just rating changes. Do not substitute a peer comparison for the main covered company. Then check each mentioned_candidates entry against the source. Omit a candidate only when it lacks substantive supported discussion. Include explicit company rating changes even if they are brief, including upgrades/downgrades listed in Street Actions. These count as substantive news. A price move alone, an event calendar listing, or sector commentary without substantive company discussion is not a stock finding. Never imply that the report author issued a rating when they are reporting a rating from another firm. Empty findings is valid when no covered company has meaningful news.'},{'role':'user','content':json.dumps({'universe':catalog,'primary_candidates':mentioned_candidates(row['filename'],catalog),'mentioned_candidates':mentioned_candidates(row['text'],catalog),'review_instruction':('A prior pass returned no findings despite repeated covered ticker references. Recheck company product announcements, broker analysis, ratings and targets carefully. Return supported findings if present; an empty result is still valid if none are substantive.' if empty_retry else ''),'validation_recheck':('Previous analysis failed: '+analysis_retry['reason']+'. Copy supporting evidence verbatim including intervening words; do not paraphrase or combine separate passages. Set event to null when an explicit dated rating action is not evidenced.' if analysis_retry else ''),'filename':row['filename'],'report':row['text']})}]},timeout=90)
         if response.status_code!=200:raise RuntimeError('AI provider HTTP '+str(response.status_code))
         payload=response.json();usage=payload.get('usage',{});cost=usage.get('cost')
         if not isinstance(cost,(int,float)) or not math.isfinite(cost) or cost<0:cost=None
@@ -577,6 +594,7 @@ def analyze_one(token=None):
         if raw.startswith('```'):raw=raw.split('\n',1)[1].rsplit('```',1)[0].strip()
         result=validate_report(json.loads(raw),row['text'],catalog,row['filename'])
         with s.db() as c:
+            put(c,'coverage_check:'+row['id'],{'at':time.time(),'missing_primary':coverage_gaps(result,row['filename'],catalog)})
             c.execute('UPDATE research_documents SET status=?,result=?,error=NULL,updated=? WHERE id=?',('draft' if result['findings'] else 'no_match',json.dumps(result),time.time(),row['id']))
             for finding in result['findings']:c.execute('INSERT OR IGNORE INTO research_links VALUES(?,?)',(row['id'],finding['ticker']))
         return {'state':'draft_ready','matches':len(result['findings'])}

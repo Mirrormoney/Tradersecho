@@ -28,43 +28,71 @@ def prepare(now,approved=False):
         if notes:rows.append({'ticker':row['ticker'],'name':row['name'],**notes[0]})
         if len(rows)==3:break
     if not rows:raise ValueError('No validated research dated today; waiting until 9:30am New York')
-    leader=rows[0]
-    prefix=f"Research before the bell 🔎\n\n${leader['ticker']}: "
-    suffix="\n\n"+str(len(rows))+" fresh research perspective"+('s' if len(rows)!=1 else '')+" for AI-related stocks.\nhttps://tradersecho.com/trending-research"
-    available=280-len(prefix)-len(re.sub(r'https://\S+','x'*23,suffix))-4
-    summary=leader['summary']
-    if len(summary)>available:summary=summary[:available-1].rsplit(' ',1)[0]+'…'
-    return {'edition':'research','title':'Research before the bell','date':day,'rows':rows,'text':prefix+summary+suffix}
+    tickers=', '.join('$'+row['ticker'] for row in rows)
+    text=(f"Research before the bell 🔎\n\nToday's research covers {tickers}."
+          "\n\nRead the full published summaries in the image."
+          "\nhttps://tradersecho.com/trending-research")
+    if len(re.sub(r'https://\S+','x'*23,text))>280:
+        raise ValueError('Research caption exceeds standard post length')
+    return {'edition':'research','title':'Research before the bell','date':day,'rows':rows,'text':text}
+
+
+def full_tile_text(row):
+    parts=[row['summary']]
+    for key,label in (('catalysts','Catalysts'),('risks','Risks')):
+        for item in row.get(key,[]):
+            parts.append(label+': '+item)
+    if row.get('link_type')=='sector_readthrough' and row.get('link_reason'):
+        parts.append('Sector read-through: '+row['link_reason'])
+    return parts
+
+
+def wrapped_lines(draw,text,width,size):
+    lines=[]
+    line=''
+    for word in text.split():
+        trial=(line+' '+word).strip()
+        if line and draw.textlength(trial,font=font(size))>width:
+            lines.append(line);line=word
+        else:line=trial
+    if line:lines.append(line)
+    return lines
+
 
 def artwork(report):
     if report.get('approved_preview'):return Path(__file__).with_name('research_before_bell_approved.png').read_bytes()
-    im=Image.new('RGB',(1500,900),BG);d=ImageDraw.Draw(im)
+    # Full published content, never the collapsed website excerpt. Measure before
+    # drawing so longer notes expand the card rather than disappearing at its edge.
+    probe=ImageDraw.Draw(Image.new('RGB',(1500,1)))
+    layouts=[]
+    for row in report['rows']:
+        name=wrapped_lines(probe,row['name'],1160,26)
+        paragraphs=[wrapped_lines(probe,text,1300,28) for text in full_tile_text(row)]
+        height=130+len(name)*34+sum(len(lines)*39+16 for lines in paragraphs)+44
+        layouts.append((row,name,paragraphs,height))
+    height=340+sum(item[3]+20 for item in layouts)+90
+    if height>8000:raise ValueError('Full research artwork exceeds readable image size; no text was clipped')
+    im=Image.new('RGB',(1500,height),BG);d=ImageDraw.Draw(im)
     pulse(d,50,34,88);d.text((157,42),'tradersecho',font=font(43),fill=WHITE)
     d.text((160,99),'ATTENTION / PERSPECTIVE / COMMUNITY',font=font(16),fill=MUTED)
     d.text((1160,62),report['date'],font=font(22),fill=MUTED)
     d.text((60,166),'Research before the bell.',font=font(57),fill=GREEN)
     d.text((63,247),'Fresh AI-stock research. Ratings. Developments. Context.',font=font(27),fill=MUTED)
-    def wrap(text,x,y,width,size,max_lines):
-        words=text.split();lines=[];line=''
-        for word in words:
-            trial=(line+' '+word).strip()
-            if d.textlength(trial,font=font(size))>width:lines.append(line);line=word
-            else:line=trial
-        if line:lines.append(line)
-        if len(lines)>max_lines:lines=lines[:max_lines];lines[-1]=lines[-1].rsplit(' ',1)[0]+'…'
-        for line in lines:d.text((x,y),line,font=font(size),fill=WHITE);y+=size+12
-    width=(1380-(len(report['rows'])-1)*20)/len(report['rows'])
-    for i,row in enumerate(report['rows']):
-        x=60+i*(width+20)
-        d.rounded_rectangle((x,320,x+width,773),radius=24,fill=PANEL,outline='#38543d',width=2)
-        d.text((x+width-65,350),f'0{i+1}',font=font(25),fill=GREEN)
-        d.text((x+28,350),'$'+row['ticker'],font=font(43),fill=GREEN)
-        wrap(row['name'],x+29,410,width-60,22,1)
-        d.line((x+28,455,x+width-28,455),fill='#38543d',width=2)
-        wrap(row['firm'] or 'Research update',x+29,477,width-60,19,1)
-        wrap(row['summary'],x+29,521,width-60,24,5)
-        if row.get('link_type')=='sector_readthrough':d.text((x+29,713),'Sector read-through',font=font(18),fill=GREEN)
-        d.text((x+29,741),'Note date: '+row['report_date'],font=font(18),fill=MUTED)
-    d.text((63,825),'Find the conversation. Form your own conviction.',font=font(24),fill=WHITE)
-    d.text((1030,825),'tradersecho.com',font=font(32),fill=GREEN)
-    return png(im)
+    y=320
+    for i,(row,name,paragraphs,h) in enumerate(layouts):
+        d.rounded_rectangle((60,y,1440,y+h),radius=24,fill=PANEL,outline='#38543d',width=2)
+        d.text((1370,y+26),f'0{i+1}',font=font(25),fill=GREEN)
+        d.text((90,y+25),'$'+row['ticker'],font=font(43),fill=GREEN)
+        cursor=y+83
+        for line in name:d.text((90,cursor),line,font=font(26),fill=MUTED);cursor+=34
+        d.line((90,cursor+8,1410,cursor+8),fill='#38543d',width=2);cursor+=30
+        for lines in paragraphs:
+            for line in lines:d.text((90,cursor),line,font=font(28),fill=WHITE);cursor+=39
+            cursor+=16
+        d.text((90,y+h-38),'Note date: '+row['report_date'],font=font(20),fill=MUTED)
+        y+=h+20
+    d.text((63,y+20),'Find the conversation. Form your own conviction.',font=font(24),fill=WHITE)
+    d.text((1030,y+20),'tradersecho.com',font=font(32),fill=GREEN)
+    result=png(im)
+    if len(result)>5_000_000:raise ValueError('Full research image exceeds upload allowance; no text was clipped')
+    return result

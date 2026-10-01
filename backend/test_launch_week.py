@@ -23,7 +23,7 @@ def test_launch_day_only_two_advertisements_and_no_collisions():
     assert all(b-a>=45*60 for a,b in zip(ordered,ordered[1:]))
     for slot in unique.values():
         report=(p.prepare_signal if slot['edition']=='signal_launch' else p.prepare_insights)(slot,slot['at'])
-        assert 'live today' in report['text']
+        assert 'live starting today' in report['text']
         assert len(re.sub(r'https://\S+','x'*23,report['text']))<=280
 
 def test_launch_week_expires_and_returns_to_original_art():
@@ -33,7 +33,7 @@ def test_launch_week_expires_and_returns_to_original_art():
         assert len(si)+len(ai)==1
         text=(p.prepare_signal(si[0],now) if si else p.prepare_insights(ai[0],now))['text']
         assert ('live now' in text)==(day<5)
-        assert 'live today' not in text
+        assert 'live starting today' not in text
         name='signal' if si else 'insights'
         image=(p.signal_artwork if si else p.insights_artwork)(now)
         expected=Path(p.__file__).with_name(name+('_live_week_promo.png' if day<5 else '_evergreen_promo.png')).read_bytes()

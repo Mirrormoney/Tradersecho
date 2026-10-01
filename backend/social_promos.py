@@ -101,7 +101,7 @@ def launch_week(now):
     return LAUNCH_DATE<=datetime.fromtimestamp(now,NY).date()<LAUNCH_WEEK_END
 
 def launch_caption(kind,now):
-    timing='today' if datetime.fromtimestamp(now,NY).date()==LAUNCH_DATE else 'now'
+    timing='starting today' if datetime.fromtimestamp(now,NY).date()==LAUNCH_DATE else 'now'
     if kind=='signal':
         return (f"Signal Lab is live {timing} at TradersEcho.\n\n"
                 "Does the market chatter match the other signals? Compare X activity, options pressure, broker commentary, price and volume in one view.\n\n"

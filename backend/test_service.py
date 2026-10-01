@@ -181,7 +181,13 @@ def test_verified_trial_starts_once_expires_and_preserves_paid_access(monkeypatc
         db.execute('INSERT INTO account_tokens VALUES(?,?,?,?,?,0)',(hashlib.sha256(token.encode()).hexdigest(),u['id'],'verify',u['email'],time.time()+60))
     assert c.post('/api/auth/verify-email',json={'token':token}).status_code==200
     trial=c.get('/api/me').json()
-    assert trial['plan']=='premium' and trial['billing_tier']=='trial' and trial['trial_active']
+    assert trial['plan']=='pro' and trial['billing_tier']=='trial' and trial['trial_active']
+    assert trial['pro_access']
+    assert trial['limits']=={'saved_stocks':50,'personal_voices':5,'ticker_refreshes':5}
+    from . import pro_access
+    monkeypatch.setattr(pro_access,'launched',lambda:True)
+    assert c.get('/api/signal-lab/overview').status_code==200
+    assert c.get('/api/insights/800-vdc').status_code==200
     assert round(trial['trial_ends_at']-trial['trial_started_at'])==7*86400
     assert c.post('/api/auth/start-trial').status_code==409
     assert c.post('/api/auth/verify-email',json={'token':token}).status_code==400
@@ -192,6 +198,9 @@ def test_verified_trial_starts_once_expires_and_preserves_paid_access(monkeypatc
         db.execute('UPDATE accounts SET trial_ends_at=? WHERE id=?',(time.time()-1,u['id']))
         assert 'trialvoice' in shared_handles(db)
     assert c.get('/api/me').json()['plan']=='free'
+    assert not c.get('/api/me').json()['pro_access']
+    assert c.get('/api/signal-lab/overview').status_code==403
+    assert c.get('/api/insights/800-vdc').status_code==403
     assert c.get('/api/community/messages').status_code==200
     assert c.post('/api/auth/start-trial').status_code==409
     with s.db() as db:
@@ -927,7 +936,8 @@ def test_newsletter_personalization_safe_html_and_inline_logo():
     result=render(report,'<Sven>','https://example.com',preview=True)
     assert '&lt;Sven&gt;' in result['html'] and '<script>' not in result['html']
     assert '&lt;img' in result['html'] and 'src="data:image/png;base64,' in result['html']
-    assert '$MU leads your watchlist' in result['html']
+    assert 'YOUR WATCHLIST' in result['html']
+    assert '$MU leads your watchlist' not in result['html']
     assert 'view=market&amp;ticker=MU' in result['html'] and 'view=account' in result['text']
     assert 'Design preview / owner test' in result['html']
     actual=render(report,'Sven','https://example.com')

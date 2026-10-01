@@ -23,7 +23,7 @@ function useSignals(home=false){
 }
 export function SignalTeaser({compact=false}){
  const {data,error}=useSignals(compact)
- return <section className={'signal-teaser '+(compact?'signal-compact':'')} aria-label="Signal Lab preview"><div className="section-head"><div><span className="eyebrow">SIGNAL LAB · EARLY PREVIEW</span><h2>Compare the signals.</h2></div><a className="text-link" href="/signal-lab">Explore Signal Lab ↗</a></div>{!compact&&<p className="muted">Three test names, ordered by saved X activity.</p>}
+ return <section className={'signal-teaser '+(compact?'signal-compact':'')} aria-label="Signal Lab preview"><div className="section-head"><div><span className="eyebrow">SIGNAL LAB</span><h2>Compare the signals.</h2></div><a className="text-link" href="/signal-lab">Explore Signal Lab ↗</a></div>{!compact&&<p className="muted">Explore a selection of saved signals.</p>}
  <div className="signal-cards">{data?.stocks.map((s,i)=><a className="signal-card" href={'/signal-lab/'+encodeURIComponent(s.ticker)} key={s.ticker}><div className="signal-card-title"><span><strong>${s.ticker}</strong><small>{s.name}</small></span><span className="signal-rank">0{i+1}</span></div><SignalRadar axes={s.axes} compact={compact}/><span className="signal-card-foot">{s.stale?'Last saved view':'Latest saved view'}<span>Explore ↗</span></span></a>)}</div>
  {!data&&<p role="status">{error||'Loading Signal Lab…'}</p>}{data&&!data.stocks.length&&<p>First observations are being prepared.</p>}
  </section>

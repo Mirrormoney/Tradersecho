@@ -217,7 +217,7 @@ def signup(payload:SignupCredentials,request:Request,response:Response):
     if configured():
         try:result['verification_email']=issue(email,'verify') or 'sent'
         except HTTPException:result['verification_email']='failed'
-    result['verification_message']=('Your account is ready. Check your inbox and spam folder for the verification email to activate your seven-day Premium trial.' if result['verification_email']=='sent' else 'Your account is ready, but the verification email could not be sent. Use Send verification link in My account to try again.')
+    result['verification_message']=('Your account is ready. Check your inbox and spam folder for the verification email to activate your seven-day Pro trial.' if result['verification_email']=='sent' else 'Your account is ready, but the verification email could not be sent. Use Send verification link in My account to try again.')
     return result
 
 @app.post('/api/auth/login')

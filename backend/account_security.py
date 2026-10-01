@@ -29,7 +29,8 @@ def trial_account(user,now=None):
         with core().db() as c:until=access_until(c,u['id'],now)
     u['referral_ends_at']=until
     u['referral_active']=bool(until and not u['demo'] and u['status']=='active' and u['email_verified'])
-    if u['trial_active'] or u['referral_active']:u['plan']='premium'
+    if u['trial_active']:u['plan']='pro'
+    elif u['referral_active']:u['plan']='premium'
     return u
 
 def start_trial(c,uid):
@@ -131,4 +132,4 @@ def verify(payload:Token,request:Request):
         c.execute('UPDATE accounts SET email_verified=1 WHERE id=?',(row['user_id'],))
         started=start_trial(c,row['user_id'])
         c.execute("DELETE FROM account_tokens WHERE user_id=? AND purpose='verify'",(row['user_id'],))
-    return {'message':'Email verified. Your seven-day Premium trial has started. No card required and no automatic charges.' if started else 'Email verified. You can return to your account.'}
+    return {'message':'Email verified. Your seven-day Pro trial has started. No card required and no automatic charges.' if started else 'Email verified. You can return to your account.'}

@@ -12,7 +12,7 @@ export function ProFeaturePage({kind,user}){
  useEffect(()=>{if(kind==='insights')api('/insights').then(setTopics).catch(()=>{})},[kind])
  if(!live)return <>{kind==='signal'?<SignalAnnouncement/>:<InsightsAnnouncement/>}{!isPro(user)&&<ProLock title="Full access opens October 1"/>}</>
  if(isPro(user))return kind==='signal'?<SignalOverview member/>:<InsightsAdmin member/>
- return <section>{kind==='signal'?<><h1>Signal Lab</h1><SignalPreview/></>:<><h1>AI Insights</h1><p>Understand the technologies shaping the AI economy.</p><div className="data-grid">{topics.map(t=><article className="panel" key={t.slug}><h2>{t.title}</h2><p>{t.intro}</p></article>)}</div></>}<ProLock title={kind==='signal'?'Screen individual stocks with Pro':'Explore timelines and potential beneficiaries with Pro'}/></section>
+ return <section>{kind==='signal'?<><h1>Signal Lab</h1><SignalPreview/></>:<><h1>AI Insights</h1><p>Understand the technologies shaping the AI economy.</p><div className="data-grid">{topics.map(t=><article className="panel" data-tour-insight-preview key={t.slug}><h2>{t.title}</h2><p>{t.intro}</p></article>)}</div></>}<ProLock title={kind==='signal'?'Screen individual stocks with Pro':'Explore timelines and potential beneficiaries with Pro'}/></section>
 }
 
 export function SignalPreview(){return <SignalTeaser lockedIndicators/>}

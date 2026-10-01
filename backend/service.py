@@ -320,6 +320,15 @@ def rankings(request:Request,window:int=Query(1,ge=1,le=30),source:str=Query('de
         with db() as c:watched={r[0] for r in c.execute('SELECT ticker FROM watchlist WHERE user_id=? ORDER BY ticker LIMIT ?',(u['id'],50 if full else 5))}
         rows=[r for r in rows if r['ticker'] in watched]
     visible=rows if full else rows[:5 if u else 3]
+    if not u and source=='x' and window==1 and scope=='market':
+        try:
+            from .research_feed import landing_research
+            research=landing_research(tuple(r['ticker'] for r in visible[:2]),int(time.time()//60))
+            visible=[{**r,'latest_research':research.get(r['ticker'])} if i<2 else r for i,r in enumerate(visible)]
+        except Exception:
+            import logging
+            logging.exception('Landing research preview unavailable')
+            visible=[{**r,'research_unavailable':True} if i<2 else r for i,r in enumerate(visible)]
     return {'rows':visible,'total_tickers':total,'total_mentions':total_mentions,'ranking_locked':bool(u and not full and scope=='market'),'preview_limit':None if full else 5 if u else 3,'preview':not bool(u),'stale':source=='x' and time.time()-now>36*3600,'as_of':now,'sample_as_of':time.time() if source=='x' else now,'source':source,'window':window,'comparison_complete':comparison,'coverage_days':round((now-earliest)/86400,1) if earliest else 0}
 
 @app.get('/api/posts')

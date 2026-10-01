@@ -1,5 +1,6 @@
 """Published, redacted research. No paid requests on page views."""
 import json,re,time,hashlib,threading
+from functools import lru_cache
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter,Request,HTTPException
@@ -120,3 +121,16 @@ def publish(document_id:str,request:Request):
         if not row or not json.loads(row['result']).get('report_date'):raise HTTPException(409,'A dated, validated draft is required')
         c.execute('INSERT OR IGNORE INTO research_publications VALUES(?,?)',(document_id,time.time()))
     return {'ok':True}
+
+
+def latest_preview_item(items):
+    dated=[i for i in items if i.get('report_date') and i.get('summary')]
+    if not dated:return None
+    item=max(dated,key=lambda i:(i['report_date'],i.get('received') or 0,i.get('id','')))
+    return {k:item.get(k) for k in ('summary','report_date','link_type','link_reason')}
+
+@lru_cache(maxsize=32)
+def landing_research(tickers,minute):
+    # Caller supplies only the two public 24-hour leaders; no arbitrary ticker access.
+    with core().db() as c:
+        return {ticker:latest_preview_item(published(c,ticker)) for ticker in tickers[:2]}

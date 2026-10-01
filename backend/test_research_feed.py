@@ -91,3 +91,15 @@ def test_cached_feed_still_restricts_each_user(monkeypatch):
 
 def test_private_scoring_metadata_not_public():
  assert public_item({'ticker':'NVDA','_rating_event':{'broker':'Test'},'_price_target':{'current':100}})=={'ticker':'NVDA'}
+
+
+def test_landing_latest_research_date_and_privacy():
+ from .research_feed import latest_preview_item
+ old={'summary':'Older note','report_date':'2026-09-20','received':999}
+ new={'summary':'Latest full sentence. Another complete sentence.','report_date':'2026-10-01','received':1,'evidence':'PRIVATE','pdf':'PRIVATE','ticker':'MU'}
+ item=latest_preview_item([old,new])
+ assert item['summary']==new['summary']
+ assert item['report_date']=='2026-10-01'
+ assert set(item)=={'summary','report_date','link_type','link_reason'}
+ assert latest_preview_item([]) is None
+ assert latest_preview_item([{'summary':'Undated'}]) is None

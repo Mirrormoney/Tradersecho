@@ -8,3 +8,5 @@
 .sidebar nav .nav-badges:empty{display:none}
 .sidebar nav .nav-badges small{margin-left:0}
 @media(max-width:850px){.sidebar nav .nav-label{white-space:nowrap}}
+
+.signal-preview-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(220px,.8fr);gap:24px;align-items:stretch}.signal-preview-layout .signal-teaser{min-width:0}.signal-preview-indicators{display:grid;gap:10px;align-content:start;padding-top:24px}.signal-preview-indicators h2{margin:0 0 8px}.signal-preview-indicator{margin:0;overflow:hidden;user-select:none;min-height:76px;padding:16px}.signal-preview-blur{filter:blur(6px);opacity:.55;display:grid;gap:8px;pointer-events:none}.signal-preview-blur i{display:block;height:8px;background:#9dba94;border-radius:5px;width:70%}.signal-preview-blur i:last-child{width:40%}@media(max-width:1100px){.signal-preview-layout{grid-template-columns:1fr}.signal-preview-indicators{padding-top:0}}

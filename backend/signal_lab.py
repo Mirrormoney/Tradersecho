@@ -89,7 +89,14 @@ def options_axis(stock, past, now):
         if p>0:days[d.date()]=p
     baseline=[days[d] for d in sorted(days,reverse=True)[:20]]
     balance=(f['bull']-f['bear'])/total
-    if len(baseline)<20:return axis(TITLES[2],reason='Collecting 20 comparable sessions before scoring unusualness.',sessions=len(baseline),premium_balance=round(balance,3),classified=f['accepted'])
+    if len(baseline)<20:
+        # Keep the same directional weight as the mature formula. Missing
+        # unusualness contributes zero rather than amplifying early scores.
+        result=axis(TITLES[2],clamp(50+30*balance),
+            'Preliminary: directional premium balance only (50 = balanced; range 20-80). Historical unusualness is added after 20 comparable sessions.',
+            True,sessions=len(baseline),premium_balance=round(balance,3),classified=f['accepted'],preliminary=True,method='options-directional-v1')
+        result['state']='preliminary'
+        return result
     ratio=total/statistics.median(baseline)
     unusual=max(0,min(1,ratio-1))
     score=clamp(50+50*(.6*balance+.4*unusual*(1 if balance>0 else -1 if balance<0 else 0)))

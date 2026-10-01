@@ -9,8 +9,9 @@ export function SignalRadar({axes=[],compact=false}){
  const poly=v=>names.map((_,i)=>point(i,v).join(',')).join(' ')
  const visible=axes.flatMap((a,i)=>a.strength==null?[]:[{i,p:point(i,a.strength)}])
  return <svg className="signal-pentagon" viewBox={compact?"0 0 280 200":"0 0 300 245"} role="img" aria-label={axes.map(a=>a.name+': '+(a.score??'not ready')).join(', ')}>
+ {axes.some(a=>a.state==='preliminary')&&<title>Options: preliminary directional pressure; historical comparison is still building.</title>}
  {[25,50,75,100].map(v=><polygon key={v} points={poly(v)} fill="none" stroke="currentColor" opacity=".2"/>)}
- {names.map((n,i)=>{const p=compact?[[140,10],[244,66],[205,186],[75,186],[36,66]][i]:point(i,133);return <text key={n} x={p[0]} y={p[1]} textAnchor="middle" dominantBaseline="middle">{n}</text>})}
+ {names.map((n,i)=>{const p=compact?[[140,10],[244,66],[205,186],[75,186],[36,66]][i]:point(i,133);return <text key={n} x={p[0]} y={p[1]} textAnchor="middle" dominantBaseline="middle">{n}{axes[i]?.state==='preliminary'?'*':''}</text>})}
  {visible.length>=3&&<polygon points={visible.map(a=>a.p.join(',')).join(' ')} fill="currentColor" opacity=".23"/>}
  {visible.length>1&&visible.map((a,i)=>{const b=visible[(i+1)%visible.length];return <line key={a.i} x1={a.p[0]} y1={a.p[1]} x2={b.p[0]} y2={b.p[1]} stroke="currentColor" strokeWidth="2" strokeDasharray={(b.i-a.i+5)%5>1?'4 4':undefined}/>})}
  {visible.map(a=><circle key={a.i} cx={a.p[0]} cy={a.p[1]} r="4" fill="currentColor"/>)}

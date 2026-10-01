@@ -71,7 +71,8 @@ def test_volume_thresholds_and_staleness():
 def test_options_partial_and_history_gates():
     sample=dict(at=NOW,partial=False,bull=200,bear=0,accepted=30)
     s=dict(filtered_options=sample)
-    assert lab.options_axis(s,[],NOW)['score'] is None
+    assert lab.options_axis(s,[],NOW)['score']==80
+    assert lab.options_axis(s,[],NOW)['state']=='preliminary'
     past=[]
     for i in range(1,21):
         prev={**sample,'bull':100,'at':NOW-i*86400}
@@ -84,7 +85,7 @@ def test_options_partial_and_history_gates():
     for row in past:row['version']='lab-0.2'
     assert lab.options_axis(s,past,NOW)['score']==100
     past[-1]['version']='older-rules'
-    assert lab.options_axis(s,past,NOW)['score'] is None
+    assert lab.options_axis(s,past,NOW)['score']==80
 
 def test_catalyst_publication_date_readthrough_and_missing():
     item=dict(report_date='2026-09-24',summary='Broker raises estimates.',original=True,id='a',stance='bullish')
@@ -187,3 +188,14 @@ def test_catalyst_strength_direction_and_decay():
         a=lab.catalyst_axis([{**base,'_price_target':dict(previous=previous,current=current)}],NOW)
         assert a['strength']==60
         assert a['direction']==('bullish' if current>previous else 'bearish')
+
+
+def test_preliminary_options_direction_and_minimum_evidence():
+    for bull,bear,expected in [(100,100,50),(0,200,20),(150,50,65)]:
+        f=dict(at=NOW,partial=False,bull=bull,bear=bear,accepted=20)
+        a=lab.options_axis(dict(filtered_options=f),[],NOW)
+        assert a['score']==expected and a['state']=='preliminary'
+        assert a['details']['sessions']==0
+        f['accepted']=19
+        assert lab.options_axis(dict(filtered_options=f),[],NOW)['score'] is None
+    assert lab.options_axis(dict(filtered_options=dict(at=NOW,partial=False,bull=0,bear=0,accepted=20)),[],NOW)['score'] is None

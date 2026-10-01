@@ -9,4 +9,13 @@
 .sidebar nav .nav-badges small{margin-left:0}
 @media(max-width:850px){.sidebar nav .nav-label{white-space:nowrap}}
 
-.signal-preview-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(220px,.8fr);gap:24px;align-items:stretch}.signal-preview-layout .signal-teaser{min-width:0}.signal-preview-indicators{display:grid;gap:10px;align-content:start;padding-top:24px}.signal-preview-indicators h2{margin:0 0 8px}.signal-preview-indicator{margin:0;overflow:hidden;user-select:none;min-height:76px;padding:16px}.signal-preview-blur{filter:blur(6px);opacity:.55;display:grid;gap:8px;pointer-events:none}.signal-preview-blur i{display:block;height:8px;background:#9dba94;border-radius:5px;width:70%}.signal-preview-blur i:last-child{width:40%}@media(max-width:1100px){.signal-preview-layout{grid-template-columns:1fr}.signal-preview-indicators{padding-top:0}}
+.signal-connected-preview .signal-cards{grid-template-columns:1fr}
+.signal-connected-preview .signal-card{display:grid;grid-template-columns:minmax(260px,1fr) minmax(260px,1fr);gap:16px 32px;align-items:center;padding:28px}
+.signal-connected-preview .signal-card-title{grid-column:1;grid-row:1;display:flex}
+.signal-connected-preview .signal-pentagon{grid-column:1;grid-row:2;max-height:300px;height:280px}
+.signal-connected-preview .signal-preview-indicators{grid-column:2;grid-row:1/3;display:grid;gap:0;border-left:1px solid var(--line);padding-left:32px;min-width:0}
+.signal-preview-indicator{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:19px 0;border-bottom:1px solid var(--line);font-size:16px}
+.signal-preview-indicator:last-child{border-bottom:0}
+.signal-preview-score{filter:blur(5px);opacity:.6;user-select:none;white-space:nowrap;color:var(--lime);pointer-events:none}
+.signal-connected-preview .signal-card-foot{grid-column:1/-1;border-top:1px solid var(--line);padding-top:16px;display:flex}
+@media(max-width:650px){.signal-connected-preview .signal-card{grid-template-columns:minmax(0,1fr);padding:20px;gap:14px}.signal-connected-preview .signal-pentagon{height:240px;grid-column:1;grid-row:2}.signal-connected-preview .signal-preview-indicators{grid-column:1;grid-row:3;border-left:0;border-top:1px solid var(--line);padding-left:0}.signal-preview-indicator{padding:14px 0}.signal-connected-preview .signal-card-foot{grid-row:4}}

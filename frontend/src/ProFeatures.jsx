@@ -15,4 +15,4 @@ export function ProFeaturePage({kind,user}){
  return <section>{kind==='signal'?<><h1>Signal Lab</h1><SignalPreview/></>:<><h1>AI Insights</h1><p>Understand the technologies shaping the AI economy.</p><div className="data-grid">{topics.map(t=><article className="panel" key={t.slug}><h2>{t.title}</h2><p>{t.intro}</p></article>)}</div></>}<ProLock title={kind==='signal'?'Screen individual stocks with Pro':'Explore timelines and potential beneficiaries with Pro'}/></section>
 }
 
-export function SignalPreview(){return <div className="signal-preview-layout"><SignalTeaser/><aside className="signal-preview-indicators" aria-label="Five indicators available with Pro"><h2>Five perspectives.</h2>{["Price strength","Volume","Options pressure","X activity","Catalyst strength"].map(name=><div className="panel signal-preview-indicator" key={name}><span className="sr-only">{name} · Pro access required</span><div className="signal-preview-blur" aria-hidden="true"><strong>{name}</strong><i/><i/></div></div>)}</aside></div>}
+export function SignalPreview(){return <SignalTeaser lockedIndicators/>}

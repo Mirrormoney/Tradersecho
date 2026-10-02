@@ -71,11 +71,11 @@ def base(h,kicker,title,sub,date):
  return im,d
 def logo(im,d,t,x,y,size=74):
  d.rounded_rectangle((x-4,y-4,x+size+4,y+size+4),radius=15,fill='#020807',outline='#425348',width=2)
- path=ASSETS/'logos'/(t+'.png')
- if not path.is_file():
-  fit(d,(x+8,y+size//3),t,size-16,24,c=G,b=True)
-  return
- a=Image.open(path).convert('RGB').resize((size,size),Image.Resampling.LANCZOS)
+ from .social_logos import LOGOS
+ import base64
+ encoded=LOGOS.get(t)
+ if not encoded:raise ValueError('Verified company logo unavailable for '+t)
+ a=Image.open(BytesIO(base64.b64decode(encoded))).convert('RGB').resize((size,size),Image.Resampling.LANCZOS)
  mask=Image.new('L',(size,size));ImageDraw.Draw(mask).rounded_rectangle((0,0,size-1,size-1),radius=11,fill=255)
  im.paste(a,(x,y),mask)
 def badge(d,x,y,s,col=G):

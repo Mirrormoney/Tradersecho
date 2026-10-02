@@ -12,7 +12,7 @@ def test_zero_volume_unknown_logos_and_long_names(monkeypatch):
         return original(self,xy,text,*args,**kwargs)
     monkeypatch.setattr(ImageDraw.ImageDraw,'text',capture)
     rows=[{'ticker':t,'name':'A particularly long company name with a share class description',
-           'mentions':0,'change':change} for t,change in [('ZZZZ',None),('QQQQ',-80),('WWWW',0)]]
+           'mentions':0,'change':change} for t,change in [('NVDA',None),('AMD',-80),('MU',0)]]
     im=Image.open(BytesIO(attention_card({'rows':rows,'title':'The month in AI attention','label':'30 days','date':'Oct 02, 2026'})))
     assert im.size==(1200,1250)
     assert 'Comparison unavailable' in seen and '-80% attention' in seen
@@ -49,3 +49,14 @@ def test_missing_asset_directory_still_renders(monkeypatch):
         assert Image.open(BytesIO(design.attention_card({'rows':rows,'label':'3 hours','date':'Oct 02, 2026'}))).size==(1200,1250)
     finally:
         design.ft.cache_clear()
+
+
+def test_bundled_logos_cover_website_universe():
+    import json,base64
+    from .social_logos import LOGOS
+    manifest=json.loads((Path(__file__).parents[1]/'frontend/src/companyLogos.json').read_text())
+    assert set(manifest)==set(LOGOS)
+    for encoded in LOGOS.values():
+        with Image.open(BytesIO(base64.b64decode(encoded))) as image:
+            assert image.size==(164,164)
+            image.verify()

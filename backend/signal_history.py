@@ -13,7 +13,9 @@ def detail(c,ticker,now):
     # Extract only numeric scores and aggregate in Neon, never transfer 30 days of raw payloads.
     if isinstance(c,Postgres):
         day="to_char(to_timestamp(observed) AT TIME ZONE 'America/New_York','YYYY-MM-DD')"
-        score=lambda i:f"CAST(payload::jsonb->'axes'->{i}->>'score' AS DOUBLE PRECISION)"
+        # Research excerpts can contain escaped NUL; sanitize only the JSON read.
+        payload="replace(payload,chr(92)||'u0000',chr(92)||'ufffd')::jsonb"
+        score=lambda i:f"CAST({payload}->'axes'->{i}->>'score' AS DOUBLE PRECISION)"
     else:
         c.create_function('ny_day',1,lambda ts:datetime.fromtimestamp(ts,NY).date().isoformat())
         day='ny_day(observed)'

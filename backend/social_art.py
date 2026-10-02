@@ -22,22 +22,5 @@ def banner():
     d.text((357,379),'tradersecho.com',font=font(22),fill=BG)
     return png(im)
 def card(report):
-    im=Image.new('RGB',(1200,675),BG);d=ImageDraw.Draw(im)
-    pulse(d,40,30,80);d.text((134,46),'tradersecho',font=font(34),fill=WHITE)
-    d.text((134,88),'ATTENTION / PERSPECTIVE / COMMUNITY',font=font(12),fill=MUTED)
-    d.text((930,56),report.get('date',''),font=font(21),fill=MUTED)
-    d.text((48,150),report['title'],font=font(44),fill=GREEN)
-    d.text((50,208),report['label'],font=font(20),fill=MUTED)
-    for i,r in enumerate(report['rows'][:3]):
-        x=48+i*374;d.rounded_rectangle((x,261,x+354,532),radius=18,fill=PANEL,outline='#2e4640',width=2)
-        d.text((x+26,285),f'0{i+1}',font=font(24),fill=GREEN)
-        d.text((x+26,330),'$'+r['ticker'],font=font(43),fill=WHITE)
-        name=r['name'];name=name if len(name)<28 else name[:25]+'...'
-        d.text((x+26,390),name,font=font(17),fill=MUTED)
-        d.text((x+26,435),f"{r['mentions']:,} mentions",font=font(25),fill=WHITE)
-        change=r.get('change');value=f'{change:+g}% attention' if change is not None else 'Comparison unavailable'
-        d.text((x+26,481),value,font=font(19),fill=GREEN if change is not None and change>=0 else MUTED)
-    d.text((50,566),'AI-related stocks ranked by conversation heat',font=font(20),fill=WHITE)
-    d.text((50,603),'X attention, not price performance or investment advice.',font=font(16),fill=MUTED)
-    d.text((934,605),'tradersecho.com',font=font(23),fill=GREEN)
-    return png(im)
+    from .social_design import attention_card
+    return attention_card(report)

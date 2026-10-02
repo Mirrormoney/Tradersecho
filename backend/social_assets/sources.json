@@ -1,0 +1,26 @@
+{
+  "logos": [
+    {
+      "ticker": "MU",
+      "source": "https://raw.githubusercontent.com/ShaadyEmad/ticker-logos/main/US%20Market/PNG/MU.png"
+    },
+    {
+      "ticker": "HPE",
+      "source": "https://raw.githubusercontent.com/ShaadyEmad/ticker-logos/main/US%20Market/PNG/HPE.png"
+    },
+    {
+      "ticker": "GOOGL",
+      "source": "https://raw.githubusercontent.com/ShaadyEmad/ticker-logos/main/US%20Market/PNG/GOOGL.png"
+    },
+    {
+      "ticker": "AAPL",
+      "source": "https://raw.githubusercontent.com/ShaadyEmad/ticker-logos/main/US%20Market/PNG/AAPL.png"
+    },
+    {
+      "ticker": "ASTS",
+      "source": "https://raw.githubusercontent.com/ShaadyEmad/ticker-logos/main/US%20Market/PNG/ASTS.png"
+    }
+  ],
+  "note": "Assets used in user-approved October 2 samples; no external logo requests during rendering. Other tickers use text.",
+  "font": "Manrope, Google Fonts, SIL Open Font License (OFL.txt)"
+}

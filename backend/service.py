@@ -539,3 +539,6 @@ app.include_router(insight_worker_router)
 
 from .availability import router as availability_router
 app.include_router(availability_router)
+
+from .industry_radar import router as industry_radar_router
+app.include_router(industry_radar_router)

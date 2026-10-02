@@ -110,3 +110,5 @@ work/
 !backend/social_font.py
 
 !backend/social_logos.py
+
+!backend/industry_radar.py

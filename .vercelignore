@@ -44,6 +44,7 @@ work/
 !backend/budget_monitor.py
 
 !backend/social.py
+!backend/social_caption.py
 !backend/social_art.py
 !backend/social_promos.py
 !backend/social_research.py

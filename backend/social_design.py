@@ -32,6 +32,8 @@ def ft(n,b=False):
  return f
 def txt(d,xy,s,n=24,c=W,b=False):d.text(xy,s,font=ft(n,b),fill=c)
 def wrap(d,s,w,n):
+ # Normalize legacy Windows punctuation before measuring and drawing text.
+ s=s.translate({i:bytes([i]).decode('cp1252',errors='replace') for i in range(128,160)})
  lines=[];line=''
  for word in s.split():
   t=(line+' '+word).strip()

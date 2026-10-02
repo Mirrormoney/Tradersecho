@@ -1,5 +1,5 @@
 """Private industry radar. Isolated budget, bounded collection, no public writes."""
-import hashlib,hmac,json,os,re,ssl,time
+import hashlib,hmac,json,os,re,ssl,time,unicodedata
 from datetime import datetime,timezone,date
 from urllib.parse import urljoin,urlsplit
 from urllib.robotparser import RobotFileParser
@@ -42,7 +42,9 @@ def get(c,k,default=None):
  return json.loads(r[0]) if r else default
 def put(c,k,v):c.execute('INSERT INTO radar_state VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(k,json.dumps(v)))
 def month():return datetime.now(timezone.utc).strftime('%Y-%m')
-def normal(s):return re.sub(r'\s+',' ',s).strip().casefold()
+def normal(s):
+ s=unicodedata.normalize('NFKC',s).translate(str.maketrans({'’':"'",'‘':"'",'“':'"','”':'"','–':'-','—':'-','\u00ad':''}))
+ return re.sub(r'\s+',' ',s).strip().casefold()
 def topics(text):return [k for k,p in TOPICS.items() if re.search(p,text,re.I)]
 
 def download(url):
@@ -53,7 +55,11 @@ def download(url):
   for chunk in r.iter_bytes():
    b.extend(chunk)
    if len(b)>750000:raise ValueError('source_too_large')
-  return b.decode('utf-8',errors='replace')
+  try:return b.decode('utf-8')
+  except UnicodeDecodeError:
+   # Some publisher pages still use Windows-1252 punctuation. Do not silently
+   # corrupt apostrophes with replacement characters before evidence matching.
+   return b.decode('windows-1252',errors='replace')
 
 def allowed(url,index,prefix):
  u=urlsplit(url);base=urlsplit(index)

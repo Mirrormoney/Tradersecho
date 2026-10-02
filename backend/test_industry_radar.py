@@ -93,3 +93,8 @@ def test_preview_does_not_collect(monkeypatch):
  monkeypatch.setenv('VERCEL_ENV','preview')
  monkeypatch.setattr(r,'discover',lambda:pytest.fail('No preview collection'))
  assert r.run(Request({'type':'http','headers':[]}))['state']=='preview_read_only'
+
+
+def test_typography_normalization_does_not_change_words():
+ assert r.normal("Micron’s HBM—growth") == r.normal("Micron's HBM-growth")
+ assert r.normal('growth 10%') != r.normal('growth 100%')

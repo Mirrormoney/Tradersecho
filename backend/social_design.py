@@ -27,8 +27,15 @@ def research_label(row):
 G='#c4f27a'; W='#f2f6ee'; M='#9cb5aa'; BG='#081514'
 @lru_cache(maxsize=64)
 def ft(n,b=False):
- f=ImageFont.truetype(str(ASSETS/'Manrope.ttf'),n)
- f.set_variation_by_axes([700 if b else 400])
+ try:
+  f=ImageFont.truetype(str(ASSETS/'Manrope.ttf'),n)
+ except OSError:
+  from .social_font import FONT
+  import base64
+  try:f=ImageFont.truetype(BytesIO(base64.b64decode(FONT)),n)
+  except OSError:return ImageFont.load_default(size=n)
+ try:f.set_variation_by_axes([700 if b else 400])
+ except (OSError,AttributeError):pass
  return f
 def txt(d,xy,s,n=24,c=W,b=False):d.text(xy,s,font=ft(n,b),fill=c)
 def wrap(d,s,w,n):

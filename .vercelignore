@@ -106,3 +106,5 @@ work/
 !backend/social_assets/**
 
 !backend/research_partial.py
+
+!backend/social_font.py

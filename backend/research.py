@@ -411,10 +411,10 @@ def page_quote(quote,text,page_number):
     except ValueError:
         # Models sometimes concatenate complete sentences from separate paragraphs.
         # Verify EVERY sentence on this same page; never fuzzy-match or discard one.
-        parts=re.split(r'\s*\[…\]\s*|(?<=[.!?])\s+(?=[A-Z])',quote.strip())
+        parts=re.split(r'\s*\[â€¦\]\s*|(?<=[.!?])\s+(?=[A-Z])',quote.strip())
         if not 2<=len(parts)<=4 or any(len(p)<15 or p[-1] not in '.!?' for p in parts):raise
         verified=[pdf_quote(p,page[1]) for p in parts]
-        return ' […] '.join(verified)
+        return ' [â€¦] '.join(verified)
 
 def located_quote(quote,text,page_number):
     """Correct a model page number only for a unique, unchanged source quote."""
@@ -597,6 +597,35 @@ def analysis_generation_limits(retry):
     return {'max_tokens':6000,'reasoning_effort':'low'}
 
 
+def validated_choice(choice,text,catalog,filename=''):
+    from .research_partial import complete_prefix
+    raw=choice.get('message',{}).get('content')
+    if not isinstance(raw,str):raise ValueError('Incomplete analysis')
+    reason=choice.get('finish_reason')
+    if reason not in ('stop','length'):raise ValueError('Incomplete analysis')
+    clean=raw.strip()
+    if clean.startswith('```'):clean=clean.split('\n',1)[1].rsplit('```',1)[0].strip()
+    if reason=='stop':
+        try:value=json.loads(clean)
+        except json.JSONDecodeError:pass
+        else:return validate_report(value,text,catalog,filename)
+    prefix=complete_prefix(raw)
+    tickers=[f.get('ticker') for f in prefix['findings']]
+    if any(not isinstance(t,str) for t in tickers) or len(set(tickers))!=len(tickers):
+        raise ValueError('Invalid or duplicate ticker')
+    findings=[];held=[];result=None
+    for finding in prefix['findings']:
+        try:one=validate_report({**prefix,'findings':[finding]},text,catalog,filename)
+        except (ValueError,TypeError):held.append(finding.get('ticker'));continue
+        if result is None:result=one
+        findings.extend(one['findings'])
+    if not findings:raise ValueError('Incomplete analysis')
+    result['findings']=findings
+    result['validation_warnings']={'partial_response':True,'held_tickers':held,
+        'optional_sections_not_recovered':True}
+    return result
+
+
 def analyze_one(token=None):
     token=token or os.getenv('AI_GATEWAY_API_KEY') or os.getenv('VERCEL_OIDC_TOKEN')
     if not token:return {'state':'ai_credentials_required'}
@@ -630,10 +659,7 @@ def analyze_one(token=None):
         if not isinstance(cost,(int,float)) or not math.isfinite(cost) or cost<0:cost=None
         with s.db() as c:c.execute('UPDATE ai_sentiment_spend SET actual=?,usage=?,raw_response=?,status=? WHERE id=?',(cost,json.dumps(usage),json.dumps(payload),'received',rid))
         choice=payload['choices'][0]
-        if choice.get('finish_reason')!='stop':raise ValueError('Incomplete analysis')
-        raw=choice['message']['content'].strip()
-        if raw.startswith('```'):raw=raw.split('\n',1)[1].rsplit('```',1)[0].strip()
-        result=validate_report(json.loads(raw),row['text'],catalog,row['filename'])
+        result=validated_choice(choice,row['text'],catalog,row['filename'])
         with s.db() as c:
             put(c,'coverage_check:'+row['id'],{'at':time.time(),'missing_primary':coverage_gaps(result,row['filename'],catalog)})
             c.execute('UPDATE research_documents SET status=?,result=?,error=NULL,updated=? WHERE id=?',('draft' if result['findings'] else 'no_match',json.dumps(result),time.time(),row['id']))
@@ -671,7 +697,7 @@ def recover_cached_analyses(c,now,limit=5):
     if not c.execute('PRAGMA table_info(ai_sentiment_spend)').fetchall():return 0
     rows=c.execute("""SELECT d.id,d.filename,d.text FROM research_documents d
         WHERE d.status='needs_review' AND d.received>? AND NOT EXISTS
-        (SELECT 1 FROM meta m WHERE m.key='research_cached_recovery_v1:' || d.id)
+        (SELECT 1 FROM meta m WHERE m.key='research_cached_recovery_v2:' || d.id)
         AND EXISTS (SELECT 1 FROM ai_sentiment_spend s WHERE s.cache_key='research:' || d.id AND s.raw_response IS NOT NULL)
         ORDER BY d.received DESC LIMIT ?""",(now-30*86400,limit)).fetchall()
     if not rows:return 0
@@ -682,16 +708,13 @@ def recover_cached_analyses(c,now,limit=5):
         for saved in c.execute("SELECT raw_response FROM ai_sentiment_spend WHERE cache_key=? AND raw_response IS NOT NULL ORDER BY ts DESC LIMIT 2",('research:'+row['id'],)).fetchall():
             try:
                 choice=json.loads(saved['raw_response'])['choices'][0]
-                if choice.get('finish_reason')!='stop':continue
-                raw=choice['message']['content'].strip()
-                if raw.startswith('```'):raw=raw.split('\n',1)[1].rsplit('```',1)[0].strip()
-                result=validate_report(json.loads(raw),limit_stored_excerpt(row['text']),catalog,row['filename'])
+                result=validated_choice(choice,limit_stored_excerpt(row['text']),catalog,row['filename'])
                 if not result['findings']:continue
             except (ValueError,KeyError,TypeError,IndexError):continue
             c.execute("UPDATE research_documents SET status='draft',result=?,error=NULL,updated=? WHERE id=? AND status='needs_review'",(json.dumps(result),now,row['id']))
             for f in result['findings']:c.execute('INSERT OR IGNORE INTO research_links VALUES(?,?)',(row['id'],f['ticker']))
             outcome='recovered';recovered+=1;break
-        put(c,'cached_recovery_v1:'+row['id'],{'state':outcome,'at':now})
+        put(c,'cached_recovery_v2:'+row['id'],{'state':outcome,'at':now})
     return recovered
 
 

@@ -27,7 +27,9 @@ def test_cached_recovery_is_bounded_idempotent_and_never_calls_provider(monkeypa
  c.execute('CREATE TABLE ai_sentiment_spend(cache_key TEXT,raw_response TEXT,ts REAL)')
  for i in range(3):
   c.execute('INSERT INTO research_documents VALUES(?,?,?,?,?,?,?,?,?,?,?)',(str(i),'x.pdf','',now-i,TEXT+'\nAdditional industry discussion provides detailed context for the company outlook.',2,'needs_review','Evidence not present in source',None,None,now))
-  payload={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(REPORT)}}]}
+  content=json.dumps(REPORT)
+  if i==1: content=content[:content.rfind(']')]+', {"ticker":'
+  payload={'choices':[{'finish_reason':'length' if i==1 else 'stop','message':{'content':content}}]}
   c.execute('INSERT INTO ai_sentiment_spend VALUES(?,?,?)',('research:'+str(i),json.dumps(payload),now))
  monkeypatch.setattr(r.httpx,'post',lambda *a,**k:(_ for _ in ()).throw(AssertionError('No paid retries')))
  assert r.recover_cached_analyses(c,now,limit=2)==2
@@ -43,7 +45,7 @@ def test_cached_invalid_response_marked_once_without_blocking_next():
  c.execute('INSERT INTO research_documents VALUES(?,?,?,?,?,?,?,?,?,?,?)',('bad','x.pdf','',now,'text',1,'needs_review','error',None,None,now))
  c.execute("INSERT INTO ai_sentiment_spend VALUES('research:bad','not json',?)",(now,))
  assert r.recover_cached_analyses(c,now)==0
- assert r.meta(c,'cached_recovery_v1:bad')['state']=='unresolved'
+ assert r.meta(c,'cached_recovery_v2:bad')['state']=='unresolved'
  assert r.recover_cached_analyses(c,now+1)==0
 
 def test_mail_failures_back_off_and_stop_after_three_attempts(monkeypatch):

@@ -104,3 +104,5 @@ work/
 !backend/social_design.py
 !backend/social_assets/
 !backend/social_assets/**
+
+!backend/research_partial.py

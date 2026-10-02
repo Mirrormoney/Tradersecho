@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from .community import core
 from .newsletter_schedule import due_slots,NY
 from .social_art import card
+from .social_caption import validate_ranked_caption
 from . import social_promos,social_research
 router=APIRouter()
 HANDLE='tradersecho'
@@ -234,6 +235,7 @@ def run(now=None,manual_promo=False,manual_research=False):
             elif slot['edition']=='research':
                 p=social_research.prepare(now,approved=manual_research);image=social_research.artwork(p)
             else:p=prepare(slot['edition'],now);image=card(p)
+            validate_ranked_caption(p)
         except ValueError as e:result={'state':'waiting_for_data','reason':str(e)};continue
         with s.db() as c:
             c.execute('BEGIN IMMEDIATE')

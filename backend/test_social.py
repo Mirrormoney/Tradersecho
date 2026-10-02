@@ -8,7 +8,18 @@ from .social_art import card,banner
 def reset_social():
     with s.db() as c:c.execute('DELETE FROM social_editions')
 
-def report():return {'title':'Morning radar','label':'24 hours','rows':[{'ticker':t,'name':t,'mentions':100,'change':10,'as_of':1000} for t in ['NVDA','MU','AMD']],'text':'Morning radar','as_of':1000,'max_age':129600}
+def report():return {'title':'Morning radar','label':'24 hours','rows':[{'ticker':t,'name':t,'mentions':100,'change':10,'as_of':1000} for t in ['NVDA','MU','AMD']],'text':'Morning radar: $NVDA leads.','as_of':1000,'max_age':129600}
+
+@pytest.mark.parametrize('caption', ['$NVDA and $MU lead.', '$MU leads.', 'No leader.', '$NVDA leads. More on $NVDA.'])
+def test_invalid_ranked_caption_never_spends_or_contacts_x(monkeypatch,caption):
+    now=setup(monkeypatch)
+    payload=report();payload['text']=caption
+    monkeypatch.setattr(social,'prepare',lambda *a:payload)
+    monkeypatch.setattr(social,'client',lambda *a:pytest.fail('Invalid caption must not contact X'))
+    assert social.run(now)['state']=='waiting_for_data'
+    with s.db() as c:
+        assert c.execute('SELECT COUNT(*) FROM social_editions').fetchone()[0]==0
+        assert c.execute("SELECT COUNT(*) FROM x_spend WHERE kind='social_publish'").fetchone()[0]==0
 
 def test_art_and_owner_protection():
     assert card(report()).startswith(b'\x89PNG') and banner().startswith(b'\x89PNG')

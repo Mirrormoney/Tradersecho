@@ -14,13 +14,24 @@ def test_schedule():
     assert not r.slots(at('2026-09-26'))
 
 def test_fresh_notes_only(monkeypatch):
-    rows=[{'ticker':t,'name':t,'research':[{'report_date':d,'summary':'Clear evidence. '*100,'firm':'Broker'}]} for t,d in [('OLD','2026-09-22'),('MU','2026-09-23'),('LITE','2026-09-23')]]
+    rows=[{'ticker':t,'name':t,'research':[{'report_date':d,'summary':'Clear evidence. '*100,'firm':'Broker'}]} for t,d in [('OLD','2026-09-22'),('MU','2026-09-23'),('LITE','2026-09-23'),('AMD','2026-09-23')]]
     monkeypatch.setattr(research_feed,'shared_overview',lambda:(rows,[],0,0))
     p=r.prepare(at('2026-09-23'))
-    assert [x['ticker'] for x in p['rows']]==['MU','LITE']
-    assert p['text'].count('$')==2
+    assert [x['ticker'] for x in p['rows']]==['MU','LITE','AMD']
+    assert re.findall(r'\$[A-Z]+',p['text'])==['$MU']
     assert len(re.sub(r'https://\S+','x'*23,p['text']))<=278
+    from .social_caption import validate_ranked_caption
+    validate_ranked_caption(p)
+    from PIL import ImageDraw
+    seen=[]
+    original=ImageDraw.ImageDraw.text
+    def capture(self,xy,text,*args,**kwargs):
+        seen.append(text)
+        return original(self,xy,text,*args,**kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw,'text',capture)
     assert r.artwork(p).startswith(b'\x89PNG')
+    for ticker in ('MU','LITE','AMD'):
+        assert any(ticker in line for line in seen)
     with pytest.raises(ValueError):r.prepare(at('2026-09-24'))
 
 def test_approved_preview_expiration():

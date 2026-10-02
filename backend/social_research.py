@@ -28,8 +28,7 @@ def prepare(now,approved=False):
         if notes:rows.append({'ticker':row['ticker'],'name':row['name'],**notes[0]})
         if len(rows)==3:break
     if not rows:raise ValueError('No validated research dated today; waiting until 9:30am New York')
-    tickers=', '.join('$'+row['ticker'] for row in rows)
-    text=(f"Research before the bell 🔎\n\nToday's research covers {tickers}."
+    text=(f"Research before the bell 🔎\n\n${rows[0]['ticker']} leads today's research selection."
           "\n\nRead the full published summaries in the image."
           "\nhttps://tradersecho.com/trending-research")
     if len(re.sub(r'https://\S+','x'*23,text))>280:

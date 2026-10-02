@@ -38,3 +38,14 @@ def test_research_height_expands_without_clipping():
          'report_date':'2026-10-02','catalysts':[],'risks':[]}
     image=Image.open(BytesIO(research_card({'rows':[row]*3,'date':'2026-10-02'})))
     assert 2000<image.height<8000 and image.width==1200
+
+
+def test_missing_asset_directory_still_renders(monkeypatch):
+    from . import social_design as design
+    monkeypatch.setattr(design,'ASSETS',Path('missing-runtime-assets'))
+    design.ft.cache_clear()
+    try:
+        rows=[{'ticker':t,'name':t,'mentions':100,'change':10} for t in ['MU','AMD','NVDA']]
+        assert Image.open(BytesIO(design.attention_card({'rows':rows,'label':'3 hours','date':'Oct 02, 2026'}))).size==(1200,1250)
+    finally:
+        design.ft.cache_clear()

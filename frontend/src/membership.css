@@ -9,3 +9,5 @@
 @media(max-width:700px){.landing>.panel.public-preview-invite{padding:26px 22px}}
 
 .chat-message .chat-message-actions{display:flex;gap:20px;align-items:center;margin-top:10px}.chat-message-actions .text-link{padding:6px 0;min-height:32px}.chat-cashtag{display:inline;padding:0;border:0;background:none;color:var(--lime);font:inherit;cursor:pointer;text-decoration:underline;text-decoration-color:#759a5b66;text-underline-offset:3px}.chat-cashtag:hover{text-decoration-color:currentColor}.chat-cashtag:focus-visible{outline:2px solid var(--lime);outline-offset:3px;border-radius:2px}
+
+.public-stock-title .company-logo{margin-right:0}.public-stock-title>div{min-width:0}.public-stock-title p{overflow-wrap:anywhere}@media(max-width:600px){.public-stock-title{gap:8px}.public-stock-title>.tag{flex-shrink:0}}

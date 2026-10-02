@@ -37,3 +37,5 @@
 .research-featured-card .research-ranking-summary{height:420px}.research-featured-card .research-ranking-summary>span:nth-child(3)>strong{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden}.research-featured-card .research-ranking-summary>span:nth-child(3)>small{min-height:36px}@media(max-width:700px){.research-featured-card .research-ranking-summary{height:auto;min-height:340px}}
 
 .research-featured-card .research-position{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 8px;border:1px solid #71984e;border-radius:7px;background:#203529;color:var(--lime);font-weight:600;letter-spacing:.04em}
+
+.research-featured-company .company-logo{float:left;margin-right:12px}.research-featured-company>small{display:block;overflow:hidden}.research-featured-company{min-height:48px}

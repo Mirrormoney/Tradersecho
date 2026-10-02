@@ -1,3 +1,4 @@
+import {CompanyLogo} from './CompanyLogo.jsx'
 import {signalStatus} from './signalStatus.mjs'
 import {SignalRadar} from './SignalLab.jsx'
 import {StockActions} from './Engagement.jsx'
@@ -33,7 +34,7 @@ export function StockDetail({onBack,ticker,name,row,intraday,windowDays,asOf,cov
  const measured=row&&Number.isFinite(row.mentions)&&(!intraday||row.state==='measured')
  const curated=posts.filter(p=>p.curated)
  const contextualPost=curated.find(p=>p.sentiment_status==='done'&&p.sentiment_reason)
- return <article className="stock-detail stock-page"><button className="text-link stock-back" onClick={onBack}>← Back to overview</button><header className="stock-page-heading"><div><span className="eyebrow">STOCK RESEARCH</span><h1>${ticker}</h1><p>{name||ticker}</p></div><div className="stock-page-actions"><button className="button" onClick={()=>toggleWatch(ticker)}>{watchlist.includes(ticker)?'★ Saved':'☆ Watchlist'}</button><TradingViewLink ticker={ticker} name={name} detail/><StockActions key={`${ticker}-${intraday}-${windowDays}`} ticker={ticker} intraday={intraday} windowDays={windowDays} source={source}/></div></header><TradingViewDisclosure/><div className="stock-page-columns"><div className="stock-page-main">
+ return <article className="stock-detail stock-page"><button className="text-link stock-back" onClick={onBack}>← Back to overview</button><header className="stock-page-heading"><div><span className="eyebrow">STOCK RESEARCH</span><h1><CompanyLogo ticker={ticker}/>${ticker}</h1><p>{name||ticker}</p></div><div className="stock-page-actions"><button className="button" onClick={()=>toggleWatch(ticker)}>{watchlist.includes(ticker)?'★ Saved':'☆ Watchlist'}</button><TradingViewLink ticker={ticker} name={name} detail/><StockActions key={`${ticker}-${intraday}-${windowDays}`} ticker={ticker} intraday={intraday} windowDays={windowDays} source={source}/></div></header><TradingViewDisclosure/><div className="stock-page-columns"><div className="stock-page-main">
 
   <DetailSection title="Why it’s trending · Evidence check">
    {measured&&<><p>{fmt(row.mentions)} mentions in the {period}{row.change!=null?`, ${row.change>0?'up':row.change<0?'down':'unchanged'}${row.change===0?'':` ${fmt(Math.abs(row.change))}%`} versus the preceding comparable period`:'. A comparable growth figure is not available'}.</p><p className="muted">{Number.isFinite(row.heat)?`Attention heat score: ${row.heat}. `:''}Rankings combine mention volume and acceleration; they do not measure price performance.{!intraday&&coverageDays<windowDays?` History covers ${coverageDays} of ${windowDays} days.`:''}</p>{(row.as_of||asOf)&&<small className="muted">Snapshot · {dualTime(row.as_of||asOf)}</small>}</>}

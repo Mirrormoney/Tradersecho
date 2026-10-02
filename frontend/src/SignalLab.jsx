@@ -1,3 +1,4 @@
+import {CompanyLogo} from './CompanyLogo.jsx'
 import {signalStatus} from './signalStatus.mjs'
 import React,{useEffect,useState} from 'react'
 import {api} from './api.js'
@@ -25,7 +26,7 @@ function useSignals(home=false){
 export function SignalTeaser({compact=false,lockedIndicators=false}){
  const {data,error}=useSignals(compact)
  return <section className={'signal-teaser '+(compact?'signal-compact':'')+(lockedIndicators?' signal-connected-preview':'')} aria-label="Signal Lab preview"><div className="section-head"><div><span className="eyebrow">SIGNAL LAB</span><h2>Compare the signals.</h2></div><a className="text-link" href="/signal-lab">Explore Signal Lab ↗</a></div>{!compact&&<p className="muted">Explore a selection of saved signals.</p>}
- <div className="signal-cards">{data?.stocks.map((s,i)=><a className="signal-card" href={'/signal-lab/'+encodeURIComponent(s.ticker)} key={s.ticker}><div className="signal-card-title"><span><strong>${s.ticker}</strong><small>{s.name}</small></span><span className="signal-rank">0{i+1}</span></div><SignalRadar axes={s.axes} compact={compact}/>{lockedIndicators&&<div className="signal-preview-indicators" aria-label="Five indicators available with Pro">{["Price strength","Volume","Options pressure","X activity","Catalyst strength"].map(name=><div className="signal-preview-indicator" key={name}><span>{name}</span><span className="sr-only">Pro access required</span><strong className="signal-preview-score" aria-hidden="true">XX/100</strong></div>)}</div>}<span className="signal-card-foot">{s.stale?'Last saved view':'Latest saved view'}<span>Explore ↗</span></span></a>)}</div>
+ <div className="signal-cards">{data?.stocks.map((s,i)=><a className="signal-card" href={'/signal-lab/'+encodeURIComponent(s.ticker)} key={s.ticker}><div className="signal-card-title"><span><CompanyLogo ticker={s.ticker}/><strong>${s.ticker}</strong><small>{s.name}</small></span><span className="signal-rank">0{i+1}</span></div><SignalRadar axes={s.axes} compact={compact}/>{lockedIndicators&&<div className="signal-preview-indicators" aria-label="Five indicators available with Pro">{["Price strength","Volume","Options pressure","X activity","Catalyst strength"].map(name=><div className="signal-preview-indicator" key={name}><span>{name}</span><span className="sr-only">Pro access required</span><strong className="signal-preview-score" aria-hidden="true">XX/100</strong></div>)}</div>}<span className="signal-card-foot">{s.stale?'Last saved view':'Latest saved view'}<span>Explore ↗</span></span></a>)}</div>
  {!data&&<p role="status">{error||'Loading Signal Lab…'}</p>}{data&&!data.stocks.length&&<p>First observations are being prepared.</p>}
  </section>
 }

@@ -159,7 +159,7 @@ class Analysis(BaseModel):
  kind:Literal['reported','expectation','rumour','correction']
  summary:str=Field(max_length=650)
  evidence:str=Field(min_length=30,max_length=700)
- timing:str=Field(max_length=160)
+ timing:str=Field(max_length=160,description='When the claimed development or forecast is expected to occur, with uncertainty. Never substitute the publication date. Use Timing not specified if no event horizon is supported.')
  novelty:Literal['new_to_archive','update','repeat','unclear']
  compared_to:list[str]=Field(max_length=5)
  what_changed:str=Field(max_length=500)

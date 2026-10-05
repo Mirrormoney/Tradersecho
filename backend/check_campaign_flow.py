@@ -19,6 +19,8 @@ assert r.status_code==200,r.text
 with s.db() as c:
  assert summary(c)['campaigns'][0]['verified']==1
  assert summary(c)['campaigns'][0]['trials']==1
+assert client.get('/api/signal-lab/overview').status_code==200
+assert client.get('/api/insights/800-vdc').status_code==200
 assert client.get('/api/admin/campaign-results').status_code==403
 for i,headers,attribution in [(1,{'dnt':'1'},a),(2,{'sec-gpc':'1'},a),(3,{},dict(a,campaign='unknown')),(4,{},dict(a,campaign=[]))]:
  r=client.post('/api/auth/signup',json={'email':f'other{i}@example.com','password':'long-password-test','display_name':f'Other User {i}','campaign_attribution':attribution},headers=headers)

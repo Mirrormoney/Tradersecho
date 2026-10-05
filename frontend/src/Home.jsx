@@ -25,7 +25,7 @@ const destinations=[
  ['signal','Signal Lab','Compare the signals.','Price, volume, options, X activity and broker research in one clear view.','Preview Signal Lab'],
  ['market','Market pulse','Find the names making noise.','Explore ticker attention, momentum and the posts behind it.','Explore the market'],
  ['supply','AI Supply Chain','See how the AI economy connects.','Explore attention across chips, memory, power and the companies putting AI to work.','Explore the heatmap'],
- ['insights','AI Insights','Understand what comes next.','Explore AI technologies, expected milestones and potential beneficiaries.','Preview AI Insights'],
+ ['insights','AI Insights','Understand what comes next.','Explore AI technologies, expected milestones and potential beneficiaries.','Explore AI Insights'],
  ['research','Trending Research','Stay close to the latest thinking.','Find concise broker research summaries linked to the names you follow.','Explore research'],
  ['voices','Tracked voices','Better sources. Clearer thinking.','Read collected takes from curated voices and your own circle.','Follow the conversation'],
  ['community','Trading room','Bring a thesis. Find a perspective.','Exchange ideas, ask better questions and challenge assumptions.','Enter the room'],

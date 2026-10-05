@@ -1,6 +1,9 @@
+import {captureCampaign,campaignForSignup} from './campaignAttribution.js'
+captureCampaign()
 const inflight = new Map()
 const pause = ms => new Promise(resolve => setTimeout(resolve,ms))
 export async function api(path,method='GET',body){
+ if(path==='/auth/signup'&&method==='POST')body={...body,campaign_attribution:campaignForSignup()}
  const key=method+path
  if(method==='GET'&&inflight.has(key))return inflight.get(key)
  const task=(async()=>{

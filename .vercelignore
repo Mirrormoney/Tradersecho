@@ -112,3 +112,4 @@ work/
 !backend/social_logos.py
 
 !backend/industry_radar.py
+!backend/campaign_attribution.py

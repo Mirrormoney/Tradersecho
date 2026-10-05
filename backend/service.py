@@ -42,6 +42,8 @@ from .voices import router as voices_router, migrate as migrate_voices, normaliz
 app.include_router(voices_router)
 from .customer_api import router as customer_api_router
 app.include_router(customer_api_router)
+from .campaign_attribution import router as campaign_router, migrate as migrate_campaigns
+app.include_router(campaign_router)
 
 def db():
     return connect(DB_PATH)
@@ -77,6 +79,7 @@ def init():
         migrate_voices(c)
         from .account_security import migrate as migrate_security
         migrate_security(c)
+        migrate_campaigns(c)
         from .email_delivery import migrate as migrate_email_delivery
         migrate_email_delivery(c)
         from .context_sentiment import migrate as migrate_sentiment
@@ -185,6 +188,7 @@ class Credentials(BaseModel):
 
 class SignupCredentials(Credentials):
     display_name:str=Field(min_length=3,max_length=30)
+    campaign_attribution:dict | None = None
 
 @app.post('/api/auth/signup')
 def signup(payload:SignupCredentials,request:Request,response:Response):
@@ -203,6 +207,8 @@ def signup(payload:SignupCredentials,request:Request,response:Response):
         try: c.execute('INSERT INTO accounts(id,email,password,display_name,created_at,last_login) VALUES(?,?,?,?,?,?)',(uid,email,password_hash(payload.password),name,time.time(),time.time()))
         except IntegrityError: raise HTTPException(409,'That email or username is already in use.')
         if payload.owner_code: claim_owner(c,payload.owner_code,email,uid)
+        from .campaign_attribution import attach as attach_campaign
+        attach_campaign(c,uid,payload.campaign_attribution,request)
         from .referrals import attach
         attach(c,uid,request.cookies.get('te_referral',''))
         from .owner_reports import enqueue_signup

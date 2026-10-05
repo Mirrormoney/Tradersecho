@@ -92,6 +92,9 @@ def read_page(url,index,prefix):
  return p
 
 def save_item(c,identity,origin,source,url,day,title,text):
+ # Extracted PDF/model strings may contain escaped NULs. PostgreSQL text
+ # cannot store them; normalize before hashing or inserting the whole batch.
+ identity,origin,source,url,day,title,text=[v.replace('\x00','') if isinstance(v,str) else v for v in (identity,origin,source,url,day,title,text)]
  body=text[:28000];digest=hashlib.sha256(normal(body).encode()).hexdigest()
  relevant=bool(topics(title+' '+body));duplicate=c.execute('SELECT 1 FROM radar_items WHERE digest=?',(digest,)).fetchone()
  status='duplicate' if duplicate else ('queued' if relevant and len(body)>300 else 'irrelevant')

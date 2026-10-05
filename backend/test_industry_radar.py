@@ -22,6 +22,15 @@ def db(tmp_path,monkeypatch):
 
 TEXT='Micron supplies HBM memory to customers and expects capacity growth in 2027. '+('Supporting HBM industry discussion. '*12)
 
+def test_pdf_null_characters_removed_before_database_insert(db):
+ with db() as c:
+  r.save_item(c,'research:test','research','Broker\x00age',None,'2026-10-05','HBM\x00 research',TEXT+'\x00')
+  row=c.execute('SELECT * FROM radar_items').fetchone()
+  assert row['source']=='Brokerage'
+  assert row['title']=='HBM research'
+  assert row['text']==TEXT
+  assert r.save_item(c,'research:copy','research','Brokerage',None,None,'HBM research',TEXT)=='duplicate'
+
 def analysis():
  return dict(headline='Memory capacity expectation',topic='hbm',kind='expectation',summary='Micron expects capacity growth.',evidence=TEXT[:73],timing='2027',novelty='unclear',compared_to=[],what_changed='No comparable previous evidence supplied.',readthroughs=[dict(ticker='MU',relationship='direct',direction='mixed',reason='Capacity could support sales if demand holds.',basis_source='current',basis_quote='Micron supplies HBM memory to customers',caveat='Capacity alone does not establish profitability.')],next_check='Check shipment confirmation.',uncertainty='Forecast, not an accomplished event.')
 

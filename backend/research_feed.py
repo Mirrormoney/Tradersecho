@@ -13,6 +13,13 @@ def migrate(c):
 def premium(user):
     return bool(user and not user.get('demo') and (user.get('plan') in ('premium','pro') or user.get('role') in ('owner','admin')))
 
+def public_source_label(value):
+    """Hide the import provider identity in published research, retaining private evidence."""
+    if isinstance(value,str):
+        return re.sub(r'(?:https?://)?(?:www\.)?the\s*cleanest\s*setup(?:\.com)?', 'Third party', value, flags=re.I)
+    if isinstance(value,list):return [public_source_label(v) for v in value]
+    return value
+
 def clean_finding(doc,f):
     # Conservative migration for earlier summaries: reported external ratings must
     # never carry the compiling firm's badge. Unclassified material has no badge.
@@ -26,7 +33,8 @@ def clean_finding(doc,f):
     key=None
     if all(event.get(k) for k in ('broker','action','rating','date')) and event.get('action') in ('upgrade','downgrade','initiation','reiteration'):
         key='|'.join([f['ticker'],event['date'],*[re.sub(r'[^a-z0-9]','',event[k].lower()) for k in ('broker','action','rating')]])
-    return {'_rating_event':{k:v for k,v in event.items() if k in ('broker','action','rating','date')},'_price_target':{k:v for k,v in (f.get('price_target') or {}).items() if k in ('broker','currency','current','previous')},'link_type':f.get('link_type','direct'),'link_reason':f.get('link_reason',''),'ticker':f['ticker'],'summary':text,'stance':f.get('stance','unclear'),'firm':firm,'report_date':doc.get('report_date'),'catalysts':f.get('catalysts',[]),'risks':f.get('risks',[]),'event_key':key,'original':kind=='original','id':doc['id']+':'+f['ticker']}
+    result={'_rating_event':{k:v for k,v in event.items() if k in ('broker','action','rating','date')},'_price_target':{k:v for k,v in (f.get('price_target') or {}).items() if k in ('broker','currency','current','previous')},'link_type':f.get('link_type','direct'),'link_reason':f.get('link_reason',''),'ticker':f['ticker'],'summary':text,'stance':f.get('stance','unclear'),'firm':firm,'report_date':doc.get('report_date'),'catalysts':f.get('catalysts',[]),'risks':f.get('risks',[]),'event_key':key,'original':kind=='original','id':doc['id']+':'+f['ticker']}
+    return {k:public_source_label(v) if k in ('firm','summary','catalysts','risks','link_reason') else v for k,v in result.items()}
 
 def deduplicate(items):
     chosen={}

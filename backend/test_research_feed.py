@@ -4,6 +4,11 @@ from .research_feed import clean_finding,deduplicate,restrict_feed,premium,publi
 class FeedTests(unittest.TestCase):
  def finding(self,original=False):
   return clean_finding({'id':'ubs' if original else 'gs','firm':'UBS' if original else 'Goldman Sachs','report_date':'2026-09-18'}, {'ticker':'ARRY','summary':'Our downgrade reflects demand.' if original else 'The author is reporting a third-party downgrade.','attribution':'original' if original else 'relayed','stance':'bearish','event':{'broker':'UBS','action':'downgrade','rating':'Neutral','date':'2026-09-18'}})
+ def test_import_provider_is_generic_in_published_research(self):
+  result=clean_finding({'id':'private-id','firm':'TheCleanestSetup.com'}, {'ticker':'MU','summary':'The report expects growth. TheCleanestSetup.com sees upside.','attribution':'original','catalysts':['The Cleanest Setup expects demand.']})
+  self.assertEqual(result['firm'],'Third party')
+  self.assertNotIn('Cleanest',str(public_item(result)))
+  self.assertIn('Third party expects growth',result['summary'])
  def test_original_uses_broker_instead_of_report(self):
   result=clean_finding({'id':'x','firm':'Morgan Stanley'}, {'ticker':'ACMR','summary':'The report identifies ACMR as a beneficiary.','attribution':'original'})
   self.assertEqual(result['summary'],'Morgan Stanley identifies ACMR as a beneficiary.')
